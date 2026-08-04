@@ -1,0 +1,53 @@
+[debug] [2026-07-30T17:04:40.458Z] ----------------------------------------------------------------------
+[debug] [2026-07-30T17:04:40.473Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\User\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init
+[debug] [2026-07-30T17:04:40.474Z] CLI Version:   15.25.0
+[debug] [2026-07-30T17:04:40.475Z] Platform:      win32
+[debug] [2026-07-30T17:04:40.475Z] Node Version:  v24.16.0
+[debug] [2026-07-30T17:04:40.476Z] Detected Agent: unknown
+[debug] [2026-07-30T17:04:40.476Z] Time:          Thu Jul 30 2026 10:04:40 GMT-0700 (Pacific Daylight Time)
+[debug] [2026-07-30T17:04:40.477Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  C:\Users\User\Desktop\watch2earn\backend
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2026-07-30T17:09:17.045Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-07-30T17:09:17.058Z] > authorizing via signed-in user (petervic3600@gmail.com)
+[debug] [2026-07-30T17:09:17.254Z] Checked if tokens are valid: true, expires at: 1785434604929
+[debug] [2026-07-30T17:09:17.255Z] Checked if tokens are valid: true, expires at: 1785434604929
+[debug] [2026-07-30T17:09:17.263Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=100
+[debug] [2026-07-30T17:09:18.609Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2026-07-30T17:09:18.610Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[info] 
+=== Hosting Setup
+[debug] [2026-07-30T17:10:33.231Z] Checked if tokens are valid: true, expires at: 1785434604929
+[debug] [2026-07-30T17:10:33.234Z] Checked if tokens are valid: true, expires at: 1785434604929
+[debug] [2026-07-30T17:10:33.237Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/enable-authentication-1b56c [none]
+[debug] [2026-07-30T17:10:34.131Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/enable-authentication-1b56c 200
+[debug] [2026-07-30T17:10:34.132Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/enable-authentication-1b56c {"projectId":"enable-authentication-1b56c","projectNumber":"946417281410","displayName":"Enable Authentication","name":"projects/enable-authentication-1b56c","resources":{"hostingSite":"enable-authentication-1b56c"},"state":"ACTIVE","labels":{"firebase":"enabled","firebase.studio/templateappid":"gemini"},"etag":"1_04894978-be86-4afd-a627-8f59d85053e4"}
+[info] 
+[info] Your public directory is the folder (relative to your project directory) that
+[info] will contain Hosting assets to be uploaded with firebase deploy. If you
+[info] have a build process for your assets, use your build's output directory.
+[info] 
+[info] 
+[info] i  Didn't detect a .git folder. Assuming C:\Users\User\Desktop\watch2earn\backend is the project root. 
+[info] i  Authorizing with GitHub to upload your service account to a GitHub repository's secrets store. 
+[info] 
+[info] Visit this URL on this device to log in:
+[info] https://github.com/login/oauth/authorize?client_id=89cf50f02ac6aaed3484&state=954220805&redirect_uri=http%3A%2F%2Flocalhost%3A9005&scope=read%3Auser%20repo%20public_repo
+[info] 
+[info] Waiting for authentication...

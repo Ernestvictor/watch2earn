@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watch2Earn - Sign Up</title>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
+  <style>
+    body { background:#070709; font-family:Segoe UI, Arial, sans-serif; color:#fff; display:flex; justify-content:center; align-items:center; height:100vh; }
+    .container { max-width:400px; width:100%; padding:20px; background:#111; border-radius:12px; text-align:center; }
+    h1 { color:#4CAF50; margin-bottom:10px; }
+    input { width:100%; padding:12px; margin:10px 0; border-radius:6px; border:1px solid #444; background:#222; color:#fff; box-sizing:border-box; }
+    button { width:100%; padding:12px; background:#4CAF50; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold; }
+    button:disabled { background:#333; cursor:not-allowed; }
+    a { color:#4CAF50; text-decoration:none; }
+    .error { color:#ff6b6b; font-size:13px; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Watch2Earn 💎</h1>
+    <h2>Create Account</h2>
+    <form id="signupForm">
+      <input type="text" id="name" placeholder="Full Name" required>
+      <input type="email" id="email" placeholder="Email" required>
+      <input type="password" id="password" placeholder="Password" required>
+      <label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:14px;text-align:left">
+        <input type="checkbox" id="terms" required style="width:auto;margin:0"> I agree to <a href="terms.html">Terms & Services</a>
+      </label>
+      <button type="submit" id="signupBtn">Sign Up</button>
+      <div id="errorMsg" class="error"></div>
+    </form>
+    <p style="margin-top:15px">Already have an account? <a href="login.html">Login</a></p>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0",
+      authDomain: "enable-authentication-1b56c.firebaseapp.com",
+      projectId: "enable-authentication-1b56c",
+      storageBucket: "enable-authentication-1b56c.firebasestorage.app",
+      messagingSenderId: "946417281410",
+      appId: "1:946417281410:web:7f4e06e3b4b03946d0079b"
+    };
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db=firebase.firestore();
+
+    // Capture referral from URL
+    (function(){
+      try{
+        const params=new URLSearchParams(window.location.search);
+        const r=params.get('ref');
+        if(r) localStorage.setItem('w2e_ref',r);
+      }catch(e){}
+    })();
+
+    const form=document.getElementById('signupForm');
+    const btn=document.getElementById('signupBtn');
+    const errorMsg=document.getElementById('errorMsg');
+
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      errorMsg.innerText='';
+      btn.disabled=true;
+      btn.innerText='Signing up...';
+
+      const fullName=document.getElementById('name').value.trim();
+      const email=document.getElementById('email').value.trim();
+      const password=document.getElementById('password').value;
+      localStorage.setItem('watch2earn_name',fullName);
+
+      try{
+        const cred=await firebase.auth().createUserWithEmailAndPassword(email,password);
+        await cred.user.updateProfile({displayName:fullName});
+        // Save user doc
+        await db.collection('users').doc(cred.user.uid).set({
+          email,
+          displayName:fullName,
+          createdAt:new Date(),
+          referredBy:localStorage.getItem('w2e_ref')||null
+        });
+        window.location.href='home.html';
+      }catch(error){
+        if(error.code==='auth/email-already-in-use'){
+          try{
+            await firebase.auth().signInWithEmailAndPassword(email,password);
+            window.location.href='home.html';
+          }catch{
+            errorMsg.innerText='This email already has an account. Please login.';
+            setTimeout(()=>location.href='login.html',1500);
+          }
+        }else{
+          errorMsg.innerText=error.message;
+        }
+        btn.disabled=false;
+        btn.innerText='Sign Up';
+      }
+    });
+  </script>
+</body>
+</html>

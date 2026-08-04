@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="48" viewBox="0 0 240 48">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1">
+      <stop offset="0" stop-color="#4CAF50"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <rect width="240" height="48" rx="8" fill="transparent" />
+  <g transform="translate(6,6)">
+    <circle cx="18" cy="18" r="18" fill="url(#g)" />
+    <text x="44" y="26" font-family="Segoe UI, Arial, sans-serif" font-weight="800" font-size="18" fill="#fff">Watch</text>
+    <text x="100" y="26" font-family="Segoe UI, Arial, sans-serif" font-weight="800" font-size="18" fill="#4CAF50">2</text>
+    <text x="112" y="26" font-family="Segoe UI, Arial, sans-serif" font-weight="800" font-size="18" fill="#fff">Earn</text>
+  </g>
+</svg>

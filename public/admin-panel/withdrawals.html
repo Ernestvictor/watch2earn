@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Withdrawals</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0b0c0f;color:#e0e0e0;font-family:'Segoe UI',Inter,Arial,sans-serif;padding-bottom:90px}
+    .top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#121214;border-bottom:1px solid #232326;position:sticky;top:0;z-index:10}
+    .logo{font-weight:900;font-size:20px;color:#4CAF50}
+    .container{max-width:960px;margin:0 auto;padding:16px}
+    h2{margin-bottom:16px}
+    .stats{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+    .stat{flex:1;min-width:200px;background:#1a1a1d;border:1px solid #232326;border-radius:16px;padding:16px;text-align:center}
+    .stat b{display:block;font-size:22px;color:#4CAF50}
+    table{width:100%;border-collapse:collapse;margin-top:20px}
+    th,td{padding:12px;border-bottom:1px solid #232326;text-align:left}
+    th{background:#1a1a1d;color:#4CAF50}
+    tr:hover{background:#1f2023}
+    button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;margin-right:6px}
+    button.approve{background:#4CAF50;color:#fff}
+    button.reject{background:#f44336;color:#fff}
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
+    .bottom-nav a{color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+    .bottom-nav a.active{color:#4CAF50;font-weight:700}
+    @media(max-width:600px){
+      table,thead,tbody,tr,td,th{display:block}
+      tr{margin-bottom:12px}
+      td{padding:8px;border:none}
+      th{display:none}
+    }
+  </style>
+</head>
+<body>
+  <div class="top"><div class="logo">Withdrawals</div></div>
+  <div class="container">
+    <h2>Withdrawals</h2>
+    <div class="stats">
+      <div class="stat">
+        <small>Total Payout</small>
+        <b id="totalPayout">$0</b>
+      </div>
+      <div class="stat">
+        <small>Pending Payout</small>
+        <b id="pendingPayout">$0</b>
+      </div>
+    </div>
+    <h3>Withdrawal Table</h3>
+    <table id="withdrawalsTable">
+      <thead>
+        <tr><th>Name</th><th>Amount</th><th>Method</th><th>Status</th><th>Risk</th><th>Action</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div style="margin-top:20px;">
+      <button class="approve">Approve Selected</button>
+      <button class="reject">Reject Selected</button>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <a href="carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="withdrawals.html" class="active"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="charts.html"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="messages.html"><i class="fas fa-envelope"></i>Messages</a>
+  </div>
+  <script>
+    // Fetch withdrawal data securely
+    fetch('/api/admin/withdrawals',{credentials:'include'})
+      .then(res=>res.json())
+      .then(data=>{
+        document.getElementById('totalPayout').textContent = `$${data.totalPayout}`;
+        document.getElementById('pendingPayout').textContent = `$${data.pendingPayout}`;
+        const tbody = document.querySelector('#withdrawalsTable tbody');
+        tbody.innerHTML = data.withdrawals.map(w=>`
+          <tr>
+            <td>${w.name}</td>
+            <td>$${w.amount}</td>
+            <td>${w.method}</td>
+            <td>${w.status}</td>
+            <td>${w.risk}</td>
+            <td>
+              <button class="approve" onclick="updateStatus('${w.id}','approved')">Approve</button>
+              <button class="reject" onclick="updateStatus('${w.id}','rejected')">Reject</button>
+            </td>
+          </tr>`).join('');
+      })
+      .catch(err=>console.error(err));
+
+    function updateStatus(id,status){
+      fetch(`/api/admin/withdrawals/${id}`,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({status})
+      }).then(()=>location.reload());
+    }
+  </script>
+</body>
+</html>

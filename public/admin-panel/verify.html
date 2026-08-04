@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Login</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body{background:#0b0c0f;color:#e0e0e0;font-family:'Segoe UI',Inter,Arial,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh}
+    .login-box{background:#121214;padding:30px;border-radius:12px;width:320px;box-shadow:0 0 10px #000}
+    h2{color:#4CAF50;margin-bottom:20px;text-align:center}
+    input{width:100%;padding:10px;margin:10px 0;border-radius:6px;border:1px solid #333;background:#0f0f10;color:#fff}
+    button{width:100%;padding:10px;background:#4CAF50;color:#fff;border:none;border-radius:6px;cursor:pointer}
+    button:hover{background:#45a049}
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <h2>Admin Login</h2>
+    <input id="email" placeholder="Email" type="email"/>
+    <input id="pass" type="password" placeholder="Password"/>
+    <button onclick="login()">Login</button>
+  </div>
+  <script>
+    async function login(){
+      const email=document.getElementById('email').value;
+      const pass=document.getElementById('pass').value;
+      try{
+        const res=await fetch('/api/admin/login',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({email,password:pass})
+        });
+        const data=await res.json();
+        if(data.token){
+          localStorage.setItem('adminToken',data.token);
+          location.href='carbinate.html';
+        }else{
+          alert(data.error);
+        }
+      }catch(e){console.error(e);}
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Withdrawal History - Watch2Earn</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#070709;color:#fff;font-family:Inter,sans-serif;padding-bottom:90px}
+.top{padding:16px 20px;background:#121214;border-bottom:1px solid #232326;display:flex;align-items:center;gap:12px;position:sticky;top:0}
+.container{max-width:500px;margin:0 auto;padding:16px}
+.card{background:#121214;border:1px solid #232326;border-radius:16px;padding:16px;margin-bottom:12px}
+.status{padding:4px 10px;border-radius:20px;font-size:10px;font-weight:800;display:inline-block}
+.status.pending{background:#2a1f13;color:#f59e0b}
+.status.approved{background:#132a18;color:#4CAF50}
+.status.rejected{background:#2a1515;color:#ff6b6b}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f10;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0}
+.bottom-nav a{color:#666;text-decoration:none;font-size:11px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+.bottom-nav a.active{color:#4CAF50}
+.empty{text-align:center;padding:40px 20px;color:#777}
+.empty i{font-size:40px;margin-bottom:12px;display:block}
+</style>
+</head>
+<body>
+<div class="top">
+  <i class="fas fa-arrow-left" onclick="location.href='home.html'" style="cursor:pointer;padding:8px"></i>
+  <b><i class="fas fa-clock-rotate-left" style="color:#4CAF50"></i> Withdrawal History</b>
+  <i class="fas fa-rotate" style="margin-left:auto;cursor:pointer;color:#777" onclick="loadHistory()"></i>
+</div>
+
+<div class="container">
+  <div class="card" style="text-align:center;background:linear-gradient(135deg,#121412,#162916);border-color:#1f3d1f">
+    <small style="color:#4CAF50">TOTAL WITHDRAWN</small>
+    <h2 id="totalWithdrawn">₦0</h2>
+    <small style="color:#777" id="pendingCount">0 Pending</small>
+  </div>
+  <div id="historyList">
+    <div class="empty"><i class="fas fa-inbox"></i>Loading history...</div>
+  </div>
+</div>
+
+<div class="bottom-nav">
+  <a href="home.html"><i class="fas fa-house"></i>Home</a>
+  <a href="earn.html"><i class="fas fa-coins"></i>Earn</a>
+  <a href="history.html" class="active"><i class="fas fa-clock-rotate-left"></i>History</a>
+  <a href="account.html"><i class="fas fa-wallet"></i>Account</a>
+</div>
+
+<script>
+async function loadHistory(){
+  const list=document.getElementById('historyList');
+  let withdrawals=[];
+  try{
+    const res=await fetch('/api/withdrawals/my',{credentials:'include'});
+    if(res.ok){ withdrawals=await res.json(); }
+  }catch(e){ console.log('Backend fetch failed, using local',e); }
+  if(withdrawals.length===0){
+    withdrawals=JSON.parse(localStorage.getItem('watch2earn_withdrawals')||'[]');
+  }
+  withdrawals.sort((a,b)=> new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date));
+  let total=0, pending=0;
+  withdrawals.forEach(w=>{ if(w.status==='Approved') total+= (w.netAmount||w.net||0); if(w.status==='Pending') pending++; });
+  document.getElementById('totalWithdrawn').innerText='₦'+total.toLocaleString();
+  document.getElementById('pendingCount').innerText=`${pending} Pending • ${withdrawals.length} Total Requests`;
+  if(withdrawals.length===0){
+    list.innerHTML=`<div class="empty"><i class="fas fa-clock-rotate-left"></i><b>No withdrawals yet</b><br><small>Your requests will appear here as PENDING, then APPROVED after admin review</small><br><br><button onclick="location.href='withdraw.html'" style="padding:10px 20px;background:#4CAF50;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">Withdraw Now</button></div>`;
+    return;
+  }
+  list.innerHTML=withdrawals.map(w=>{
+    const date=new Date(w.createdAt||w.date);
+    const dateStr=date.toLocaleDateString()+' '+date.toLocaleTimeString();
+    const statusClass=(w.status||'Pending').toLowerCase();
+    const amount=w.amount||0;
+    const fee=w.fee||0;
+    const net=w.netAmount||w.net||amount-fee;
+    return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:10px">
+        <div><b style="font-size:16px">₦${amount.toLocaleString()}</b><br><small style="color:#777">${w.method||'Withdrawal'} • ${dateStr}</small></div>
+        <span class="status ${statusClass}">${(w.status||'Pending').toUpperCase()}</span>
+      </div>
+      <div style="background:#0f0f10;border-radius:10px;padding:10px;font-size:12px">
+        <div style="display:flex;justify-content:space-between"><span style="color:#777">Amount:</span><b>₦${amount.toLocaleString()}</b></div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px"><span style="color:#777">Fee:</span><b style="color:#ff6b6b">-₦${fee.toLocaleString()}</b></div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px"><span style="color:#777">You Receive:</span><b style="color:#4CAF50">₦${net.toLocaleString()}</b></div>
+        <div style="height:1px;background:#232326;margin:8px 0"></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:#777">Method:</span><span>${w.method||'Bank'} ${w.accountDetails||''}</span></div>
+        ${w.rejectReason?`<div style="margin-top:6px;padding:6px;background:#2a1515;border-radius:6px;color:#ff6b6b;font-size:11px"><i class="fas fa-exclamation-circle"></i> Rejected: ${w.rejectReason}</div>`:''}
+        ${w.status==='Pending'?`<div style="margin-top:8px;padding:8px;background:#2a1f13;border-radius:8px;color:#f59e0b;font-size:11px;text-align:center"><i class="fas fa-clock"></i> Pending Admin Review (24-48hrs)</div>`:''}
+        ${w.status==='Approved'?`<div style="margin-top:8px;padding:8px;background:#132a18;border-radius:8px;color:#4CAF50;font-size:11px;text-align:center"><i class="fas fa-check-circle"></i> Approved! Paid on ${w.approvedAt?new Date(w.approvedAt).toLocaleString():'-'} </div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+loadHistory();
+</script>
+</body>
+</html>

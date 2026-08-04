@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Charts</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
+  <style>
+    body { background:#0b0c0f; color:#e0e0e0; font-family:'Segoe UI',Inter,Arial,sans-serif; padding-bottom:90px; }
+    h1,h2 { color:#4CAF50; }
+    .chart-container { height:400px; width:100%; background:#121214; padding:12px; border-radius:12px; }
+    table { background:#1a1a1d; color:#e0e0e0; }
+    th { color:#4CAF50; }
+    tr:hover { background:#1f2023; }
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
+    .bottom-nav a{color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+    .bottom-nav a.active{color:#4CAF50;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="container mt-5">
+    <h1>Admin Analytics</h1>
+    <div class="row">
+      <div class="col-md-6">
+        <h2>Earnings Chart</h2>
+        <div class="chart-container"><canvas id="earningsChart"></canvas></div>
+      </div>
+      <div class="col-md-6">
+        <h2>Ads Watched Chart</h2>
+        <div class="chart-container"><canvas id="adsWatchedChart"></canvas></div>
+      </div>
+    </div>
+    <div class="row mt-5">
+      <div class="col-md-12">
+        <h2>Earnings Summary</h2>
+        <table class="table table-striped">
+          <thead><tr><th>Time Period</th><th>Earnings</th></tr></thead>
+          <tbody>
+            <tr><td>Last 1 Day</td><td id="earnings-1-day"></td></tr>
+            <tr><td>Last 7 Days</td><td id="earnings-7-days"></td></tr>
+            <tr><td>Last 30 Days</td><td id="earnings-30-days"></td></tr>
+            <tr><td>Last 90 Days</td><td id="earnings-90-days"></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="row mt-5">
+      <div class="col-md-6">
+        <h2>Active Users</h2>
+        <table class="table table-striped">
+          <thead><tr><th>Email</th><th>Last Active</th></tr></thead>
+          <tbody id="active-users-table"></tbody>
+        </table>
+      </div>
+      <div class="col-md-6">
+        <h2>Passive Users</h2>
+        <table class="table table-striped">
+          <thead><tr><th>Email</th><th>Last Active</th></tr></thead>
+          <tbody id="passive-users-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Linked navigation -->
+  <div class="bottom-nav">
+    <a href="carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="chart.html" class="active"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="messages.html"><i class="fas fa-envelope"></i>Messages</a>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Earnings chart
+    fetch('/api/admin/chart/earnings',{credentials:'include'})
+      .then(res=>res.json())
+      .then(data=>{
+        new Chart(document.getElementById('earningsChart'),{
+          type:'bar',
+          data:{labels:data.labels,datasets:[{label:'Earnings',data:data.data,backgroundColor:'rgba(255,99,132,0.2)',borderColor:'rgba(255,99,132,1)',borderWidth:1}]},
+          options:{scales:{y:{beginAtZero:true}}}
+        });
+      });
+
+    // Ads watched chart
+    fetch('/api/admin/chart/ads-watched',{credentials:'include'})
+      .then(res=>res.json())
+      .then(data=>{
+        new Chart(document.getElementById('adsWatchedChart'),{
+          type:'bar',
+          data:{labels:data.labels,datasets:[{label:'Ads Watched',data:data.data,backgroundColor:'rgba(54,162,235,0.2)',borderColor:'rgba(54,162,235,1)',borderWidth:1}]},
+          options:{scales:{y:{beginAtZero:true}}}
+        });
+      });
+
+    // Earnings summary
+    fetch('/api/admin/chart/earnings-summary',{credentials:'include'})
+      .then(res=>res.json())
+      .then(data=>{
+        document.getElementById('earnings-1-day').innerText = data['1-day'];
+        document.getElementById('earnings-7-days').innerText = data['7-days'];
+        document.getElementById('earnings-30-days').innerText = data['30-days'];
+        document.getElementById('earnings-90-days').innerText = data['90-days'];
+      });
+
+    // Active users
+    fetch('/api/admin/users/active',{credentials:'include'})
+      .then(res=>res.json())
+      .then(data=>{
+        const tbody=document.getElementById('active-users-table');
+        tbody.innerHTML=data.map(u=>`<tr><td>${u.email}</td><td>${u.lastActive}</td></tr>`).join('');
+      });
+
+    // Passive users
+    fetch('/api/admin/users/passive',{credentials:'include'})
+      .then(res=>res.json())
+      .then(data=>{
+        const tbody=document.getElementById('passive-users-table');
+        tbody.innerHTML=data.map(u=>`<tr><td>${u.email}</td><td>${u.lastActive}</td></tr>`).join('');
+      });
+  </script>
+</body>
+</html>

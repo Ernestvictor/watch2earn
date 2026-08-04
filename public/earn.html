@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Earn - Watch2Earn</title>
+<!-- User CSS -->
+<link rel="stylesheet" href="user.css">
+
+<!-- Font Awesome (icons) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding-bottom:85px}
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#0f0f0f;border-bottom:1px solid #222;position:sticky;top:0}
+.logo{font-weight:800;font-size:20px;display:flex;gap:8px}
+.logo span{color:#4CAF50}
+.site-logo{height:36px}
+.icon-btn{width:38px;height:38px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;text-decoration:none}
+.dashboard{background:linear-gradient(135deg,#111,#1a2e1a);border:1px solid #2a4a2a;border-radius:20px;padding:18px;margin:16px}
+.dashboard h1{font-size:34px;font-weight:900}
+.earn-stats{display:flex;gap:10px;margin-top:12px}
+.stat{flex:1;background:#0f0f0f;border:1px solid #222;border-radius:12px;padding:10px;text-align:center}
+.stat b{color:#4CAF50;display:block}
+.tabs{display:flex;gap:8px;margin:14px 16px;background:#111;border:1px solid #222;border-radius:14px;padding:6px}
+.tab{flex:1;padding:10px;text-align:center;border-radius:10px;font-weight:700;cursor:pointer}
+.tab.active{background:#4CAF50;color:#fff}
+.ad-card{background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin:0 16px 12px}
+.payout-box{background:#0f0f0f;border:1px solid #1e1e1e;border-radius:10px;padding:8px 12px;text-align:right}
+.payout-box .company{color:#888;font-size:11px}
+.payout-box .you{color:#4CAF50;font-weight:800}
+.btn-watch{background:#4CAF50;color:#fff;width:100%;margin-top:10px;padding:10px;border-radius:10px;border:none;font-weight:700}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f0f;border-top:1px solid #222;display:flex;justify-content:space-around;padding:10px 0;max-width:500px;margin:0 auto}
+.bottom-nav a{color:#666;text-decoration:none;font-size:11px;text-align:center}
+.bottom-nav a.active{color:#4CAF50}
+.bottom-nav a i{display:block;font-size:20px}
+.announcement{background:#1a1a1d;padding:12px;border-radius:12px;margin:16px;color:#fff}
+.announcement i{color:#4CAF50;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
+  <div style="display:flex;gap:10px">
+    <a href="settings.html" class="icon-btn"><i class="fas fa-gear"></i></a>
+    <a href="help.html" class="icon-btn"><i class="fas fa-headset"></i></a>
+  </div>
+</div>
+<div class="ads-section">
+  <h2>Watch Ads</h2>
+  <iframe src="https://your-ad-network-link.com/ad1" width="300" height="250"></iframe>
+  <iframe src="https://your-ad-network-link.com/ad2" width="300" height="250"></iframe>
+</div>
+
+<!-- Announcement Banner -->
+<div class="announcement" id="announcementBanner" style="display:none">
+  <i class="fas fa-bullhorn"></i><span id="announcementText"></span>
+  <a href="social.html" style="color:#4CAF50;text-decoration:underline;margin-left:8px">Follow & Earn</a>
+</div>
+
+<div class="dashboard">
+  <small>TOTAL EARNED • 30% SHARE</small>
+  <h1>$<span id="totalEarn">0.00</span></h1>
+  <div class="earn-stats">
+    <div class="stat"><b id="adsEarn">$0.00</b><small>Ads</small></div>
+    <div class="stat"><b id="gamesEarn">$0.00</b><small>Games</small></div>
+    <div class="stat"><b id="surveyEarn">$0.00</b><small>Surveys</small></div>
+  </div>
+  <div style="background:#0f0f0f;border:1px dashed #2a4a2a;border-radius:10px;padding:8px;margin-top:10px;font-size:11px">
+    Companies pay us 100%, we give you 30%. Example: Company pays ₦100 → You get ₦30
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('videos',this)">Videos</div>
+  <div class="tab" onclick="switchTab('games',this)">Games</div>
+  <div class="tab" onclick="switchTab('surveys',this)">Surveys</div>
+</div>
+
+<div id="videosTab">
+  <!-- Example Ad -->
+  <div class="ad-card">
+    <div style="display:flex;justify-content:space-between">
+      <div><b>Tech Review - iPhone 15</b><br><small style="color:#777">30s</small></div>
+      <div class="payout-box"><div class="company">₦100</div><div class="you">You ₦30</div></div>
+    </div>
+    <button class="btn-watch" onclick="watchAd(this,'Tech Review','videos',30,30)">Watch 30s Earn ₦30</button>
+  </div>
+</div>
+
+<div id="gamesTab" style="display:none">
+  <div class="ad-card">
+    <div style="display:flex;justify-content:space-between">
+      <div><b>Candy Crush Check</b></div>
+      <div class="payout-box"><div class="company">₦133</div><div class="you">₦40</div></div>
+    </div>
+    <button class="btn-watch" style="background:#4dabf7" onclick="watchAd(this,'Candy Game','games',20,40)">Check Game Earn ₦40</button>
+  </div>
+</div>
+
+<div id="surveysTab" style="display:none">
+  <div class="ad-card">
+    <div style="display:flex;justify-content:space-between">
+      <div><b>Shopping Survey</b></div>
+      <div class="payout-box"><div class="company">₦200</div><div class="you">₦60</div></div>
+    </div>
+    <button class="btn-watch" style="background:#ffa94d;color:#000" onclick="watchAd(this,'Shopping Survey','surveys',20,60)">Survey Earn ₦60</button>
+  </div>
+</div>
+
+<div class="bottom-nav">
+  <a href="home.html"><i class="fas fa-house"></i>Home</a>
+  <a href="earn.html" class="active"><i class="fas fa-coins"></i>Earn</a>
+  <a href="history.html"><i class="fas fa-receipt"></i>History</a>
+  <a href="account.html"><i class="fas fa-user"></i>Account</a>
+</div>
+
+<script>
+function watchAd(btn,title,category,seconds,naira){
+  let elapsed=0;
+  btn.disabled=true;
+  btn.innerText=`Watching ${seconds}s...`;
+  const interval=setInterval(async ()=>{
+    elapsed++;
+    if(elapsed>=seconds){
+      clearInterval(interval);
+      const payload={nairaAmount:naira,source:category,title};
+      try{
+        const res=await fetch('/api/transactions/earn',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(payload)
+        });
+        const data=await res.json();
+        if(!res.ok) throw new Error(data.error||'Server error');
+        btn.innerText=`Earned ₦${naira}!`;
+        alert(`+₦${naira} added! Check History.`);
+      }catch(e){
+        // fallback local storage
+        const usd=naira/1500;
+        let bal=parseFloat(localStorage.getItem('watch2earn_balance')||'0');
+        bal+=usd;
+        localStorage.setItem('watch2earn_balance',bal);
+        let txs=JSON.parse(localStorage.getItem('watch2earn_tx')||'[]');
+        txs.unshift({
+          type:'earn',
+          source:category,
+          title,
+          amount:usd,
+          date:new Date().toISOString()
+        });
+        localStorage.setItem('watch2earn_tx',JSON.stringify(txs));
+        btn.innerText=`Earned ₦${naira}! (Local)`;
+      }
+    }
+  },1000);
+}
+</script>

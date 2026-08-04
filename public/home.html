@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Watch2Earn - Home</title>
+<!-- User CSS -->
+<link rel="stylesheet" href="user.css">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif;padding-bottom:90px}
+.top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#121214;border-bottom:1px solid #232326;position:sticky;top:0;z-index:10}
+.logo{font-weight:900;font-size:20px;display:flex;align-items:center;gap:8px}
+.logo span{color:#4CAF50}
+.site-logo{height:36px}
+.badge{background:#132a18;border:1px solid #1f3d1f;color:#4CAF50;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700}
+.container{max-width:480px;margin:0 auto;padding:16px}
+.card{background:#121214;border:1px solid #232326;border-radius:20px;padding:20px;margin-bottom:14px}
+.card.green{background:linear-gradient(135deg,#121412,#162916);border-color:#1f3d1f}
+.card h1{font-size:36px;margin:8px 0}
+.muted{color:#777;font-size:13px}
+.btn{width:100%;padding:14px;border-radius:12px;border:none;font-weight:700;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary{background:#4CAF50;color:#fff}
+.btn-dark{background:#1a1a1d;color:#fff;border:1px solid #232326}
+.btn:disabled{background:#1a1a1d;color:#555;cursor:not-allowed}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.stat{background:#121214;border:1px solid #232326;border-radius:16px;padding:16px;text-align:center}
+.stat b{display:block;font-size:20px;color:#4CAF50}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f10;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
+.bottom-nav a{color:#666;text-decoration:none;font-size:11px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+.bottom-nav a.active{color:#4CAF50;font-weight:700}
+.announcement{background:#1a1a1d;padding:12px;border-radius:12px;margin-bottom:14px;color:#fff}
+.announcement i{color:#4CAF50;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
+  <div class="badge"><i class="fas fa-naira-sign"></i> <span id="nairaTop">0</span></div>
+</div>
+
+<div class="container">
+  <!-- Announcement Banner -->
+  <div class="announcement" id="announcementBanner" style="display:none">
+    <i class="fas fa-bullhorn"></i><span id="announcementText"></span>
+    <a href="earn.html" style="color:#4CAF50;text-decoration:underline;margin-left:8px">Go Earn</a>
+  </div>
+
+  <div style="padding:10px 4px">
+    <h2>Hi, <span id="userName" style="color:#4CAF50">...</span> 👋</h2>
+    <p class="muted">Keep watching, keep earning</p>
+  </div>
+
+  <div class="card green">
+    <small style="color:#4CAF50;font-weight:700;letter-spacing:1px">TOTAL BALANCE</small>
+    <h1>$<span id="usd">0.00</span></h1>
+    <p class="muted">≈ ₦<span id="naira">0</span></p>
+    <button id="withdrawBtn" class="btn btn-primary" style="margin-top:16px" onclick="goWithdraw()" disabled>
+      <i class="fas fa-wallet"></i> Need $5 to withdraw
+    </button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="adsWatched">0</b><small class="muted">Ads Watched</small></div>
+    <div class="stat"><b>🔥 Day <span id="streak">1</span></b><small class="muted">Daily Streak</small></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div><b>Quick Earn</b><br><small class="muted">Watch ads & earn instantly</small></div>
+      <button class="btn btn-dark" style="width:auto;padding:10px 18px" onclick="location.href='earn.html'">
+        <i class="fas fa-play"></i> Earn
+      </button>
+    </div>
+  </div>
+
+  <div class="card">
+    <b><i class="fas fa-gift" style="color:#4CAF50"></i> Refer & Earn</b>
+    <br><small class="muted">Invite friends, get 10% of their earnings</small>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <input id="refLink" style="flex:1;padding:10px;background:#0f0f0f;border:1px solid #232326;border-radius:10px;color:#777" readonly>
+      <button class="btn btn-dark" style="width:auto" onclick="copyRef()"><i class="fas fa-copy"></i></button>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-nav">
+  <a href="home.html" class="active"><i class="fas fa-house"></i>Home</a>
+  <a href="earn.html"><i class="fas fa-coins"></i>Earn</a>
+  <a href="history.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+  <a href="account.html"><i class="fas fa-wallet"></i>Account</a>
+</div>
+
+<script>
+if(!firebase.apps.length){
+  const firebaseConfig={apiKey:"AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0",authDomain:"enable-authentication-1b56c.firebaseapp.com",projectId:"enable-authentication-1b56c",storageBucket:"enable-authentication-1b56c.firebasestorage.app",messagingSenderId:"946417281410",appId:"1:946417281410:web:7f4e06e3b4b03946d0079b"};
+  firebase.initializeApp(firebaseConfig);
+}
+firebase.auth().onAuthStateChanged(user=>{
+  if(!user){ location.href='login.html'; return;}
+  const saved=localStorage.getItem('watch2earn_name');
+  const name=user.displayName||saved||user.email.split('@')[0];
+  document.getElementById('userName').innerText=name;
+  load();
+  loadAnnouncement();
+});
+function load(){
+  const bal=parseFloat(localStorage.getItem('watch2earn_balance')||'0');
+  document.getElementById('usd').innerText=bal.toFixed(2);
+  const naira=Math.round(bal*1500);
+  document.getElementById('naira').innerText=naira.toLocaleString();
+  document.getElementById('nairaTop').innerText=naira.toLocaleString();
+  document.getElementById('adsWatched').innerText=localStorage.getItem('watch2earn_ads')||'0';
+  document.getElementById('streak').innerText=localStorage.getItem('watch2earn_streak')||'1';
+  const btn=document.getElementById('withdrawBtn');
+  if(bal>=5){ btn.disabled=false; btn.innerHTML='<i class="fas fa-wallet"></i> Withdraw $'+bal.toFixed(2); }
+}
+function goWithdraw(){ location.href='withdraw.html'; }
+function copyRef(){
+  const i=document.getElementById('refLink');
+  i.value=`https://watch2earn.com/ref/W2E-${firebase.auth().currentUser.uid.substring(0,6).toUpperCase()}`;
+  i.select(); document.execCommand('copy');
+  alert('Referral link copied!');
+}
+function loadAnnouncement(){
+  fetch('/api/user/announcements',{credentials:'include'})

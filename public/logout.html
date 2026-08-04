@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Logged Out - Watch2Earn</title>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+body{background:#070709;color:#fff;font-family:Segoe UI,Arial,sans-serif;display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;text-align:center}
+h2{color:#4CAF50;margin-bottom:12px}
+p{color:#777;margin-top:8px}
+.btn{padding:10px 20px;border:none;border-radius:8px;font-weight:700;cursor:pointer;margin:6px}
+.btn-primary{background:#4CAF50;color:#fff}
+.btn-dark{background:#1a1a1a;color:#fff;border:1px solid #333}
+</style>
+</head>
+<body>
+  <h2 id="statusText">Signing out...</h2>
+  <p id="redirectText">Please wait</p>
+  <div id="links" style="display:none">
+    <button class="btn btn-primary" onclick="location.href='login.html'"><i class="fas fa-sign-in-alt"></i> Login</button>
+    <button class="btn btn-dark" onclick="location.href='signup.html'"><i class="fas fa-user-plus"></i> Sign Up</button>
+    <button class="btn btn-dark" onclick="location.href='home.html'"><i class="fas fa-house"></i> Home</button>
+  </div>
+
+<script>
+const firebaseConfig={apiKey:"AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0",authDomain:"enable-authentication-1b56c.firebaseapp.com",projectId:"enable-authentication-1b56c",storageBucket:"enable-authentication-1b56c.firebasestorage.app",messagingSenderId:"946417281410",appId:"1:946417281410:web:7f4e06e3b4b03946d0079b"};
+if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+firebase.auth().signOut().then(()=>{
+  document.getElementById('statusText').innerText='Signed out';
+  let countdown=3;
+  const redirectText=document.getElementById('redirectText');
+  const links=document.getElementById('links');
+  const interval=setInterval(()=>{
+    redirectText.innerText=`Redirecting to login in ${countdown}s...`;
+    countdown--;
+    if(countdown<0){
+      clearInterval(interval);
+      location.href='login.html';
+    }
+  },1000);
+  links.style.display='block';
+});
+</script>
+</body>
+</html>

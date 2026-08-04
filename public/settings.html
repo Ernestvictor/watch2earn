@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Settings - Watch2Earn</title>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding-bottom:85px}
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#0f0f0f;border-bottom:1px solid #222;position:sticky;top:0}
+.container{max-width:480px;margin:0 auto;padding:16px}
+.card{background:#111;border:1px solid #222;border-radius:16px;padding:16px;margin-bottom:14px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #1a1a1a}
+.switch{width:44px;height:24px;background:#333;border-radius:20px;position:relative;cursor:pointer}
+.switch.on{background:#4CAF50}
+.switch::after{content:'';width:18px;height:18px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:0.2s}
+.switch.on::after{left:23px}
+.input{width:100%;padding:12px;background:#0f0f0f;border:1px solid #222;border-radius:10px;color:#fff;margin-top:8px}
+.btn{width:100%;padding:14px;border-radius:12px;border:none;font-weight:800;cursor:pointer;margin-top:10px}
+.btn-danger{background:#331414;color:#ff6b6b;border:1px solid #442222}
+.btn-primary{background:#4CAF50;color:#fff}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f0f;border-top:1px solid #222;display:flex;justify-content:space-around;padding:10px 0;max-width:480px;margin:0 auto}
+.bottom-nav a{color:#666;text-decoration:none;font-size:11px;text-align:center}
+.bottom-nav a.active{color:#4CAF50}
+.bottom-nav a i{display:block;font-size:20px}
+.small{font-size:12px;color:#7d7d7d;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <div style="display:flex;align-items:center;gap:10px">
+    <a href="account.html" style="color:#fff"><i class="fas fa-arrow-left"></i></a>
+    <h2><i class="fas fa-gear"></i> Settings</h2>
+  </div>
+  <a href="help.html" class="icon-btn"><i class="fas fa-headset"></i></a>
+</div>
+
+<div class="container">
+  <!-- Theme -->
+  <div class="card">
+    <h4><i class="fas fa-palette" style="color:#4CAF50"></i> Theme Change</h4>
+    <div class="row"><span>Dark Mode</span><div class="switch on" id="darkSwitch"></div></div>
+    <div class="row"><span>Light Mode</span><div class="switch" id="lightSwitch"></div></div>
+  </div>
+
+  <!-- Notifications -->
+  <div class="card">
+    <h4><i class="fas fa-bell" style="color:#4CAF50"></i> Notification Sound</h4>
+    <div class="row"><span>Sound</span><div class="switch on" id="notifySwitch"></div></div>
+  </div>
+
+  <!-- Accounts -->
+  <div class="card">
+    <h4><i class="fas fa-building-columns" style="color:#4CAF50"></i> Save Bank Account / Crypto Wallet</h4>
+    <select id="accountType" class="input">
+      <option value="bank">Bank Account</option>
+      <option value="crypto">Crypto Wallet</option>
+    </select>
+    <input id="label" class="input" placeholder="Label (e.g. OPay, BTC Wallet)">
+    <input id="bankName" class="input" placeholder="Bank Name (for bank)">
+    <input id="accountNumber" class="input" placeholder="Account Number (for bank)">
+    <input id="accountName" class="input" placeholder="Account Name (for bank)">
+    <input id="cryptoType" class="input" placeholder="Crypto Type (BTC, ETH, USDT)">
+    <input id="walletAddress" class="input" placeholder="Wallet Address (for crypto)">
+    <input id="network" class="input" placeholder="Network (e.g. TRC20/BEP20)">
+    <button id="saveAccountBtn" class="btn btn-primary">Save Account / Wallet</button>
+    <div id="saveStatus" class="small"></div>
+  </div>
+
+  <!-- Logout -->
+  <div class="card" style="border-color:#331414">
+    <h4 style="color:#ff6b6b"><i class="fas fa-right-from-bracket"></i> Logout Section</h4>
+    <p class="small">Takes you to login section to login with another account</p>
+    <button class="btn btn-danger" onclick="firebase.auth().signOut().then(()=>location.href='login.html')">
+      <i class="fas fa-right-from-bracket"></i> Logout to Login Page
+    </button>
+    <button class="btn" style="background:#1a1a1a;border:1px solid #222;color:#fff" onclick="firebase.auth().signOut().then(()=>location.href='index.html')">
+      Sign in with Another Account
+    </button>
+  </div>
+</div>
+
+<div class="bottom-nav">
+  <a href="home.html"><i class="fas fa-house"></i>Home</a>
+  <a href="earn.html"><i class="fas fa-coins"></i>Earn</a>
+  <a href="history.html"><i class="fas fa-receipt"></i>History</a>
+  <a href="account.html" class="active"><i class="fas fa-user"></i>Account</a>
+</div>
+
+<script>
+const firebaseConfig={apiKey:"AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0",authDomain:"enable-authentication-1b56c.firebaseapp.com",projectId:"enable-authentication-1b56c",storageBucket:"enable-authentication-1b56c.firebasestorage.app",messagingSenderId:"946417281410",appId:"1:946417281410:web:7f4e06e3b4b03946d0079b"};
+if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+// Theme toggle
+document.getElementById('darkSwitch').onclick=()=>{localStorage.setItem('theme','dark');alert('Dark mode saved');};
+document.getElementById('lightSwitch').onclick=()=>{localStorage.setItem('theme','light');alert('Light mode saved');};
+
+// Notification toggle
+document.getElementById('notifySwitch').onclick=function(){
+  this.classList.toggle('on');
+  localStorage.setItem('notifySound',this.classList.contains('on')?'on':'off');
+};
+
+// Save account/wallet
+async function saveAccount() {
+  const status=document.getElementById('saveStatus');
+  const type=document.getElementById('accountType').value;
+  const payload={
+    type,
+    label:document.getElementById('label').value.trim(),
+    bankName:document.getElementById('bankName').value.trim(),
+    accountNumber:document.getElementById('accountNumber').value.trim(),
+    accountName:document.getElementById('accountName').value.trim(),
+    cryptoType:document.getElementById('cryptoType').value.trim(),
+    walletAddress:document.getElementById('walletAddress').value.trim(),
+    network:document.getElementById('network').value.trim()
+  };
+  status.innerText='Saving...';
+  try{
+    const user=firebase.auth().currentUser;
+    if(!user) throw new Error('Please sign in first.');
+    const token=await user.getIdToken();
+    const res=await

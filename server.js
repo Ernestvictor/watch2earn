@@ -155,7 +155,6 @@ const net = require('net');
 async function findAvailablePort(startPort, maxOffset = 10) {
   for (let i = 0; i <= maxOffset; i++) {
     const port = Number(startPort) + i;
-    // try to bind a temporary server
     const ok = await new Promise((resolve) => {
       const tester = net.createServer()
         .once('error', () => resolve(false))

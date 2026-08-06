@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>User Profile - Admin</title>
+<link rel="stylesheet" href="/admin.css">
+</head>
+<body style="background:#070709;color:#fff;padding:16px;font-family:Segoe UI,Arial,sans-serif">
+<h2>User Profile</h2>
+<input id="uid" placeholder="Enter user id" style="width:100%;padding:8px;margin:8px 0">
+<button id="load">Load Profile</button>
+<div id="profile" style="margin-top:12px"></div>
+<script>
+document.getElementById('load').onclick = async ()=>{
+  const id = document.getElementById('uid').value.trim();
+  if(!id) return alert('Enter user id');
+  const res = await fetch('/api/admin/user/' + id);
+  const data = await res.json();
+  const html = [];
+  html.push('<h3>Transactions</h3>');
+  html.push('<ul>');
+  (data.transactions||[]).forEach(t=> html.push('<li>'+ (t.type||'') + ' • ' + (t.amountUsd||t.amountNaira||t.amount||0) + ' • ' + (t.date||'') + '</li>'));
+  html.push('</ul>');
+  html.push('<h3>Referrals</h3>');
+  html.push('<ul>');
+  (data.referrals||[]).forEach(r=> html.push('<li>'+ (r.id||'') + ' • $' + (r.amountUsd||0) + '</li>'));
+  html.push('</ul>');
+  document.getElementById('profile').innerHTML = html.join('');
+}
+</script>
+</body>
+</html>

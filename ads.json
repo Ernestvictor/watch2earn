@@ -1,5 +1,5 @@
 [
-	{"id":"ad_sample_1","title":"Short Promo A","seconds":15,"type":"ad"},
-	{"id":"survey_sample_1","title":"Quick Survey","seconds":90,"type":"survey"},
-	{"id":"game_sample_1","title":"Mini Game Play","seconds":60,"type":"game"}
+	{"id":"ad_sample_1","title":"Short Promo A","seconds":15,"type":"ad","url":"https://www.example.com/sample-ad-1"},
+	{"id":"survey_sample_1","title":"Quick Survey","seconds":90,"type":"survey","url":""},
+	{"id":"game_sample_1","title":"Mini Game Play","seconds":60,"type":"game","url":""}
 ]

@@ -251,6 +251,33 @@ router.get('/users/passive', async (req, res) => {
   }
 });
 
+// Get a user's profile (transactions, referrals)
+router.get('/user/:id', (req, res) => {
+  const userId = req.params.id;
+  const transactions = readTransactions().filter(t => t.userId === userId || t.referredUserId === userId || t.referredUser === userId);
+  const referrals = readTransactions().filter(t => t.type === 'referral' && t.userId === userId).map(r => ({ id: r.referredUserId || r.referredUser, amountUsd: r.amountUsd, date: r.date }));
+  res.json({ transactions, referrals });
+});
+
+// Leaderboard aggregations
+router.get('/leaderboard', (req, res) => {
+  const transactions = readTransactions();
+  const users = readUsers();
+  // referral leaderboard
+  const refMap = {};
+  transactions.filter(t => t.type === 'referral').forEach(t => { refMap[t.userId] = (refMap[t.userId]||0) + (Number(t.amountUsd)||0); });
+  const refBoard = Object.keys(refMap).map(uid => ({ userId: uid, amountUsd: refMap[uid], name: (users.find(u=>u.id===uid)||{}).name || uid })).sort((a,b)=>b.amountUsd-a.amountUsd);
+  // ads leaderboard (count ads)
+  const adsMap = {};
+  transactions.filter(t => t.type === 'ad').forEach(t => { adsMap[t.userId] = (adsMap[t.userId]||0) + 1; });
+  const adsBoard = Object.keys(adsMap).map(uid => ({ userId: uid, count: adsMap[uid], name: (users.find(u=>u.id===uid)||{}).name || uid })).sort((a,b)=>b.count-a.count);
+  // withdrawals leaderboard
+  const wdMap = {};
+  transactions.filter(t => t.type === 'withdrawal' || t.type === 'withdraw').forEach(t => { wdMap[t.userId] = (wdMap[t.userId]||0) + (Number(t.amountUsd||t.amount||0)); });
+  const withdrawBoard = Object.keys(wdMap).map(uid => ({ userId: uid, amountUsd: wdMap[uid], name: (users.find(u=>u.id===uid)||{}).name || uid })).sort((a,b)=>b.amountUsd-a.amountUsd);
+  res.json({ referral: refBoard.slice(0,100), ads: adsBoard.slice(0,100), withdrawals: withdrawBoard.slice(0,100) });
+});
+
 router.put('/users/:id', (req, res) => {
   const { action } = req.body;
   res.json({ success: true, id: req.params.id, action: action || 'updated' });

@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leaderboard - Admin</title>
+<link rel="stylesheet" href="/admin.css">
+</head>
+<body style="background:#070709;color:#fff;padding:16px;font-family:Segoe UI,Arial,sans-serif">
+<h2>Leaderboards</h2>
+<div id="boards"></div>
+<script>
+async function load(){
+  const res = await fetch('/api/admin/leaderboard');
+  const data = await res.json();
+  const container = document.getElementById('boards');
+  const html = [];
+  html.push('<h3>Referral Leaderboard</h3><ol>'); data.referral.slice(0,10).forEach(r=> html.push('<li>'+ (r.name||r.userId) + ' • $' + (r.amountUsd||0).toFixed(2) + '</li>')); html.push('</ol>');
+  html.push('<h3>Ads Leaderboard</h3><ol>'); data.ads.slice(0,10).forEach(r=> html.push('<li>'+ (r.name||r.userId) + ' • ' + (r.count||0) + ' ads</li>')); html.push('</ol>');
+  html.push('<h3>Withdrawals Leaderboard</h3><ol>'); data.withdrawals.slice(0,10).forEach(r=> html.push('<li>'+ (r.name||r.userId) + ' • $' + (r.amountUsd||0).toFixed(2) + '</li>')); html.push('</ol>');
+  container.innerHTML = html.join('');
+}
+load();
+</script>
+</body>
+</html>

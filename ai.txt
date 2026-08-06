@@ -1,0 +1,19 @@
+my ads like i said i want them to be i5sec now it like this once users starts an ads it must be one of the ads link showing not startic counting that does  nothing add logic so when real ads are  watched for 15sec they get $0.005 with the option to cancel if they want but if they remove the ads before the ad finished they would not get any earning do not add balance or dashboard on the earn.html just give a botton connected to a reaasl life ads that says start ads the earning would be automatically credited to there balance in earn.html make survay and game clickable but dont put anything there yet just live it empty with no survays yet no games yet
+u need to change the size of home.html it tooo big on mobile phone and ios also make sure our referall logic is active with live data not static data add a new html in our public html called daily stike users can click this to add more earning to there balance add logic so it not just static 
+now for our admin panel html add a new html user profile it is already connecrted to user.html this user profile show earning history of that user his referals and  everything he did live data not static data add logic for it 
+add a new admin panel html called leaderboard this leaderborad shows all users and what they did (referall leaderboard; for users who have the highest referall from 1 to up have top three top ten teop 20 and more, (ads leaderboard: highest ads watcher) (withdrawal leaderboeard) (survay leaderboard) (games leaderboard) 
+
+in the the admin/ messege.html side create an automatic messege exm 
+"new signin"welcome messege with description welcome "users name" to watch2earn ready to start ur earning jorney.
+"withdrwaled" u have withdrwal with "either bank or crpto" ur withdrawal would be sent within 24hurs after successful review 
+"rejected withdrwal messege" there woulb two description either for wrong account or illigal earning history
+"successfull withdrawal" when there money has succesfully been sent 
+also create a part were i can add more automatic messeges with date, time, frequency, of how the messege would go send as manual messege, send as automatic messege under automatic u add all this i added also save all messege so they dont disappear after reloading app also add all users, specifc users to send messages to in specific add new old 
+
+in my admin/ carbintae.html i can send bonus to user who meet requirement users can claim this bonusus on the public/home.html make our home.html have the same display size with history.html
+
+make there stly the same make everything live data not static and user can see there earning after watching ads $0.005 this should not be shown there just put start adds
+admin panel/
+in my users.html add logic so i can ban users incase of frauds suspend there account then tell them to appeal and view there profile and also promote them by give bonus
+
+when user withdraw there should be an automatic both that check there earning if clean it would automatically approve withdrawl if risk high it would keep pending until admin manually review approve or reject

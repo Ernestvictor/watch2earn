@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Daily Strike - Watch2Earn</title>
+<link rel="stylesheet" href="user.css">
+<style>body{background:#070709;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding:20px}.card{background:#121214;padding:14px;border-radius:10px;border:1px solid #232326}</style>
+</head>
+<body>
+<div class="card">
+  <h2>Daily Strike</h2>
+  <p>Claim an extra bonus once per day.</p>
+  <button id="claim" class="btn btn-primary">Claim Daily Strike</button>
+  <div id="status" style="margin-top:10px;color:#aaa"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+<script>
+if(!firebase.apps.length){
+  const firebaseConfig={apiKey:'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',authDomain:'enable-authentication-1b56c.firebaseapp.com',projectId:'enable-authentication-1b56c',storageBucket:'enable-authentication-1b56c.firebasestorage.app',messagingSenderId:'946417281410',appId:'1:946417281410:web:7f4e06e3b4b03946d0079b'};
+  firebase.initializeApp(firebaseConfig);
+}
+firebase.auth().onAuthStateChanged(user=>{
+  if(!user) return location.href='login.html';
+  document.getElementById('claim').onclick = async ()=>{
+    try{
+      const token = await user.getIdToken();
+      const res = await fetch('/api/transactions/claim-strike',{method:'POST',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json'}});
+      const data = await res.json();
+      if(res.ok) document.getElementById('status').innerText = 'Claimed: $'+(data.amount||0);
+      else document.getElementById('status').innerText = data.error || 'Could not claim';
+    }catch(e){ document.getElementById('status').innerText = 'Error'; }
+  }
+});
+</script>
+</body>
+</html>

@@ -32,11 +32,14 @@
           body:JSON.stringify({email,password:pass})
         });
         const data=await res.json();
-        if(data.token){
-          localStorage.setItem('adminToken',data.token);
-          location.href='carbinate.html';
-        }else{
-          alert(data.error);
+        if (data.token) {
+          try {
+            document.cookie = `adminToken=${data.token}; Path=/; Max-Age=${60*60*24}`;
+          } catch (e) { /* ignore cookie errors */ }
+          localStorage.setItem('adminToken', data.token);
+          location.href = '/admin-panel/carbinate.html';
+        } else {
+          alert(data.error || 'Login failed');
         }
       }catch(e){console.error(e);}
     }

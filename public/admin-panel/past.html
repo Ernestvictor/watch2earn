@@ -77,40 +77,77 @@
   </div>
 
   <div class="bottom-nav">
-    <a href="carbinate.html"><i class="fas fa-house"></i>Home</a>
-    <a href="users.html"><i class="fas fa-users"></i>Users</a>
-    <a href="withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
-    <a href="past.html" class="active"><i class="fas fa-clock-rotate-left"></i>History</a>
-    <a href="charts.html"><i class="fas fa-chart-line"></i>Charts</a>
-    <a href="messages.html"><i class="fas fa-envelope"></i>Messages</a>
+    <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="/admin-panel/past.html" class="active"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="/admin-panel/charts.html"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    // Fetch history data
-    fetch('/api/admin/history',{credentials:'include'})
-      .then(res=>res.json())
-      .then(data=>{
-        document.getElementById('totalPaid').textContent = `$${data.totalPaid}`;
-        document.getElementById('paidMonth').textContent = `$${data.paidMonth}`;
-        const tbody=document.querySelector('#historyTable tbody');
-        tbody.innerHTML=data.transactions.map(t=>`
-          <tr>
-            <td>${t.date}</td><td>${t.txnId}</td><td>${t.user}</td>
-            <td>$${t.amount}</td><td>${t.method}</td><td>${t.status}</td>
-            <td>$${t.fee}</td><td>$${t.net}</td>
-            <td><button class="view" onclick="viewProof('${t.id}')">View Receipt</button></td>
-          </tr>`).join('');
-        const updatesBody=document.querySelector('#updatesTable tbody');
-        updatesBody.innerHTML=data.updates.map(u=>`
+    function checkAuth() {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        location.href = '/admin-panel/verify.html';
+        return false;
+      }
+      return true;
+    }
+
+    async function loadHistory() {
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/history', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          credentials: 'include'
+        });
+        
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
+        document.getElementById('totalPaid').textContent = `$${data.totalPaid || 0}`;
+        document.getElementById('paidMonth').textContent = `$${data.paidMonth || 0}`;
+        
+        const tbody = document.querySelector('#historyTable tbody');
+        if ((data.transactions || []).length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;">No transactions yet</td></tr>';
+        } else {
+          tbody.innerHTML = data.transactions.map(t=>`
+            <tr>
+              <td>${t.date}</td><td>${t.txnId}</td><td>${t.user}</td>
+              <td>$${t.amount}</td><td>${t.method}</td><td>${t.status}</td>
+              <td>$${t.fee}</td><td>$${t.net}</td>
+              <td><button class="view" onclick="viewProof('${t.id}')">View</button></td>
+            </tr>`).join('');
+        }
+        
+        const updatesBody = document.querySelector('#updatesTable tbody');
+        updatesBody.innerHTML = (data.updates || []).map(u=>`
           <tr><td>${u.date}</td><td>${u.type}</td><td>${u.description}</td></tr>`).join('');
-      });
+      } catch(err) {
+        console.error('History load error:', err);
+        document.querySelector('#historyTable tbody').innerHTML = `<tr><td colspan="9" style="color:#f44336;text-align:center;">Error loading history: ${err.message}</td></tr>`;
+      }
+    }
 
     function exportData(type){
-      window.location.href=`/api/admin/history/export?format=${type}`;
+      const token = localStorage.getItem('adminToken');
+      window.location.href=`/api/admin/history/export?format=${type}&token=${token}`;
     }
+    
     function viewProof(id){
-      window.location.href=`/api/admin/history/proof/${id}`;
+      const token = localStorage.getItem('adminToken');
+      window.location.href=`/api/admin/history/proof/${id}?token=${token}`;
+    }
+
+    if (checkAuth()) {
+      loadHistory();
     }
   </script>
 </body>

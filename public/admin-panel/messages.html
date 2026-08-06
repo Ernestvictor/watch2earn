@@ -11,83 +11,157 @@
     .logo{font-weight:900;font-size:20px;color:#4CAF50}
     .container{max-width:960px;margin:0 auto;padding:16px}
     .card{background:#1a1a1d;border:1px solid #232326;border-radius:20px;padding:20px;margin-bottom:14px}
-    textarea{width:100%;height:120px;margin-top:10px;border-radius:8px;padding:10px;background:#0f0f10;color:#fff;border:1px solid #333}
-    select,button{margin:6px;padding:8px;border-radius:6px;border:none}
+    textarea,select,input,button{margin:6px;padding:8px;border-radius:6px;border:none}
+    textarea,input,select{width:100%;background:#0f0f10;color:#fff;border:1px solid #333}
     button{cursor:pointer;background:#4CAF50;color:#fff}
+    .message-list{display:grid;gap:10px}
+    .message-row{background:#131316;border:1px solid #232326;border-radius:12px;padding:12px}
     .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
     .bottom-nav a{color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
     .bottom-nav a.active{color:#4CAF50;font-weight:700}
+    @media(min-width:700px){.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}}
   </style>
 </head>
 <body>
   <div class="top"><div class="logo">Send Announcement</div></div>
   <div class="container">
-    <h2>Send Announcement</h2>
     <div class="card">
-      <h3>Send Message Form</h3>
-      <select id="audience">
-        <option value="all">To: All Users</option>
-        <option value="user">To: Specific User</option>
-        <option value="group">To: Group (Country/Level)</option>
-      </select>
-      <select id="severity">
-        <option value="normal">Normal</option>
-        <option value="urgent">Urgent</option>
-        <option value="critical">Critical</option>
-      </select>
-      <select id="template-select">
-        <option>Choose Template</option>
-        <option>Approved Withdrawal</option>
-        <option>Rejected Withdrawal</option>
-        <option>Pending Withdrawal</option>
-        <option>Bonus Event</option>
-        <option>New Content</option>
-        <option>Rule Change</option>
-        <option>Maintenance</option>
-        <option>Warning / Fraud</option>
-        <option>Welcome</option>
-        <option>Contest</option>
-        <option>Re-engagement</option>
-      </select>
-      <textarea id="message-box" placeholder="Message"></textarea>
-      <select id="channel">
-        <option value="banner">Send as: Banner</option>
-        <option value="push">Send as: Push</option>
-        <option value="email">Send as: Email</option>
-        <option value="inapp">Send as: In-app</option>
-      </select>
-      <select id="schedule">
-        <option value="now">Send Now</option>
-        <option value="later">Send Later</option>
-      </select>
-      <button onclick="sendMessage()">Send Message</button>
+      <h2>Send Announcement</h2>
+      <div class="two-col">
+        <div>
+          <select id="audience">
+            <option value="all">To: All Users</option>
+            <option value="user">To: Specific User</option>
+            <option value="group">To: Group (Country/Level)</option>
+          </select>
+          <select id="severity">
+            <option value="normal">Normal</option>
+            <option value="urgent">Urgent</option>
+            <option value="critical">Critical</option>
+          </select>
+          <select id="template-select">
+            <option value="">Choose Template</option>
+            <option>Approved Withdrawal</option>
+            <option>Rejected Withdrawal</option>
+            <option>Pending Withdrawal</option>
+            <option>Bonus Event</option>
+            <option>New Content</option>
+            <option>Rule Change</option>
+            <option>Maintenance</option>
+            <option>Warning / Fraud</option>
+            <option>Welcome</option>
+            <option>Contest</option>
+            <option>Re-engagement</option>
+          </select>
+          <input id="bonusAds" type="number" min="0" placeholder="Bonus Ads Count (optional)">
+        </div>
+        <div>
+          <textarea id="message-box" placeholder="Message"></textarea>
+          <select id="channel">
+            <option value="banner">Send as: Banner</option>
+            <option value="push">Send as: Push</option>
+            <option value="email">Send as: Email</option>
+            <option value="inapp">Send as: In-app</option>
+          </select>
+          <select id="schedule">
+            <option value="now">Send Now</option>
+            <option value="later">Send Later</option>
+          </select>
+          <button onclick="sendMessage()">Send Message</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Recent Messages</h3>
+      <div id="messageList" class="message-list"></div>
     </div>
   </div>
   <div class="bottom-nav">
-    <a href="carbinate.html"><i class="fas fa-house"></i>Home</a>
-    <a href="users.html"><i class="fas fa-users"></i>Users</a>
-    <a href="withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
-    <a href="past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
-    <a href="charts.html"><i class="fas fa-chart-line"></i>Charts</a>
-    <a href="message.html" class="active"><i class="fas fa-envelope"></i>Messages</a>
+    <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="/admin-panel/past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="/admin-panel/charts.html"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="/admin-panel/messages.html" class="active"><i class="fas fa-envelope"></i>Messages</a>
   </div>
   <script>
-    function sendMessage(){
-      const payload={
-        audience:document.getElementById('audience').value,
-        severity:document.getElementById('severity').value,
-        template:document.getElementById('template-select').value,
-        message:document.getElementById('message-box').value,
-        channel:document.getElementById('channel').value,
-        schedule:document.getElementById('schedule').value
-      };
-      fetch('/api/admin/messages',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(payload)
-      }).then(res=>res.json()).then(data=>{
-        alert('Message sent successfully');
-      }).catch(err=>alert('Error sending message'));
+    function checkAuth() {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        location.href = '/admin-panel/verify.html';
+        return false;
+      }
+      return true;
+    }
+
+    async function sendMessage(){
+      try {
+        const token = localStorage.getItem('adminToken');
+        const payload={
+          audience:document.getElementById('audience').value,
+          severity:document.getElementById('severity').value,
+          template:document.getElementById('template-select').value,
+          message:document.getElementById('message-box').value,
+          channel:document.getElementById('channel').value,
+          schedule:document.getElementById('schedule').value,
+          bonusAds:document.getElementById('bonusAds').value
+        };
+        const res = await fetch('/api/admin/messages', {
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body:JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || `Error (${res.status}): ${data.message || 'Unknown error'}`);
+          return;
+        }
+        alert('Message sent successfully!');
+        document.getElementById('message-box').value = '';
+        document.getElementById('bonusAds').value = '';
+        loadMessages();
+      } catch(err) {
+        console.error('Send message error:', err);
+        alert('Error sending message: ' + err.message);
+      }
+    }
+
+    async function loadMessages(){
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/messages', {
+          method: 'GET',
+          headers: {
+            'Content-Type':'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const list = document.getElementById('messageList');
+        if ((Array.isArray(data) ? data : []).length === 0) {
+          list.innerHTML = '<div style="text-align:center;color:#888;">No messages sent yet</div>';
+        } else {
+          list.innerHTML = (Array.isArray(data) ? data : []).slice(0, 10).map(m => `
+            <div class="message-row">
+              <div style="color:#4CAF50;font-weight:700">${m.title || 'Watch2Earn Update'}</div>
+              <div style="color:#888;font-size:11px;margin:4px 0">${new Date(m.createdAt).toLocaleString()} • ${m.channel || 'in-app'}</div>
+              <div>${m.message}</div>
+            </div>
+          `).join('');
+        }
+      } catch(err) {
+        console.error('Load messages error:', err);
+        document.getElementById('messageList').innerHTML = `<div style="color:#f44336;">Error loading messages: ${err.message}</div>`;
+      }
+    }
+
+    if (checkAuth()) {
+      loadMessages();
     }
   </script>
 </body>

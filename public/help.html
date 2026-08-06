@@ -53,6 +53,10 @@ button{margin-top:10px;padding:10px;border:none;border-radius:8px;background:#4C
       <h4>Is it legit? <i class="fas fa-chevron-down" style="float:right;font-size:10px"></i></h4>
       <p>Yes! Check Telegram/YouTube for proofs.</p>
     </div>
+    <div class="faq" id="termsFaq">
+      <h4 onclick="loadTerms()">Terms of Service <i class="fas fa-chevron-down" style="float:right;font-size:10px"></i></h4>
+      <div id="termsContent" style="display:none;margin-top:8px;color:#888;font-size:13px"></div>
+    </div>
   </div>
 
   <!-- Contact Section -->
@@ -105,6 +109,17 @@ function loadTickets(){
     });
 }
 loadTickets();
+function loadTerms(){
+  const cont = document.getElementById('termsContent');
+  if (!cont) return;
+  if (cont.innerHTML.trim()) { cont.style.display = cont.style.display === 'block' ? 'none' : 'block'; return; }
+  fetch('/terms.html').then(r=>r.text()).then(html=>{
+    // Simple extraction: take body contents
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    cont.innerHTML = bodyMatch ? bodyMatch[1] : html;
+    cont.style.display = 'block';
+  }).catch(()=>{ cont.innerText = 'Unable to load Terms.'; cont.style.display = 'block'; });
+}
 </script>
 </body>
 </html>

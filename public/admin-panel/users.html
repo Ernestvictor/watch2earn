@@ -59,47 +59,84 @@
     </table>
   </div>
   <div class="bottom-nav">
-    <a href="carbinate.html"><i class="fas fa-house"></i>Home</a>
-    <a href="users.html" class="active"><i class="fas fa-users"></i>Users</a>
-    <a href="withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
-    <a href="past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
-    <a href="charts.html"><i class="fas fa-chart-line"></i>Charts</a>
-    <a href="messages.html"><i class="fas fa-envelope"></i>Messages</a>
+    <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/users.html" class="active"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="/admin-panel/past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="/admin-panel/charts.html"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
   </div>
   <script>
-    // Fetch users securely
-    fetch('/api/admin/users',{credentials:'include'})
-      .then(res=>res.json())
-      .then(data=>{
-        document.getElementById('healthScore').textContent = `${data.healthScore}%`;
-        document.getElementById('userBreakdown').textContent = `Real users: ${data.real}% | Bots: ${data.bots}%`;
-        document.getElementById('totalUsers').textContent = data.total;
-        document.getElementById('userGrowth').textContent = `Today: ${data.today} | Week: ${data.week} | Month: ${data.month}`;
+    function checkAuth() {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        location.href = '/admin-panel/verify.html';
+        return false;
+      }
+      return true;
+    }
+
+    async function loadUsers() {
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/users', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          credentials: 'include'
+        });
+        
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
+        document.getElementById('healthScore').textContent = `${data.healthScore || 0}%`;
+        document.getElementById('userBreakdown').textContent = `Real: ${data.real || 0} | Bots: ${data.bots || 0}`;
+        document.getElementById('totalUsers').textContent = data.total || 0;
+        document.getElementById('userGrowth').textContent = `Today: ${data.today || 0} | Week: ${data.week || 0} | Month: ${data.month || 0}`;
+        
         const tbody = document.querySelector('#usersTable tbody');
-        tbody.innerHTML = data.users.map(u=>`
-          <tr>
-            <td>${u.name}</td>
-            <td>${u.email}</td>
-            <td>${u.role}</td>
-            <td>${u.status}</td>
-            <td>
-              <button class="view" onclick="viewUser('${u.id}')">View</button>
-              <button class="ban" onclick="updateUser('${u.id}','banned')">Ban</button>
-              <button class="promote" onclick="updateUser('${u.id}','admin')">Promote</button>
-            </td>
-          </tr>`).join('');
-      })
-      .catch(err=>console.error(err));
+        if ((data.users || []).length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">No users yet</td></tr>';
+        } else {
+          tbody.innerHTML = data.users.map(u=>`
+            <tr>
+              <td>${u.name}</td>
+              <td>${u.email}</td>
+              <td>${u.role}</td>
+              <td>${u.status}</td>
+              <td>
+                <button class="view" onclick="viewUser('${u.id}')">View</button>
+                <button class="ban" onclick="updateUser('${u.id}','banned')">Ban</button>
+                <button class="promote" onclick="updateUser('${u.id}','admin')">Promote</button>
+              </td>
+            </tr>`).join('');
+        }
+      } catch(err) {
+        console.error('Users load error:', err);
+        document.querySelector('#usersTable tbody').innerHTML = `<tr><td colspan="5" style="color:#f44336;text-align:center;">Error loading users: ${err.message}</td></tr>`;
+      }
+    }
 
     function viewUser(id){
       window.location.href = `/user-profile.html?id=${id}`;
     }
-    function updateUser(id,action){
+
+    function updateUser(id, action){
+      const token = localStorage.getItem('adminToken');
       fetch(`/api/admin/users/${id}`,{
         method:'PUT',
-        headers:{'Content-Type':'application/json'},
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body:JSON.stringify({action})
       }).then(()=>location.reload());
+    }
+
+    if (checkAuth()) {
+      loadUsers();
     }
   </script>
 </body>

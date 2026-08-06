@@ -60,42 +60,79 @@
     </div>
   </div>
   <div class="bottom-nav">
-    <a href="carbinate.html"><i class="fas fa-house"></i>Home</a>
-    <a href="users.html"><i class="fas fa-users"></i>Users</a>
-    <a href="withdrawals.html" class="active"><i class="fas fa-wallet"></i>Withdrawals</a>
-    <a href="past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
-    <a href="charts.html"><i class="fas fa-chart-line"></i>Charts</a>
-    <a href="messages.html"><i class="fas fa-envelope"></i>Messages</a>
+    <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/withdrawals.html" class="active"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="/admin-panel/past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="/admin-panel/charts.html"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
   </div>
   <script>
-    // Fetch withdrawal data securely
-    fetch('/api/admin/withdrawals',{credentials:'include'})
-      .then(res=>res.json())
-      .then(data=>{
-        document.getElementById('totalPayout').textContent = `$${data.totalPayout}`;
-        document.getElementById('pendingPayout').textContent = `$${data.pendingPayout}`;
-        const tbody = document.querySelector('#withdrawalsTable tbody');
-        tbody.innerHTML = data.withdrawals.map(w=>`
-          <tr>
-            <td>${w.name}</td>
-            <td>$${w.amount}</td>
-            <td>${w.method}</td>
-            <td>${w.status}</td>
-            <td>${w.risk}</td>
-            <td>
-              <button class="approve" onclick="updateStatus('${w.id}','approved')">Approve</button>
-              <button class="reject" onclick="updateStatus('${w.id}','rejected')">Reject</button>
-            </td>
-          </tr>`).join('');
-      })
-      .catch(err=>console.error(err));
+    function checkAuth() {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        location.href = '/admin-panel/verify.html';
+        return false;
+      }
+      return true;
+    }
 
-    function updateStatus(id,status){
+    async function loadWithdrawals() {
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/withdrawals', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          credentials: 'include'
+        });
+        
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
+        document.getElementById('totalPayout').textContent = `$${data.totalPayout || 0}`;
+        document.getElementById('pendingPayout').textContent = `${data.pendingPayout || 0} pending`;
+        
+        const tbody = document.querySelector('#withdrawalsTable tbody');
+        if ((data.withdrawals || []).length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">No withdrawals yet</td></tr>';
+        } else {
+          tbody.innerHTML = data.withdrawals.map(w=>`
+            <tr>
+              <td>${w.name}</td>
+              <td>$${w.amount}</td>
+              <td>${w.method}</td>
+              <td>${w.status}</td>
+              <td>${w.risk}</td>
+              <td>
+                <button class="approve" onclick="updateStatus('${w.id}','Approved')">Approve</button>
+                <button class="reject" onclick="updateStatus('${w.id}','Rejected')">Reject</button>
+              </td>
+            </tr>`).join('');
+        }
+      } catch(err) {
+        console.error('Withdrawals load error:', err);
+        document.querySelector('#withdrawalsTable tbody').innerHTML = `<tr><td colspan="6" style="color:#f44336;text-align:center;">Error loading withdrawals: ${err.message}</td></tr>`;
+      }
+    }
+
+    function updateStatus(id, status) {
+      const token = localStorage.getItem('adminToken');
       fetch(`/api/admin/withdrawals/${id}`,{
         method:'PUT',
-        headers:{'Content-Type':'application/json'},
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body:JSON.stringify({status})
-      }).then(()=>location.reload());
+      }).then(()=>location.reload())
+        .catch(err=>console.error('Update error:', err));
+    }
+
+    if (checkAuth()) {
+      loadWithdrawals();
     }
   </script>
 </body>

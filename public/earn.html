@@ -3,62 +3,68 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Earn - Watch2Earn</title>
-<!-- User CSS -->
 <link rel="stylesheet" href="user.css">
-
-<!-- Font Awesome (icons) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+<script async="async" data-cfasync="false" src="https://pl30708907.effectivecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js"></script>
+<!-- popunder/script removed per request -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding-bottom:85px}
 .top-bar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#0f0f0f;border-bottom:1px solid #222;position:sticky;top:0}
-.logo{font-weight:800;font-size:20px;display:flex;gap:8px}
+.top-left{display:flex;align-items:center;gap:10px}
+.logo{font-weight:800;font-size:20px;display:flex;gap:8px;align-items:center}
 .logo span{color:#4CAF50}
 .site-logo{height:36px}
+.action-btns{display:flex;gap:10px}
 .icon-btn{width:38px;height:38px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;text-decoration:none}
-.dashboard{background:linear-gradient(135deg,#111,#1a2e1a);border:1px solid #2a4a2a;border-radius:20px;padding:18px;margin:16px}
+.container{max-width:500px;margin:0 auto;padding:16px}
+.dashboard{background:linear-gradient(135deg,#111,#1a2e1a);border:1px solid #2a4a2a;border-radius:20px;padding:18px;margin:16px 0}
 .dashboard h1{font-size:34px;font-weight:900}
 .earn-stats{display:flex;gap:10px;margin-top:12px}
 .stat{flex:1;background:#0f0f0f;border:1px solid #222;border-radius:12px;padding:10px;text-align:center}
 .stat b{color:#4CAF50;display:block}
-.tabs{display:flex;gap:8px;margin:14px 16px;background:#111;border:1px solid #222;border-radius:14px;padding:6px}
+.tabs{display:flex;gap:8px;margin:14px 0;background:#111;border:1px solid #222;border-radius:14px;padding:6px}
 .tab{flex:1;padding:10px;text-align:center;border-radius:10px;font-weight:700;cursor:pointer}
 .tab.active{background:#4CAF50;color:#fff}
-.ad-card{background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin:0 16px 12px}
+.ad-card{background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin-bottom:12px}
 .payout-box{background:#0f0f0f;border:1px solid #1e1e1e;border-radius:10px;padding:8px 12px;text-align:right}
 .payout-box .company{color:#888;font-size:11px}
 .payout-box .you{color:#4CAF50;font-weight:800}
 .btn-watch{background:#4CAF50;color:#fff;width:100%;margin-top:10px;padding:10px;border-radius:10px;border:none;font-weight:700}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f0f;border-top:1px solid #222;display:flex;justify-content:space-around;padding:10px 0;max-width:500px;margin:0 auto}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f0f;border-top:1px solid #222;display:flex;justify-content:space-around;padding:10px 0;width:100%;max-width:500px;margin:0 auto}
 .bottom-nav a{color:#666;text-decoration:none;font-size:11px;text-align:center}
 .bottom-nav a.active{color:#4CAF50}
 .bottom-nav a i{display:block;font-size:20px}
-.announcement{background:#1a1a1d;padding:12px;border-radius:12px;margin:16px;color:#fff}
+.announcement{background:#1a1a1d;padding:12px;border-radius:12px;margin:14px 0 12px;color:#fff}
 .announcement i{color:#4CAF50;margin-right:6px}
+.helper{margin:0 0 12px;color:#888;font-size:12px}
 </style>
 </head>
 <body>
 <div class="top-bar">
-  <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
-  <div style="display:flex;gap:10px">
+  <div class="top-left">
+    <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
+    <a href="messege.html" class="icon-btn" title="Inbox"><i class="fas fa-inbox"></i></a>
+  </div>
+  <div class="action-btns">
     <a href="settings.html" class="icon-btn"><i class="fas fa-gear"></i></a>
     <a href="help.html" class="icon-btn"><i class="fas fa-headset"></i></a>
   </div>
 </div>
-<div class="ads-section">
-  <h2>Watch Ads</h2>
-  <iframe src="https://your-ad-network-link.com/ad1" width="300" height="250"></iframe>
-  <iframe src="https://your-ad-network-link.com/ad2" width="300" height="250"></iframe>
-</div>
 
-<!-- Announcement Banner -->
-<div class="announcement" id="announcementBanner" style="display:none">
-  <i class="fas fa-bullhorn"></i><span id="announcementText"></span>
-  <a href="social.html" style="color:#4CAF50;text-decoration:underline;margin-left:8px">Follow & Earn</a>
-</div>
+<div class="container">
+  <div class="announcement" id="announcementBanner" style="display:none">
+    <i class="fas fa-bullhorn"></i><span id="announcementText"></span>
+  </div>
 
-<div class="dashboard">
+  <div class="helper" id="adCounter" title="Tap to claim daily ₦0.01 bonus" onclick="claimDailyStrike()">Your daily ad count is loading...</div>
+
+  <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin-bottom:12px">
+    <div style="text-align:center;margin-bottom:8px;color:#4CAF50;font-weight:700">Native Banner Ad</div>
+    <div id="container-4b1cf630fa653f9661f13acbf3b9bcf9" style="min-height:100px"></div>
+  </div>
+
+  <div class="dashboard">
   <small>TOTAL EARNED • 30% SHARE</small>
   <h1>$<span id="totalEarn">0.00</span></h1>
   <div class="earn-stats">
@@ -66,47 +72,37 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
     <div class="stat"><b id="gamesEarn">$0.00</b><small>Games</small></div>
     <div class="stat"><b id="surveyEarn">$0.00</b><small>Surveys</small></div>
   </div>
-  <div style="background:#0f0f0f;border:1px dashed #2a4a2a;border-radius:10px;padding:8px;margin-top:10px;font-size:11px">
-    Companies pay us 100%, we give you 30%. Example: Company pays ₦100 → You get ₦30
-  </div>
 </div>
-
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('videos',this)">Videos</div>
+  <div class="tab active" onclick="switchTab('videos',this)">Videos</div> 
   <div class="tab" onclick="switchTab('games',this)">Games</div>
   <div class="tab" onclick="switchTab('surveys',this)">Surveys</div>
 </div>
-
 <div id="videosTab">
-  <!-- Example Ad -->
-  <div class="ad-card">
-    <div style="display:flex;justify-content:space-between">
-      <div><b>Tech Review - iPhone 15</b><br><small style="color:#777">30s</small></div>
-      <div class="payout-box"><div class="company">₦100</div><div class="you">You ₦30</div></div>
-    </div>
-    <button class="btn-watch" onclick="watchAd(this,'Tech Review','videos',30,30)">Watch 30s Earn ₦30</button>
-  </div>
-</div>
+  <div style="background:#14230f;border:1px solid #2a4a2a;border-radius:14px;padding:12px;margin-bottom:12px;font-size:12px">
+    <b style="color:#4CAF50">💎 Why Earn Here?</b>
+    <ul style="margin:8px 0 0 16px;line-height:1.6;font-size:11px;color:#aaa">
+      <li>Watch videos till finish to earn $0.005+</li>
+      <li>Longer ads = bigger rewards</li>
+      <li>Tap counter to claim ₦0.01 daily bonus</li>
+      <li>Max 5 ads per day • Resets at 12:00 AM</li>
 
-<div id="gamesTab" style="display:none">
-  <div class="ad-card">
-    <div style="display:flex;justify-content:space-between">
-      <div><b>Candy Crush Check</b></div>
-      <div class="payout-box"><div class="company">₦133</div><div class="you">₦40</div></div>
-    </div>
-    <button class="btn-watch" style="background:#4dabf7" onclick="watchAd(this,'Candy Game','games',20,40)">Check Game Earn ₦40</button>
+    
+  <d
+    <div style="display:flex;justify-content:space-between;gap:8px">
+      <div style="flex:1">
+        <b style="font-size:14px">Product Feedback</b>
+        <br><small style="color:#777">2-3 minutes</small>
+      </div>
+      </div>
+    
   </div>
 </div>
-
-<div id="surveysTab" style="display:none">
-  <div class="ad-card">
-    <div style="display:flex;justify-content:space-between">
-      <div><b>Shopping Survey</b></div>
-      <div class="payout-box"><div class="company">₦200</div><div class="you">₦60</div></div>
-    </div>
-    <button class="btn-watch" style="background:#ffa94d;color:#000" onclick="watchAd(this,'Shopping Survey','surveys',20,60)">Survey Earn ₦60</button>
+  <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin-bottom:12px;text-align:center">
+    <div style="font-weight:700;color:#4CAF50;margin-bottom:10px">Native 300x250 Banner</div>
+    <div id="adsList"></div>
   </div>
-</div>
+</div><!-- end container -->
 
 <div class="bottom-nav">
   <a href="home.html"><i class="fas fa-house"></i>Home</a>
@@ -114,45 +110,223 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
   <a href="history.html"><i class="fas fa-receipt"></i>History</a>
   <a href="account.html"><i class="fas fa-user"></i>Account</a>
 </div>
-
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script>
-function watchAd(btn,title,category,seconds,naira){
-  let elapsed=0;
-  btn.disabled=true;
-  btn.innerText=`Watching ${seconds}s...`;
-  const interval=setInterval(async ()=>{
-    elapsed++;
-    if(elapsed>=seconds){
-      clearInterval(interval);
-      const payload={nairaAmount:naira,source:category,title};
-      try{
-        const res=await fetch('/api/transactions/earn',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify(payload)
-        });
-        const data=await res.json();
-        if(!res.ok) throw new Error(data.error||'Server error');
-        btn.innerText=`Earned ₦${naira}!`;
-        alert(`+₦${naira} added! Check History.`);
-      }catch(e){
-        // fallback local storage
-        const usd=naira/1500;
-        let bal=parseFloat(localStorage.getItem('watch2earn_balance')||'0');
-        bal+=usd;
-        localStorage.setItem('watch2earn_balance',bal);
-        let txs=JSON.parse(localStorage.getItem('watch2earn_tx')||'[]');
-        txs.unshift({
-          type:'earn',
-          source:category,
-          title,
-          amount:usd,
-          date:new Date().toISOString()
-        });
-        localStorage.setItem('watch2earn_tx',JSON.stringify(txs));
-        btn.innerText=`Earned ₦${naira}! (Local)`;
-      }
-    }
-  },1000);
+// Firebase client init (uses same config as other pages)
+if(!firebase.apps.length){
+  const firebaseConfig={apiKey:'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',authDomain:'enable-authentication-1b56c.firebaseapp.com',projectId:'enable-authentication-1b56c',storageBucket:'enable-authentication-1b56c.firebasestorage.app',messagingSenderId:'946417281410',appId:'1:946417281410:web:7f4e06e3b4b03946d0079b'};
+  firebase.initializeApp(firebaseConfig);
 }
+
+// Configuration
+const MAX_DAILY_ADS = 5;
+const AD_REWARD_USD = 0.0015; // reward in USD when ad completes
+const NAIRA_PER_USD = 1500;
+const AD_REWARD_NAIRA = AD_REWARD_USD * NAIRA_PER_USD; // 2.25
+
+// Save referrer if present in URL
+function saveRefFromUrl(){
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get('ref') || params.get('r');
+  if(ref) localStorage.setItem('watch2earn_referrer', ref);
+}
+
+// Get today's ad transactions from server (if logged in) to enforce limits and per-ad watched state
+async function loadUserAdState(){
+  const user = firebase.auth().currentUser;
+  let watchedIds = new Set();
+  let todaysCount = 0;
+  if(user){
+    try{
+      const token = await user.getIdToken();
+      const res = await fetch('/api/transactions/history', { headers: { Authorization: 'Bearer ' + token } });
+      if(res.ok){
+        const txs = await res.json();
+        const todayStr = new Date().toDateString();
+        txs.forEach(t => {
+          if(new Date(t.date).toDateString() !== todayStr) return;
+          if(t.type === 'ad'){
+            todaysCount++;
+            if(t.title) watchedIds.add(t.title);
+          }
+        });
+      }
+    }catch(e){ console.warn('loadUserAdState failed',e); }
+  }
+  // also merge localStorage fallback
+  const localCount = Number(localStorage.getItem('watch2earn_ads')||0);
+  const totalCount = Math.max(todaysCount, localCount);
+  return { watchedIds, todaysCount: totalCount };
+}
+
+// Render ads list (simple inline ads, each ad has id)
+// Render ads; accepts an ads array (from live feed) and watched state
+function renderAds(ads, watchedIds, todaysCount){
+  const container = document.getElementById('adsList');
+  container.innerHTML = '';
+  ads.forEach(ad => {
+    // ad expected shape: { id, title, seconds }
+    const adId = ad.id || ('ad_' + (ad.title||'').replace(/\s+/g,'_') );
+    const seconds = ad.seconds || 15;
+    const disabled = watchedIds.has(adId) || (todaysCount >= MAX_DAILY_ADS);
+    const card = document.createElement('div');
+    card.className = 'ad-card';
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <div style="flex:1">
+          <b style="font-size:14px">${ad.title || 'Sponsored Ad'}</b><br><small style="color:#777">${seconds}s</small>
+        </div>
+        <div class="payout-box"><div class="company">≈ ₦${(AD_REWARD_NAIRA).toFixed(2)}</div><div class="you">You</div></div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button class="btn-watch" data-ad-id="${adId}" ${disabled? 'disabled' : ''}>${disabled? 'Watched / Limit' : 'Start Ad'}</button>
+        <div class="ad-timer" id="timer-${adId}" style="min-width:80px;text-align:center;color:#aaa"></div>
+      </div>
+    `;
+    container.appendChild(card);
+    const btn = card.querySelector('.btn-watch');
+    btn.addEventListener('click', ()=> startAdFlow(btn, { id: adId, title: ad.title, seconds }));
+  });
+}
+
+// Try to fetch live ads from the server, fallback to defaults
+async function getLiveAds(){
+  try{
+    const res = await fetch('/api/ads');
+    if(res.ok){
+      const data = await res.json();
+      if(Array.isArray(data) && data.length) return data;
+    }
+  }catch(e){ /* ignore */ }
+  // fallback default list
+  return [
+    { id:'ad_a1', title:'Daily Short Ad A', seconds:15 },
+    { id:'ad_b2', title:'Daily Short Ad B', seconds:15 },
+    { id:'ad_c3', title:'Daily Short Ad C', seconds:15 },
+    { id:'ad_d4', title:'Daily Short Ad D', seconds:15 },
+    { id:'ad_e5', title:'Daily Short Ad E', seconds:15 }
+  ];
+}
+
+let activeAd = null;
+let activeInterval = null;
+
+function showCountdown(btn, seconds, onComplete, onCancel){
+  const adId = btn.getAttribute('data-ad-id');
+  const timerEl = document.getElementById('timer-' + adId);
+  let remaining = seconds;
+  timerEl.innerText = remaining + 's';
+  document.addEventListener('visibilitychange', handleVis);
+  function handleVis(){
+    if(document.hidden){
+      cleanup(false);
+    }
+  }
+  activeInterval = setInterval(()=>{
+    remaining--; timerEl.innerText = remaining + 's';
+    if(remaining <= 0){ cleanup(true); }
+  },1000);
+  function cleanup(success){
+    clearInterval(activeInterval); activeInterval = null;
+    document.removeEventListener('visibilitychange', handleVis);
+    timerEl.innerText = '';
+    if(success) onComplete(); else onCancel();
+  }
+  return ()=>{ if(activeInterval) cleanup(false); };
+}
+
+async function startAdFlow(btn, ad){
+  if(activeAd) return; // only one at a time
+  const adId = ad.id;
+  btn.disabled = true;
+  btn.innerText = 'Loading ad...';
+  // simulate ad load delay (can be replaced with real ad iframe later)
+  setTimeout(async ()=>{
+    btn.innerText = 'Playing...';
+    // start 15s countdown
+    const cancel = showCountdown(btn, ad.seconds, async ()=>{
+      // completed: credit user
+      try{
+        const user = firebase.auth().currentUser;
+        let credited = false;
+        if(user){
+          const token = await user.getIdToken();
+          const payload = { nairaAmount: AD_REWARD_NAIRA, source: 'ad', title: adId, referrerId: localStorage.getItem('watch2earn_referrer') || null };
+          const res = await fetch('/api/transactions/earn', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
+          if(res.ok){
+            credited = true;
+          }
+        }
+        if(!credited){
+          // fallback local credit
+          const prevBal = Number(localStorage.getItem('watch2earn_balance')||'0');
+          localStorage.setItem('watch2earn_balance', String(prevBal + AD_REWARD_USD));
+          let txs = JSON.parse(localStorage.getItem('watch2earn_tx')||'[]');
+          txs.unshift({ type:'ad', title: adId, amount: AD_REWARD_NAIRA, date: new Date().toISOString() });
+          localStorage.setItem('watch2earn_tx', JSON.stringify(txs));
+        }
+        // mark ad watched locally and update UI
+        markAdWatched(adId);
+        updateAfterWatch();
+        alert('✅ Ad completed — +$' + AD_REWARD_USD.toFixed(4) + ' added to your balance.');
+      }catch(e){
+        console.error('credit error', e);
+        btn.innerText = 'Error';
+        setTimeout(()=>btn.innerText = 'Start Ad', 1500);
+      }
+    }, ()=>{
+      // cancelled
+      btn.disabled = false;
+      btn.innerText = 'Start Ad';
+      alert('You left before the ad finished — no reward.');
+    });
+    activeAd = { id: adId, cancel };
+  }, 800);
+}
+
+function markAdWatched(adId){
+  const watched = JSON.parse(localStorage.getItem('watch2earn_watched_ads')||'[]');
+  if(!watched.includes(adId)) watched.push(adId);
+  localStorage.setItem('watch2earn_watched_ads', JSON.stringify(watched));
+  const newCount = Number(localStorage.getItem('watch2earn_ads')||0) + 1;
+  localStorage.setItem('watch2earn_ads', String(newCount));
+}
+
+function updateAfterWatch(){
+  // re-load state and re-render
+  loadUserAdState().then(s=>{
+    const watched = s.watchedIds;
+    // include local watched
+    const localWatched = JSON.parse(localStorage.getItem('watch2earn_watched_ads')||'[]');
+    localWatched.forEach(id=>watched.add(id));
+    getLiveAds().then(ads=> renderAds(ads, watched, Number(localStorage.getItem('watch2earn_ads')||0)));
+  });
+}
+
+// initial setup
+saveRefFromUrl();
+firebase.auth().onAuthStateChanged(user=>{
+  loadUserAdState().then(s=>{
+    // merge local watched
+    const localWatched = JSON.parse(localStorage.getItem('watch2earn_watched_ads')||'[]');
+    localWatched.forEach(id=>s.watchedIds.add(id));
+    getLiveAds().then(ads=> renderAds(ads, s.watchedIds, Number(localStorage.getItem('watch2earn_ads')||s.todaysCount||0)));
+    document.getElementById('adCounter').innerText = `Daily ads watched: ${Number(localStorage.getItem('watch2earn_ads')||s.todaysCount||0)}/${MAX_DAILY_ADS}`;
+  });
+});
+
+// make page responsive and ensure ads only on this page: already scoped to this file
 </script>
+<script>
+  atOptions = {
+    'key' : '457f65cbe904e42fea908d570f00bbb2',
+    'format' : 'iframe',
+    'height' : 250,
+    'width' : 300,
+    'params' : {}
+  };
+</script>
+<script src="https://pl30708908.effectivecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js"></script>
+</body>
+</html>

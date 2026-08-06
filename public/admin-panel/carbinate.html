@@ -57,27 +57,56 @@
     </div>
   </div>
   <div class="bottom-nav">
-    <a href="carbinate.html" class="active"><i class="fas fa-house"></i>Home</a>
-    <a href="users.html"><i class="fas fa-users"></i>Users</a>
-    <a href="withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
-    <a href="past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
-    <a href="charts.html"><i class="fas fa-chart-line"></i>Charts</a>
-    <a href="messages.html"><i class="fas fa-envelope"></i>Messages</a>
+    <a href="/admin-panel/carbinate.html" class="active"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="/admin-panel/past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="/admin-panel/charts.html"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
   </div>
   <script>
-    // Fetch dashboard data securely
-    fetch('/api/admin/dashboard', {credentials:'include'})
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById('totalBalance').textContent = `$${data.totalBalance}`;
-        document.getElementById('profit').textContent = `$${data.profit}`;
-        document.getElementById('userProfit').textContent = `$${data.userProfit}`;
-        document.getElementById('usersCount').textContent = `Users: ${data.users}`;
-        document.getElementById('withdrawalsCount').textContent = `Withdrawals: ${data.withdrawals}`;
-        document.getElementById('revenueCount').textContent = `Revenue: $${data.revenue}`;
-        document.getElementById('recentActivity').innerHTML = data.activity.map(a=>`<p>${a}</p>`).join('');
-      })
-      .catch(err => console.error(err));
+    // Check if authenticated
+    function checkAuth() {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        location.href = '/admin-panel/verify.html';
+        return false;
+      }
+      return true;
+    }
+
+    // Fetch dashboard data with error handling
+    async function loadDashboard() {
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/dashboard', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          credentials: 'include'
+        });
+        
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
+        document.getElementById('totalBalance').textContent = `$${data.totalBalance || 0}`;
+        document.getElementById('profit').textContent = `$${data.profit || 0}`;
+        document.getElementById('userProfit').textContent = `$${data.userProfit || 0}`;
+        document.getElementById('usersCount').textContent = `Users: ${data.users || 0}`;
+        document.getElementById('withdrawalsCount').textContent = `Pending Withdrawals: ${data.withdrawals || 0}`;
+        document.getElementById('revenueCount').textContent = `Revenue: $${data.revenue || 0}`;
+        document.getElementById('recentActivity').innerHTML = (data.activity || []).map(a=>`<p><i class="fas fa-check-circle" style="color:#4CAF50;margin-right:8px;"></i>${a}</p>`).join('');
+      } catch(err) {
+        console.error('Dashboard load error:', err);
+        document.getElementById('recentActivity').innerHTML = `<p style="color:#f44336;"><i class="fas fa-exclamation-circle"></i> Unable to load data: ${err.message}</p>`;
+      }
+    }
+
+    if (checkAuth()) {
+      loadDashboard();
+    }
   </script>
 </body>
 </html>

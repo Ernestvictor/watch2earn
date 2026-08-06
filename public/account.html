@@ -8,12 +8,13 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding-bottom:85px}
 .top-bar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#0f0f0f;border-bottom:1px solid #222;position:sticky;top:0;z-index:100}
+.top-left{display:flex;align-items:center;gap:10px}
 .logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:20px}
 .logo span{color:#4CAF50}
 .site-logo{height:36px}
 .top-actions{display:flex;gap:10px}
 .icon-btn{width:38px;height:38px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;text-decoration:none}
-.container{max-width:480px;margin:0 auto;padding:16px}
+.container{max-width:560px;margin:0 auto;padding:16px}
 .main-balance{background:linear-gradient(135deg,#111,#1a2e1a);border:1px solid #2a4a2a;border-radius:20px;padding:20px;margin-bottom:14px}
 .main-balance h1{font-size:42px;font-weight:900}
 .breakdown{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
@@ -28,7 +29,7 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 .ref-box input{flex:1;background:#0f0f0f;border:1px solid #222;border-radius:10px;padding:10px;color:#fff;font-size:12px}
 .ref-box button{background:#4CAF50;border:none;color:#fff;padding:10px 14px;border-radius:10px;font-weight:700}
 .menu-item{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid #1a1a1a;color:#fff;text-decoration:none}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f0f;border-top:1px solid #222;display:flex;justify-content:space-around;padding:10px 0;max-width:480px;margin:0 auto}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f0f;border-top:1px solid #222;display:flex;justify-content:space-around;padding:10px 0;max-width:560px;margin:0 auto}
 .bottom-nav a{color:#666;text-decoration:none;font-size:11px;text-align:center}
 .bottom-nav a.active{color:#4CAF50}
 .bottom-nav a i{display:block;font-size:20px}
@@ -36,44 +37,18 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 .invite-details.open{display:block}
 .announcement{background:#1a1a1d;padding:12px;border-radius:12px;margin-bottom:14px;color:#fff}
 .announcement i{color:#4CAF50;margin-right:6px}
-.account-nav {
-  display: flex;
-  justify-content: space-around;
-  background: #1e1e2f;
-  padding: 10px 0;
-  border-radius: 8px;
+.user-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:#bbb;font-size:12px}
+@media (min-width: 768px){
+  .container{max-width:760px}
 }
-
-.account-nav .nav-item {
-  color: #ccc;
-  text-decoration: none;
-  font-size: 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transition: color 0.3s ease;
-}
-
-.account-nav .nav-item i {
-  font-size: 18px;
-  margin-bottom: 4px;
-}
-
-.account-nav .nav-item:hover {
-  color: #ffd700; /* gold hover */
-}
-
-.account-nav .nav-item.active {
-  color: #fff;
-  font-weight: bold;
-  border-bottom: 2px solid #ffd700;
-}
-
 </style>
 </head>
 <body>
 <div class="top-bar">
-  <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
+  <div class="top-left">
+    <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
+    <a href="messege.html" class="icon-btn" title="Inbox"><i class="fas fa-inbox"></i></a>
+  </div>
   <div class="top-actions">
     <a href="settings.html" class="icon-btn"><i class="fas fa-gear"></i></a>
     <a href="help.html" class="icon-btn"><i class="fas fa-headset"></i></a>
@@ -82,10 +57,16 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 </div>
 
 <div class="container">
-  <!-- Announcement Banner -->
   <div class="announcement" id="announcementBanner" style="display:none">
     <i class="fas fa-bullhorn"></i><span id="announcementText"></span>
     <a href="earn.html" style="color:#4CAF50;text-decoration:underline;margin-left:8px">Go Earn</a>
+  </div>
+
+  <div class="card">
+    <div class="user-meta">
+      <span><i class="fas fa-user"></i> <span id="displayName">User</span></span>
+      <span><i class="fas fa-envelope"></i> <span id="emailText">user@email.com</span></span>
+    </div>
   </div>
 
   <div class="main-balance">
@@ -98,7 +79,7 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
       <div class="break-item"><small>Survey</small><b>$<span id="surveyEarn">0.00</span></b></div>
       <div class="break-item"><small>Referral</small><b>$<span id="refEarn">0.00</span></b></div>
     </div>
-    <div style="display:flex;gap:12px;margin-top:14px">
+    <div style="display:flex;gap:12px;margin-top:14px;flex-wrap:wrap">
       <button class="btn btn-withdraw" onclick="location.href='withdraw.html'"><i class="fas fa-arrow-up-from-bracket"></i> Withdraw</button>
       <a href="history.html" class="btn btn-history" style="text-decoration:none"><i class="fas fa-receipt"></i> History</a>
     </div>
@@ -119,7 +100,7 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
       </div>
     </div>
     <div class="invite-details" id="inviteDetails">
-      <div style="display:flex;gap:10px;margin-top:12px">
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
         <div style="flex:1;background:#0f0f0f;border-radius:12px;padding:12px;text-align:center"><b id="invitedCount" style="color:#4CAF50">0</b><br><small>Invited Users</small></div>
         <div style="flex:1;background:#0f0f0f;border-radius:12px;padding:12px;text-align:center"><b id="refEarnStat">$0.00</b><br><small>Referral Earn</small></div>
       </div>
@@ -131,103 +112,84 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
     <h4 style="margin-bottom:12px"><i class="fas fa-gear" style="color:#4CAF50"></i> Settings</h4>
     <a href="settings.html" class="menu-item"><span><i class="fas fa-palette"></i> Theme Change</span><i class="fas fa-chevron-right" style="color:#444"></i></a>
     <a href="settings.html" class="menu-item"><span><i class="fas fa-bell"></i> Notification Sound</span><i class="fas fa-chevron-right" style="color:#444"></i></a>
-    <a href="settings
-<nav class="account-nav">
-  <a href="home.html" class="nav-item">
-    <i class="fas fa-house"></i>
-    <span>Home</span>
-  </a>
-  <a href="earn.html" class="nav-item">
-    <i class="fas fa-coins"></i>
-    <span>Earn</span>
-  </a>
-  <a href="history.html" class="nav-item">
-    <i class="fas fa-clock-rotate-left"></i>
-    <span>History</span>
-  </a>
-  <a href="withdraw.html" class="nav-item">
-    <i class="fas fa-wallet"></i>
-    <span>Withdraw</span>
-  </a>
-  <a href="account.html" class="nav-item active">
-    <i class="fas fa-user"></i>
-    <span>Account</span>
-  </a>
-</nav>
+    <a href="help.html" class="menu-item"><span><i class="fas fa-headset"></i> Support</span><i class="fas fa-chevron-right" style="color:#444"></i></a>
+  </div>
+</div>
 
-  
+<div class="bottom-nav">
+  <a href="home.html"><i class="fas fa-house"></i>Home</a>
+  <a href="earn.html"><i class="fas fa-coins"></i>Earn</a>
+  <a href="history.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+  <a href="account.html" class="active"><i class="fas fa-user"></i>Account</a>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script>
 const firebaseConfig = {
-  apiKey: "AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0",
-  authDomain: "enable-authentication-1b56c.firebaseapp.com",
-  projectId: "enable-authentication-1b56c",
-  storageBucket: "enable-authentication-1b56c.firebasestorage.app",
-  messagingSenderId: "946417281410",
-  appId: "1:946417281410:web:7f4e06e3b4b03946d0079b"
+  apiKey: 'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',
+  authDomain: 'enable-authentication-1b56c.firebaseapp.com',
+  projectId: 'enable-authentication-1b56c',
+  storageBucket: 'enable-authentication-1b56c.firebasestorage.app',
+  messagingSenderId: '946417281410',
+  appId: '1:946417281410:web:7f4e06e3b4b03946d0079b'
 };
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
 firebase.auth().onAuthStateChanged(async user => {
   if (!user) {
-    location.href = "login.html";
+    location.href = 'login.html';
     return;
   }
-  const token = await user.getIdToken();
-
-  // Fetch profile data
-  const res = await fetch("/api/users/profile", {
-    headers: { Authorization: "Bearer " + token }
-  });
-  const data = await res.json();
-
-  // Update balance
-  const usd = data.balanceUsd || 0;
-  const naira = usd * 1500;
-  document.getElementById("mainBal").innerText = usd.toFixed(2);
-  document.getElementById("mainNaira").innerText = naira.toLocaleString();
-
-  // Breakdown
-  document.getElementById("adsEarn").innerText = (data.adsEarn || 0).toFixed(2);
-  document.getElementById("gameEarn").innerText = (data.gameEarn || 0).toFixed(2);
-  document.getElementById("surveyEarn").innerText = (data.surveyEarn || 0).toFixed(2);
-  document.getElementById("refEarn").innerText = (data.refEarn || 0).toFixed(2);
-
-  // Referral link
-  const refLink = `${location.origin}/signup.html?ref=${user.uid}`;
-  document.getElementById("refLink").value = refLink;
-
-  // Referral stats
-  document.getElementById("invitedCount").innerText = data.invitedCount || 0;
-  document.getElementById("refEarnStat").innerText = "$" + (data.refEarn || 0).toFixed(2);
-
-  // Announcements
-  if (data.announcement) {
-    document.getElementById("announcementText").innerText = data.announcement;
-    document.getElementById("announcementBanner").style.display = "block";
+  document.getElementById('displayName').innerText = user.displayName || 'User';
+  document.getElementById('emailText').innerText = user.email || 'user@email.com';
+  try {
+    const token = await user.getIdToken();
+    const res = await fetch('/api/users/profile', { headers: { Authorization: 'Bearer ' + token } });
+    const data = await res.json();
+    const usd = Number(data.balanceUsd || 0);
+    const naira = usd * 1500;
+    document.getElementById('mainBal').innerText = usd.toFixed(2);
+    document.getElementById('mainNaira').innerText = naira.toLocaleString();
+    document.getElementById('adsEarn').innerText = (data.adsEarn || 0).toFixed(2);
+    document.getElementById('gameEarn').innerText = (data.gameEarn || 0).toFixed(2);
+    document.getElementById('surveyEarn').innerText = (data.surveyEarn || 0).toFixed(2);
+    document.getElementById('refEarn').innerText = (data.refEarn || 0).toFixed(2);
+    document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
+    document.getElementById('invitedCount').innerText = data.invitedCount || 0;
+    document.getElementById('refEarnStat').innerText = '$' + (data.refEarn || 0).toFixed(2);
+    if (data.announcement) {
+      document.getElementById('announcementText').innerText = data.announcement;
+      document.getElementById('announcementBanner').style.display = 'block';
+    }
+  } catch (e) {
+    const usd = Number(localStorage.getItem('watch2earn_balance') || '0');
+    const naira = usd * 1500;
+    document.getElementById('mainBal').innerText = usd.toFixed(2);
+    document.getElementById('mainNaira').innerText = naira.toLocaleString();
+    document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
   }
 });
 
-// Helpers
 function toggleInvite() {
-  document.getElementById("inviteDetails").classList.toggle("open");
+  document.getElementById('inviteDetails').classList.toggle('open');
 }
 function copyRef() {
-  const input = document.getElementById("refLink");
+  const input = document.getElementById('refLink');
   input.select();
-  document.execCommand("copy");
-  alert("Referral link copied!");
+  document.execCommand('copy');
+  alert('Referral link copied!');
 }
 function shareRef(platform) {
-  const link = document.getElementById("refLink").value;
-  if (platform === "whatsapp") location.href = `https://wa.me/?text=${encodeURIComponent(link)}`;
-  if (platform === "twitter") location.href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(link)}`;
-  if (platform === "facebook") location.href = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`;
+  const link = document.getElementById('refLink').value;
+  if (platform === 'whatsapp') location.href = `https://wa.me/?text=${encodeURIComponent(link)}`;
+  if (platform === 'twitter') location.href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(link)}`;
+  if (platform === 'facebook') location.href = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`;
 }
 function logout() {
-  firebase.auth().signOut().then(() => location.href = "login.html");
+  firebase.auth().signOut().then(() => location.href = 'login.html');
 }
 </script>
+</body>
+</html>
 

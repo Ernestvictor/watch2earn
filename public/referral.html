@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Referrals - Watch2Earn</title>
+<link rel="stylesheet" href="user.css">
+<style>
+body{background:#070709;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding-bottom:90px}
+.container{max-width:900px;margin:0 auto;padding:16px}
+.top{display:flex;justify-content:space-between;align-items:center;padding:16px;background:#121214;border-bottom:1px solid #232326}
+.card{background:#121214;border:1px solid #232326;border-radius:12px;padding:14px;margin-bottom:12px}
+.list{display:grid;grid-template-columns:1fr;gap:10px}
+.item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:8px;border:1px solid #1f1f1f;background:#0f0f0f}
+@media(min-width:800px){ .list{grid-template-columns:repeat(2,1fr)} }
+.small{color:#aaa;font-size:13px}
+</style>
+</head>
+<body>
+<div class="top"><div><b>Referrals</b><div class="small">People you invited & earnings from them</div></div><div><a href="home.html" style="color:#4CAF50">Home</a></div></div>
+<div class="container">
+  <div class="card"><b>Total referral earnings</b><div style="font-size:20px;margin-top:6px">$<span id="totalUsd">0.00</span> • ₦<span id="totalNaira">0</span></div></div>
+  <div class="card">
+    <b>Your invited users (<span id="countInvited">0</span>)</b>
+    <div id="list" class="list" style="margin-top:10px"></div>
+  </div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+<script>
+if(!firebase.apps.length){
+  const firebaseConfig={apiKey:'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',authDomain:'enable-authentication-1b56c.firebaseapp.com',projectId:'enable-authentication-1b56c',storageBucket:'enable-authentication-1b56c.firebasestorage.app',messagingSenderId:'946417281410',appId:'1:946417281410:web:7f4e06e3b4b03946d0079b'};
+  firebase.initializeApp(firebaseConfig);
+}
+
+firebase.auth().onAuthStateChanged(async user=>{
+  if(!user) return location.href='login.html';
+  try{
+    const token = await user.getIdToken();
+    const res = await fetch('/api/referrals', { headers: { 'Authorization': 'Bearer ' + token } });
+    if(!res.ok) throw new Error('Failed to load referrals');
+    const data = await res.json();
+    document.getElementById('totalUsd').innerText = (data.totals.totalReferralUsd||0).toFixed(4);
+    document.getElementById('totalNaira').innerText = (data.totals.totalReferralNaira||0).toLocaleString();
+    document.getElementById('countInvited').innerText = data.totals.countInvited||0;
+    const list = document.getElementById('list');
+    list.innerHTML = '';
+    (data.referrals||[]).forEach(r=>{
+      const el = document.createElement('div'); el.className='item';
+      el.innerHTML = `<div><b>${r.name}</b><div class="small">${r.email||''}</div></div><div style="text-align:right"><div>$${(r.totalUsd||0).toFixed(4)}</div><div class="small">₦${(r.totalNaira||0).toLocaleString()}</div></div>`;
+      list.appendChild(el);
+    });
+  }catch(e){ console.error(e); alert('Could not load referrals'); }
+});
+</script>
+</body>
+</html>

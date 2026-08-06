@@ -1,21 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Watch2Earn - Home</title>
-<!-- User CSS -->
+</head>
+<body>
 <link rel="stylesheet" href="user.css">
-
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif;padding-bottom:90px}
 .top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#121214;border-bottom:1px solid #232326;position:sticky;top:0;z-index:10}
+.top-left{display:flex;align-items:center;gap:10px}
 .logo{font-weight:900;font-size:20px;display:flex;align-items:center;gap:8px}
 .logo span{color:#4CAF50}
 .site-logo{height:36px}
+.icon-btn{width:38px;height:38px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;text-decoration:none}
 .badge{background:#132a18;border:1px solid #1f3d1f;color:#4CAF50;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700}
-.container{max-width:480px;margin:0 auto;padding:16px}
+.container{max-width:500px;margin:0 auto;padding:16px}
 .card{background:#121214;border:1px solid #232326;border-radius:20px;padding:20px;margin-bottom:14px}
 .card.green{background:linear-gradient(135deg,#121412,#162916);border-color:#1f3d1f}
 .card h1{font-size:36px;margin:8px 0}
@@ -27,21 +26,30 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
 .stat{background:#121214;border:1px solid #232326;border-radius:16px;padding:16px;text-align:center}
 .stat b{display:block;font-size:20px;color:#4CAF50}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f10;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f10;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20;width:100%}
 .bottom-nav a{color:#666;text-decoration:none;font-size:11px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
 .bottom-nav a.active{color:#4CAF50;font-weight:700}
 .announcement{background:#1a1a1d;padding:12px;border-radius:12px;margin-bottom:14px;color:#fff}
 .announcement i{color:#4CAF50;margin-right:6px}
+.ref-box{display:flex;gap:8px;margin-top:12px}
+.ref-box input{flex:1;padding:10px;background:#0f0f0f;border:1px solid #232326;border-radius:10px;color:#fff}
+@media (min-width: 768px){
+  .container{max-width:760px}
+  .stats{grid-template-columns:repeat(2, minmax(0, 1fr))}
+}
 </style>
 </head>
+
 <body>
 <div class="top">
-  <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
+  <div class="top-left">
+    <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
+    <a href="messege.html" class="icon-btn" title="Inbox" style="position:relative"><i class="fas fa-inbox"></i><span id="inboxBadge" style="position:absolute;top:-8px;right:-8px;background:#f44336;color:#fff;border-radius:50%;width:18px;height:18px;display:none;align-items:center;justify-content:center;font-size:10px;font-weight:800">0</span></a>
+  </div>
   <div class="badge"><i class="fas fa-naira-sign"></i> <span id="nairaTop">0</span></div>
 </div>
 
 <div class="container">
-  <!-- Announcement Banner -->
   <div class="announcement" id="announcementBanner" style="display:none">
     <i class="fas fa-bullhorn"></i><span id="announcementText"></span>
     <a href="earn.html" style="color:#4CAF50;text-decoration:underline;margin-left:8px">Go Earn</a>
@@ -67,7 +75,7 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
   </div>
 
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <div><b>Quick Earn</b><br><small class="muted">Watch ads & earn instantly</small></div>
       <button class="btn btn-dark" style="width:auto;padding:10px 18px" onclick="location.href='earn.html'">
         <i class="fas fa-play"></i> Earn
@@ -78,9 +86,10 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
   <div class="card">
     <b><i class="fas fa-gift" style="color:#4CAF50"></i> Refer & Earn</b>
     <br><small class="muted">Invite friends, get 10% of their earnings</small>
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <input id="refLink" style="flex:1;padding:10px;background:#0f0f0f;border:1px solid #232326;border-radius:10px;color:#777" readonly>
+    <div class="ref-box">
+      <input id="refLink" readonly>
       <button class="btn btn-dark" style="width:auto" onclick="copyRef()"><i class="fas fa-copy"></i></button>
+      <button class="btn btn-dark" style="width:auto;margin-left:8px" onclick="location.href='referral.html'"><i class="fas fa-users"></i> View</button>
     </div>
   </div>
 </div>
@@ -89,22 +98,27 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
   <a href="home.html" class="active"><i class="fas fa-house"></i>Home</a>
   <a href="earn.html"><i class="fas fa-coins"></i>Earn</a>
   <a href="history.html"><i class="fas fa-clock-rotate-left"></i>History</a>
-  <a href="account.html"><i class="fas fa-wallet"></i>Account</a>
+  <a href="account.html"><i class="fas fa-user"></i>Account</a>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script>
 if(!firebase.apps.length){
-  const firebaseConfig={apiKey:"AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0",authDomain:"enable-authentication-1b56c.firebaseapp.com",projectId:"enable-authentication-1b56c",storageBucket:"enable-authentication-1b56c.firebasestorage.app",messagingSenderId:"946417281410",appId:"1:946417281410:web:7f4e06e3b4b03946d0079b"};
+  const firebaseConfig={apiKey:'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',authDomain:'enable-authentication-1b56c.firebaseapp.com',projectId:'enable-authentication-1b56c',storageBucket:'enable-authentication-1b56c.firebasestorage.app',messagingSenderId:'946417281410',appId:'1:946417281410:web:7f4e06e3b4b03946d0079b'};
   firebase.initializeApp(firebaseConfig);
 }
-firebase.auth().onAuthStateChanged(user=>{
-  if(!user){ location.href='login.html'; return;}
+
+firebase.auth().onAuthStateChanged(async user => {
+  if(!user){ location.href='login.html'; return; }
   const saved=localStorage.getItem('watch2earn_name');
   const name=user.displayName||saved||user.email.split('@')[0];
   document.getElementById('userName').innerText=name;
+  document.getElementById('refLink').value=`${location.origin}/index.html?ref=${user.uid}`;
   load();
   loadAnnouncement();
 });
+
 function load(){
   const bal=parseFloat(localStorage.getItem('watch2earn_balance')||'0');
   document.getElementById('usd').innerText=bal.toFixed(2);
@@ -116,12 +130,48 @@ function load(){
   const btn=document.getElementById('withdrawBtn');
   if(bal>=5){ btn.disabled=false; btn.innerHTML='<i class="fas fa-wallet"></i> Withdraw $'+bal.toFixed(2); }
 }
+
 function goWithdraw(){ location.href='withdraw.html'; }
+
 function copyRef(){
   const i=document.getElementById('refLink');
-  i.value=`https://watch2earn.com/ref/W2E-${firebase.auth().currentUser.uid.substring(0,6).toUpperCase()}`;
   i.select(); document.execCommand('copy');
   alert('Referral link copied!');
 }
-function loadAnnouncement(){
-  fetch('/api/user/announcements',{credentials:'include'})
+
+async function loadAnnouncement(){
+  try {
+    const res = await fetch('/api/user/announcements', { credentials: 'include' });
+    const data = await res.json();
+    const message = data.announcement || data.messages?.[0]?.message || '';
+    if (message) {
+      document.getElementById('announcementText').innerText = message;
+      document.getElementById('announcementBanner').style.display = 'block';
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function loadInboxCount(){
+  try {
+    const res = await fetch('/api/messages');
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : (data.messages || []);
+    const badge = document.getElementById('inboxBadge');
+    if (items.length > 0) {
+      badge.innerText = items.length;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (e) {
+    console.error('Failed to load inbox count', e);
+  }
+}
+
+loadInboxCount();
+setInterval(loadInboxCount, 30000); // Check every 30 seconds
+</script>
+</body>
+</html>

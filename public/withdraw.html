@@ -8,44 +8,36 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
   <style>
-    /* Core styling */
     *{margin:0;padding:0;box-sizing:border-box}
     body{background:#070709;color:#fff;font-family:Inter,'Segoe UI',sans-serif;padding-bottom:95px}
     .top{padding:14px 20px;background:#121214;border-bottom:1px solid #232326;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}
-    .container{max-width:540px;margin:0 auto;padding:14px}
+    .container{max-width:500px;margin:0 auto;padding:14px}
     .card{background:#121214;border:1px solid #232326;border-radius:18px;padding:18px;margin-bottom:12px}
     .card.green{background:linear-gradient(135deg,#121412,#162916);border-color:#1f3d1f}
-    .card.tier{cursor:pointer;transition:.2s}
-    .card.tier:hover{border-color:#4CAF50;transform:translateY(-2px)}
-    .card.tier.selected{border-color:#4CAF50;background:#132a18;box-shadow:0 0 20px rgba(76,175,80,.2)}
-    .card.tier.disabled{opacity:.4;pointer-events:none}
     .badge{padding:4px 10px;border-radius:20px;font-size:10px;font-weight:800;display:inline-block}
     .badge-starter{background:#2a1f13;color:#f59e0b}
     .badge-basic{background:#1f1a29;color:#8b5cf6}
     .badge-standard{background:#132a2a;color:#06b6d4}
     .badge-premium{background:#132a18;color:#4CAF50}
-    .input{width:100%;padding:13px;background:#0f0f10;border:1px solid #232326;border-radius:12px;color:#fff;margin-bottom:10px;outline:none;font-size:13px}
-    .input:focus{border-color:#4CAF50}
+    .input,select{width:100%;padding:13px;background:#0f0f10;border:1px solid #232326;border-radius:12px;color:#fff;margin-bottom:10px;outline:none;font-size:13px}
+    .input:focus,select:focus{border-color:#4CAF50}
     .btn{width:100%;padding:15px;border-radius:14px;border:none;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
     .btn-green{background:#4CAF50;color:#fff}
-    .btn-green:disabled{background:#1a1a1d;color:#555}
+    .btn-dark{background:#1a1a1a;border:1px solid #232326;color:#fff}
     .main-tabs{display:flex;gap:8px;background:#121214;padding:6px;border-radius:14px;border:1px solid #232326;margin-bottom:14px}
     .main-tab{flex:1;padding:12px;text-align:center;border-radius:10px;cursor:pointer;font-weight:700;font-size:13px;color:#777;display:flex;align-items:center;justify-content:center;gap:6px}
     .main-tab.active{background:#4CAF50;color:#fff}
-    .crypto-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-    .crypto-card{background:#0f0f10;border:1px solid #232326;border-radius:12px;padding:12px;text-align:center;cursor:pointer;transition:.2s}
-    .crypto-card:hover{border-color:#4CAF50}
-    .crypto-card.selected{border-color:#4CAF50;background:#132a18}
-    .crypto-card b{display:block;font-size:12px;margin-top:4px}
-    .crypto-card small{font-size:10px;color:#777}
-    .divider{height:1px;background:#232326;margin:10px 0}
+    .tier-list{display:grid;gap:8px}
+    .tier-row{display:flex;justify-content:space-between;align-items:center;background:#121214;border:1px solid #232326;border-radius:12px;padding:12px}
+    .tier-row strong{color:#4CAF50}
+    .tier-row small{color:#777}
     .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f10;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
     .bottom-nav a{color:#666;text-decoration:none;font-size:11px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
     .bottom-nav a.active{color:#4CAF50}
+    @media(min-width:768px){.container{max-width:760px}.tier-list{grid-template-columns:repeat(2,1fr)}}
   </style>
 </head>
 <body>
-  <!-- Top bar -->
   <div class="top">
     <i class="fas fa-arrow-left" onclick="location.href='home.html'" style="cursor:pointer;padding:8px"></i>
     <b>Withdraw - Real Site</b>
@@ -53,7 +45,6 @@
   </div>
 
   <div class="container">
-    <!-- Balance card -->
     <div class="card green" style="text-align:center">
       <small style="color:#4CAF50;font-weight:700;letter-spacing:1px">AVAILABLE BALANCE</small>
       <h1 style="font-size:32px;margin:6px 0">₦<span id="bal">0</span></h1>
@@ -61,26 +52,83 @@
       <div id="statusMsg" style="margin-top:10px;padding:8px 12px;background:#0f0f10;border-radius:8px;font-size:12px"></div>
     </div>
 
-    <!-- Tabs -->
     <div class="main-tabs">
       <div class="main-tab active" id="tabNaira" onclick="switchMain('naira')"><i class="fas fa-building-columns"></i> Naira Bank</div>
       <div class="main-tab" id="tabCrypto" onclick="switchMain('crypto')"><i class="fab fa-bitcoin"></i> Crypto (10)</div>
     </div>
 
-    <!-- Naira Section -->
-    <div id="nairaSection">
-      <!-- Tiers + Details form (already included in your snippets) -->
-      <!-- ... -->
+    <div class="card">
+      <div class="tier-list">
+        <div class="tier-row"><div><strong>₦5,500</strong><br><small>Minimum bank payout</small></div><span class="badge badge-starter">Tier 1</span></div>
+        <div class="tier-row"><div><strong>₦7,500</strong><br><small>Easy payout</small></div><span class="badge badge-basic">Tier 2</span></div>
+        <div class="tier-row"><div><strong>₦10,500</strong><br><small>Fast payout</small></div><span class="badge badge-standard">Tier 3</span></div>
+        <div class="tier-row"><div><strong>₦13,500</strong><br><small>Higher payout</small></div><span class="badge badge-premium">Tier 4</span></div>
+        <div class="tier-row"><div><strong>₦15,500</strong><br><small>Premium tier</small></div><span class="badge badge-premium">Tier 5</span></div>
+        <div class="tier-row"><div><strong>₦17,500</strong><br><small>Upper tier</small></div><span class="badge badge-premium">Tier 6</span></div>
+      </div>
+      <div style="margin-top:10px;color:#888;font-size:12px">
+        Fee rule: <strong style="color:#4CAF50">₦500</strong> charge for payouts below <strong>₦20,000</strong>. <strong style="color:#4CAF50">No charge</strong> once your balance is <strong>₦20,000+</strong>.
+      </div>
     </div>
 
-    <!-- Crypto Section -->
+    <div id="nairaSection">
+      <div class="card">
+        <h3 style="margin-bottom:10px;color:#4CAF50">Save Bank Account</h3>
+        <select class="input" id="bankName" style="padding:11px">
+          <option value="">Select your bank</option>
+          <option value="Opay">Opay</option>
+          <option value="Palmpay">Palmpay</option>
+          <option value="Monie Point">Monie Point</option>
+          <option value="FirstBank">FirstBank</option>
+          <option value="UBA">UBA</option>
+          <option value="Unity Bank">Unity Bank</option>
+          <option value="Access Bank">Access Bank</option>
+          <option value="GTB">GTB (Guaranty Trust Bank)</option>
+          <option value="Zenith Bank">Zenith Bank</option>
+          <option value="Fidelity Bank">Fidelity Bank</option>
+          <option value="Union Bank">Union Bank</option>
+          <option value="FCMB">FCMB (First City Monument Bank)</option>
+          <option value="Stelling Bank">Stelling Bank</option>
+          <option value="Polaris Bank">Polaris Bank</option>
+          <option value="Ecobank">Ecobank</option>
+          <option value="Wema Bank">Wema Bank</option>
+          <option value="Keystone Bank">Keystone Bank</option>
+        </select>
+        <input class="input" id="accountName" placeholder="Account name">
+        <input class="input" id="accountNumber" placeholder="Account number">
+        <button class="btn btn-dark" onclick="saveAccount('bank')">Save Naira Bank Account</button>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom:10px;color:#4CAF50">Withdraw to Bank</h3>
+        <select id="bankAccountSelect"></select>
+        <input class="input" id="bankAmount" type="number" min="5500" placeholder="Enter withdrawal amount in ₦ (min ₦5,500)">
+        <div class="btn btn-green" id="withdrawBankBtn" onclick="requestWithdraw('bank')">Request Naira Withdrawal</div>
+      </div>
+    </div>
+
     <div id="cryptoSection" style="display:none">
-      <!-- Tiers + Wallet selection + Details form (already included in your snippets) -->
-      <!-- ... -->
+      <div class="card">
+        <h3 style="margin-bottom:10px;color:#4CAF50">Save Crypto Wallet</h3>
+        <select id="cryptoType">
+          <option value="BTC">Bitcoin</option>
+          <option value="USDT">USDT</option>
+          <option value="ETH">Ethereum</option>
+          <option value="BNB">BNB</option>
+        </select>
+        <input class="input" id="walletAddress" placeholder="Wallet address">
+        <button class="btn btn-dark" onclick="saveAccount('crypto')">Save Crypto Wallet</button>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom:10px;color:#4CAF50">Withdraw to Crypto</h3>
+        <select id="cryptoAccountSelect"></select>
+        <input class="input" id="cryptoAmount" type="number" min="10" placeholder="Enter amount in wallet units (min 10)">
+        <div class="btn btn-green" id="withdrawCryptoBtn" onclick="requestWithdraw('crypto')">Request Crypto Withdrawal</div>
+      </div>
     </div>
   </div>
 
-  <!-- Bottom nav -->
   <div class="bottom-nav">
     <a href="home.html"><i class="fas fa-house"></i>Home</a>
     <a href="earn.html"><i class="fas fa-coins"></i>Earn</a>
@@ -88,11 +136,114 @@
     <a href="withdraw.html" class="active"><i class="fas fa-wallet"></i>Withdraw</a>
   </div>
 
-  <!-- Scripts -->
   <script>
-    /* Firebase config + all your functions (load, switchMain, updateAllTiers, selectTier, updateCustom, updateSummary, selectCrypto, requestWithdraw, doWithdraw, saveLocal, fetchAndRenderAccounts, useAccount) */
-    // (All the JavaScript you pasted earlier goes here unchanged)
+    const firebaseConfig = {
+      apiKey: 'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',
+      authDomain: 'enable-authentication-1b56c.firebaseapp.com',
+      projectId: 'enable-authentication-1b56c',
+      storageBucket: 'enable-authentication-1b56c.firebasestorage.app',
+      messagingSenderId: '946417281410',
+      appId: '1:946417281410:web:7f4e06e3b4b03946d0079b'
+    };
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+    let token = null;
+    let currentBalance = 0;
+    let savedAccounts = [];
+
+    firebase.auth().onAuthStateChanged(async user => {
+      if (!user) {
+        location.href = 'login.html';
+        return;
+      }
+      token = await user.getIdToken();
+      currentBalance = Number(localStorage.getItem('watch2earn_balance') || '0') * 1500;
+      document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
+      document.getElementById('usdBal').innerText = Number(localStorage.getItem('watch2earn_balance') || '0').toFixed(2);
+      document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+      await fetchAndRenderAccounts();
+    });
+
+    function switchMain(mode){
+      document.getElementById('tabNaira').classList.toggle('active', mode === 'naira');
+      document.getElementById('tabCrypto').classList.toggle('active', mode === 'crypto');
+      document.getElementById('nairaSection').style.display = mode === 'naira' ? 'block' : 'none';
+      document.getElementById('cryptoSection').style.display = mode === 'crypto' ? 'block' : 'none';
+    }
+
+    async function saveAccount(type){
+      if (!token) return alert('Please sign in again.');
+      const payload = type === 'bank' ? {
+        type: 'bank',
+        bankName: document.getElementById('bankName').value,
+        accountName: document.getElementById('accountName').value,
+        accountNumber: document.getElementById('accountNumber').value,
+        label: `${document.getElementById('bankName').value} • ${document.getElementById('accountNumber').value}`
+      } : {
+        type: 'crypto',
+        cryptoType: document.getElementById('cryptoType').value,
+        walletAddress: document.getElementById('walletAddress').value,
+        label: `${document.getElementById('cryptoType').value} • ${document.getElementById('walletAddress').value}`
+      };
+
+      const res = await fetch('/api/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error || 'Could not save account');
+      alert('Account saved successfully');
+      await fetchAndRenderAccounts();
+    }
+
+    async function fetchAndRenderAccounts(){
+      if (!token) return;
+      const res = await fetch('/api/accounts', { headers: { Authorization: 'Bearer ' + token } });
+      const data = await res.json();
+      savedAccounts = Array.isArray(data) ? data : [];
+
+      const bankSelect = document.getElementById('bankAccountSelect');
+      const cryptoSelect = document.getElementById('cryptoAccountSelect');
+      bankSelect.innerHTML = '<option value="">Select saved Naira bank account</option>' +
+        savedAccounts.filter(a => a.type === 'bank').map(a => `<option value="${a.id}">${a.label || a.bankName}</option>`).join('');
+      cryptoSelect.innerHTML = '<option value="">Select saved crypto wallet</option>' +
+        savedAccounts.filter(a => a.type === 'crypto').map(a => `<option value="${a.id}">${a.label || a.cryptoType}</option>`).join('');
+    }
+
+    async function requestWithdraw(method){
+      if (!token) return alert('Please sign in again.');
+      const amount = Number(method === 'bank' ? document.getElementById('bankAmount').value : document.getElementById('cryptoAmount').value);
+      const selectedAccount = method === 'bank' ? document.getElementById('bankAccountSelect').value : document.getElementById('cryptoAccountSelect').value;
+      if (!selectedAccount) return alert('Please save and select an account first.');
+      if (method === 'bank' && amount < 5500) return alert('Bank withdrawals start from ₦5,500.');
+      if (method === 'crypto' && amount < 10) return alert('Crypto withdrawals start from 10 units.');
+
+      const charge = amount >= 20000 ? 0 : 500;
+      const payload = {
+        amount,
+        method,
+        accountId: selectedAccount,
+        charge,
+        accountType: method,
+        accountName: savedAccounts.find(a => a.id === selectedAccount)?.accountName || '',
+        accountNumber: savedAccounts.find(a => a.id === selectedAccount)?.accountNumber || '',
+        bankName: savedAccounts.find(a => a.id === selectedAccount)?.bankName || '',
+        cryptoType: savedAccounts.find(a => a.id === selectedAccount)?.cryptoType || '',
+        walletAddress: savedAccounts.find(a => a.id === selectedAccount)?.walletAddress || '',
+        walletType: savedAccounts.find(a => a.id === selectedAccount)?.cryptoType || ''
+      };
+
+      const res = await fetch('/api/withdrawals/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error || 'Withdrawal request failed');
+      document.getElementById('statusMsg').innerText = `Request submitted: ${method === 'bank' ? 'Bank' : 'Crypto'} • Charge ₦${data.charge} • Net ₦${data.netAmount}`;
+      alert(`Withdrawal request submitted. Charge: ₦${data.charge}, Net: ₦${data.netAmount}`);
+    }
   </script>
-  <script src="js/app.js"></script>
 </body>
 </html>

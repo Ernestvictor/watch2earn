@@ -1,16 +1,43 @@
 const express = require('express');
 const router = express.Router();
-const { db, admin } = require('../config/firebaseAdmin');
-const { verifyUser } = require('../middleware/auth');
+const fs = require('fs');
+const path = require('path');
+const verifyToken = require('../middleware/auth');
+
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const ACCOUNTS_PATH = path.join(DATA_DIR, 'accounts.json');
+
+function ensureFiles() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(ACCOUNTS_PATH)) fs.writeFileSync(ACCOUNTS_PATH, '[]');
+}
+
+function readAccounts() {
+  ensureFiles();
+  try { return JSON.parse(fs.readFileSync(ACCOUNTS_PATH, 'utf8')); } catch (e) { return []; }
+}
+
+function writeAccounts(accounts) {
+  ensureFiles();
+  fs.writeFileSync(ACCOUNTS_PATH, JSON.stringify(accounts, null, 2));
+}
 
 // Add a bank account or crypto wallet for the logged-in user
-router.post('/', verifyUser, async (req, res) => {
+router.post('/', verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid;
     const { type, bankName, accountNumber, accountName, cryptoType, walletAddress, network, label } = req.body;
-    if (!type || !['bank','crypto'].includes(type)) return res.status(400).json({ error: 'type must be bank or crypto' });
 
-    const doc = await db.collection('users').doc(userId).collection('accounts').add({
+    if (!type || !['bank','crypto'].includes(type)) {
+      return res.status(400).json({ error: 'type must be bank or crypto' });
+    }
+
+    const accounts = readAccounts();
+    const existing = accounts.filter(a => a.userId === userId && a.type === type);
+
+    const entry = {
+      id: Date.now().toString(),
+      userId,
       type,
       bankName: bankName || null,
       accountNumber: accountNumber || null,
@@ -18,41 +45,62 @@ router.post('/', verifyUser, async (req, res) => {
       cryptoType: cryptoType || null,
       walletAddress: walletAddress || null,
       network: network || null,
-      label: label || (type==='bank'? (bankName||'Bank account') : (cryptoType||'Crypto wallet')),
-      createdAt: new Date()
-    });
+      label: label || (type === 'bank' ? (bankName || 'Bank account') : (cryptoType || 'Crypto wallet')),
+      createdAt: new Date().toISOString()
+    };
 
-    res.json({ success: true, id: doc.id });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    if (type === 'bank') {
+      if (!accountName || !accountNumber || !bankName) {
+        return res.status(400).json({ error: 'Bank name, account number, and account name are required' });
+      }
+    } else if (type === 'crypto') {
+      if (!walletAddress || !cryptoType) {
+        return res.status(400).json({ error: 'Crypto type and wallet address are required' });
+      }
+    }
+
+    accounts.unshift(entry);
+    writeAccounts(accounts);
+    res.json({ success: true, id: entry.id, account: entry, savedCount: existing.length + 1 });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // List accounts
-router.get('/', verifyUser, async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid;
-    const snap = await db.collection('users').doc(userId).collection('accounts').orderBy('createdAt','desc').get();
-    const accounts = snap.docs.map(d=>({ id: d.id, ...d.data() }));
+    const accounts = readAccounts().filter(a => a.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     res.json(accounts);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Delete account
-router.delete('/:id', verifyUser, async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid;
-    await db.collection('users').doc(userId).collection('accounts').doc(req.params.id).delete();
+    const accounts = readAccounts().filter(a => !(a.userId === userId && a.id === req.params.id));
+    writeAccounts(accounts);
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Get single account by id (for withdrawal selection)
-router.get('/:id', verifyUser, async (req, res) => {
+router.get('/:id', verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid;
-    const doc = await db.collection('users').doc(userId).collection('accounts').doc(req.params.id).get();
-    if (!doc.exists) return res.status(404).json({ error: 'Not found' });
-    res.json({ id: doc.id, ...doc.data() });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const accounts = readAccounts();
+    const account = accounts.find(a => a.userId === userId && a.id === req.params.id);
+    if (!account) return res.status(404).json({ error: 'Not found' });
+    res.json(account);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

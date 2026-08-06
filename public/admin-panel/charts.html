@@ -64,63 +64,73 @@
 
   <!-- Linked navigation -->
   <div class="bottom-nav">
-    <a href="carbinate.html"><i class="fas fa-house"></i>Home</a>
-    <a href="users.html"><i class="fas fa-users"></i>Users</a>
-    <a href="withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
-    <a href="past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
-    <a href="chart.html" class="active"><i class="fas fa-chart-line"></i>Charts</a>
-    <a href="messages.html"><i class="fas fa-envelope"></i>Messages</a>
+    <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="/admin-panel/past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="/admin-panel/charts.html" class="active"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
   <script>
-    // Earnings chart
-    fetch('/api/admin/chart/earnings',{credentials:'include'})
-      .then(res=>res.json())
-      .then(data=>{
-        new Chart(document.getElementById('earningsChart'),{
-          type:'bar',
-          data:{labels:data.labels,datasets:[{label:'Earnings',data:data.data,backgroundColor:'rgba(255,99,132,0.2)',borderColor:'rgba(255,99,132,1)',borderWidth:1}]},
-          options:{scales:{y:{beginAtZero:true}}}
-        });
-      });
+    function checkAuth() {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        location.href = '/admin-panel/verify.html';
+        return false;
+      }
+      return true;
+    }
 
-    // Ads watched chart
-    fetch('/api/admin/chart/ads-watched',{credentials:'include'})
-      .then(res=>res.json())
-      .then(data=>{
-        new Chart(document.getElementById('adsWatchedChart'),{
-          type:'bar',
-          data:{labels:data.labels,datasets:[{label:'Ads Watched',data:data.data,backgroundColor:'rgba(54,162,235,0.2)',borderColor:'rgba(54,162,235,1)',borderWidth:1}]},
-          options:{scales:{y:{beginAtZero:true}}}
-        });
-      });
+    async function loadCharts() {
+      const token = localStorage.getItem('adminToken');
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      };
 
-    // Earnings summary
-    fetch('/api/admin/chart/earnings-summary',{credentials:'include'})
-      .then(res=>res.json())
-      .then(data=>{
-        document.getElementById('earnings-1-day').innerText = data['1-day'];
-        document.getElementById('earnings-7-days').innerText = data['7-days'];
-        document.getElementById('earnings-30-days').innerText = data['30-days'];
-        document.getElementById('earnings-90-days').innerText = data['90-days'];
-      });
+      try {
+        // Earnings chart
+        const earningsRes = await fetch('/api/admin/chart/earnings', {headers, credentials:'include'});
+        if (earningsRes.ok) {
+          const eData = await earningsRes.json();
+          new Chart(document.getElementById('earningsChart'),{
+            type:'bar',
+            data:{labels:eData.labels,datasets:[{label:'Earnings ($)',data:eData.data,backgroundColor:'rgba(76,175,80,0.2)',borderColor:'rgba(76,175,80,1)',borderWidth:2}]},
+            options:{scales:{y:{beginAtZero:true}}}
+          });
+        }
 
-    // Active users
-    fetch('/api/admin/users/active',{credentials:'include'})
-      .then(res=>res.json())
-      .then(data=>{
-        const tbody=document.getElementById('active-users-table');
-        tbody.innerHTML=data.map(u=>`<tr><td>${u.email}</td><td>${u.lastActive}</td></tr>`).join('');
-      });
+        // Ads watched chart
+        const adsRes = await fetch('/api/admin/chart/ads-watched', {headers, credentials:'include'});
+        if (adsRes.ok) {
+          const aData = await adsRes.json();
+          new Chart(document.getElementById('adsWatchedChart'),{
+            type:'bar',
+            data:{labels:aData.labels,datasets:[{label:'Ads Watched',data:aData.data,backgroundColor:'rgba(33,150,243,0.2)',borderColor:'rgba(33,150,243,1)',borderWidth:2}]},
+            options:{scales:{y:{beginAtZero:true}}}
+          });
+        }
 
-    // Passive users
-    fetch('/api/admin/users/passive',{credentials:'include'})
-      .then(res=>res.json())
-      .then(data=>{
-        const tbody=document.getElementById('passive-users-table');
-        tbody.innerHTML=data.map(u=>`<tr><td>${u.email}</td><td>${u.lastActive}</td></tr>`).join('');
-      });
+        // Earnings summary
+        const summaryRes = await fetch('/api/admin/chart/earnings-summary', {headers, credentials:'include'});
+        if (summaryRes.ok) {
+          const sData = await summaryRes.json();
+          document.getElementById('earnings-1-day').innerText = sData['1-day'] || '$0';
+          document.getElementById('earnings-7-days').innerText = sData['7-days'] || '$0';
+          document.getElementById('earnings-30-days').innerText = sData['30-days'] || '$0';
+          document.getElementById('earnings-90-days').innerText = sData['90-days'] || '$0';
+        }
+      } catch(err) {
+        console.error('Charts load error:', err);
+      }
+    }
+
+    if (checkAuth()) {
+      loadCharts();
+    }
   </script>
 </body>
 </html>

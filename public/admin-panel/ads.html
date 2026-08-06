@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Manage Ads - Admin</title>
+  <link rel="stylesheet" href="/admin.css">
+  <style>body{font-family:Segoe UI,Arial,sans-serif;padding:16px;color:#fff;background:#060606} .card{background:#0f0f0f;padding:12px;border-radius:8px;margin-bottom:12px;border:1px solid #222}</style>
+</head>
+<body>
+  <h1>Ads Manager</h1>
+  <div class="card">
+    <label>Title<br><input id="title" style="width:100%"></label>
+    <label>Seconds<br><input id="seconds" type="number" value="15" style="width:100%"></label>
+    <label>Type (ad/survey/game)<br><input id="type" value="ad" style="width:100%"></label>
+    <button id="create">Create Ad</button>
+  </div>
+  <div id="list"></div>
+<script>
+async function load(){
+  const res = await fetch('/api/ads');
+  const ads = await res.json();
+  const list = document.getElementById('list'); list.innerHTML='';
+  ads.forEach(a=>{
+    const el = document.createElement('div'); el.className='card';
+    el.innerHTML = `<b>${a.title}</b> <small>(${a.seconds}s)</small><div style="margin-top:8px"><button data-id="${a.id}" class="edit">Edit</button> <button data-id="${a.id}" class="del">Delete</button></div>`;
+    list.appendChild(el);
+  });
+  document.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async e=>{
+    const id = e.target.getAttribute('data-id');
+    await fetch('/api/ads/'+id,{method:'DELETE'});
+    load();
+  }));
+}
+
+document.getElementById('create').addEventListener('click', async ()=>{
+  const title = document.getElementById('title').value;
+  const seconds = Number(document.getElementById('seconds').value||15);
+  const type = document.getElementById('type').value||'ad';
+  await fetch('/api/ads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,seconds,type})});
+  document.getElementById('title').value='';
+  load();
+});
+
+load();
+</script>
+</body>
+</html>

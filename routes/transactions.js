@@ -137,6 +137,15 @@ router.get('/referral-earnings', verifyToken, (req, res) => {
   res.json({ referralEarningsUsd: referralEarnings, referralEarningsNaira: Math.round(referralEarnings * 1500) });
 });
 
+router.get('/balance', verifyToken, (req, res) => {
+  const userId = req.user.uid || req.user.id;
+  const transactions = loadTransactions().filter(t => t.userId === userId);
+  const balanceUsd = transactions.reduce((sum, t) => sum + (Number(t.amountUsd) || 0), 0);
+  const balanceNaira = Math.round(balanceUsd * 1500);
+  const adCount = transactions.filter(t => t.type === 'ad' && isToday(t.date)).length;
+  res.json({ balanceUsd, balanceNaira, adCount });
+});
+
 router.get('/history', verifyToken, (req, res) => {
   const userId = req.user.uid || req.user.id;
   const transactions = loadTransactions().filter(t => t.userId === userId);

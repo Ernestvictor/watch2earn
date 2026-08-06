@@ -10,6 +10,22 @@ const path = require('path');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
 const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
+
+// Middleware to verify admin JWT token
+function verifyAdminToken(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token provided' });
+
+  try {
+    const jwtSecret = process.env.JWT_SECRET || 'dev-secret';
+    const decoded = jwt.verify(token, jwtSecret);
+    if (!decoded.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+    req.admin = decoded;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
 const WITHDRAWALS_PATH = path.join(DATA_DIR, 'withdrawals.json');
 const TRANSACTIONS_PATH = path.join(DATA_DIR, 'transactions.json');
 
@@ -367,25 +383,47 @@ router.get('/history/proof/:id', (req, res) => {
   res.json({ success: true, message: `Proof requested for transaction ${req.params.id}.` });
 });
 
-router.get('/messages', (req, res) => {
+router.get('/messages', verifyAdminToken, (req, res) => {
   const messages = readMessages();
-  res.json(messages);
+  // Sort by createdAt descending (newest first)
+  const sorted = (Array.isArray(messages) ? messages : []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  res.json(sorted);
 });
 
-router.post('/messages', (req, res) => {
+router.post('/messages', verifyAdminToken, (req, res) => {
   const payload = req.body || {};
   const messages = readMessages();
+  
+  // Enhanced message object with all fields for live data management
   const newMessage = {
     id: Date.now().toString(),
-    title: payload.template || 'Watch2Earn Update',
+    templateType: payload.templateType || 'custom',
+    title: payload.title || payload.template || 'Watch2Earn Update',
     message: payload.message || 'New update from admin panel.',
+    sendType: payload.sendType || 'manual',
+    priority: payload.priority || 'normal',
+    channel: payload.channel || 'inapp',
+    
+    // Scheduling
+    scheduleDateTime: payload.scheduleDateTime || null,
+    frequency: payload.frequency || 'once',
+    
+    // Targeting
+    targetType: payload.targetType || 'all',
+    targetUsers: payload.targetUsers || 'all',
+    
+    // Status
+    status: payload.status || 'pending',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    
+    // Legacy support
     audience: payload.audience || 'all',
     severity: payload.severity || 'normal',
-    channel: payload.channel || 'inapp',
-    schedule: payload.schedule || 'now',
-    createdAt: new Date().toISOString()
+    schedule: payload.schedule || 'now'
   };
 
+  // Legacy: handle bonus ads if provided
   if (Number.isFinite(Number(payload.bonusAds)) && Number(payload.bonusAds) >= 0) {
     const settings = readSettings();
     settings.bonusAdCount = Number(payload.bonusAds);
@@ -397,6 +435,35 @@ router.post('/messages', (req, res) => {
   messages.unshift(newMessage);
   writeMessages(messages);
   res.json({ success: true, message: newMessage });
+});
+
+// Delete a message
+router.delete('/messages/:id', verifyAdminToken, (req, res) => {
+  const messageId = req.params.id;
+  let messages = readMessages();
+  messages = messages.filter(m => m.id !== messageId);
+  writeMessages(messages);
+  res.json({ success: true, message: 'Message deleted' });
+});
+
+// Update message status (optional - for marking as sent, etc)
+router.put('/messages/:id', verifyAdminToken, (req, res) => {
+  const messageId = req.params.id;
+  const payload = req.body || {};
+  let messages = readMessages();
+  const msg = messages.find(m => m.id === messageId);
+  
+  if (!msg) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+  
+  if (payload.status) msg.status = payload.status;
+  if (payload.title) msg.title = payload.title;
+  if (payload.message) msg.message = payload.message;
+  msg.updatedAt = new Date().toISOString();
+  
+  writeMessages(messages);
+  res.json({ success: true, message: msg });
 });
 
 router.get('/settings', (req, res) => {

@@ -84,18 +84,21 @@
         window.location.href='home.html';
       }catch(error){
         if(error.code==='auth/email-already-in-use'){
-          try{
-            await firebase.auth().signInWithEmailAndPassword(email,password);
-            window.location.href='home.html';
-          }catch{
-            errorMsg.innerText='This email already has an account. Please login.';
-            setTimeout(()=>location.href='login.html',1500);
-          }
+          errorMsg.innerText='✗ This email already has an account. Redirecting to login...';
+          setTimeout(()=>location.href='login.html',2000);
+        }else if(error.code==='auth/weak-password'){
+          errorMsg.innerText='✗ Password must be at least 6 characters.';
+          btn.disabled=false;
+          btn.innerText='Sign Up';
+        }else if(error.code==='auth/invalid-email'){
+          errorMsg.innerText='✗ Please enter a valid email address.';
+          btn.disabled=false;
+          btn.innerText='Sign Up';
         }else{
-          errorMsg.innerText=error.message;
+          errorMsg.innerText='✗ ' + (error.message || 'Signup failed');
+          btn.disabled=false;
+          btn.innerText='Sign Up';
         }
-        btn.disabled=false;
-        btn.innerText='Sign Up';
       }
     });
   </script>

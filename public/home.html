@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="user.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="user.css">
-  <link rel="stylesheet" href="leading.css">
+
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif;padding-bottom:90px}
 .top{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#121214;border-bottom:1px solid #232326;position:sticky;top:0;z-index:10}
@@ -42,11 +42,6 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
 </head>
 
 <body>
-  <div class="leading-overlay" id="leading">
-    <img src="assets/logo-watch2earn.svg" class="logo" alt="logo">
-    <div class="loader"></div>
-    <div class="text">Loading Watch2Earn…</div>
-  </div>
 <div class="top">
   <div class="top-left">
     <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
@@ -266,7 +261,8 @@ async function claimBonus(){
   }catch(e){
     console.error('Claim bonus error:', e);
     alert('Error claiming bonus');
- 
+  }
+}
 
 function goWithdraw(){ location.href='withdraw.html'; }
 
@@ -309,9 +305,6 @@ async function loadInboxCount(){
 
 loadInboxCount();
 setInterval(loadInboxCount, 30000); // Check every 30 seconds
-
-// Hide leading overlay when page ready
-window.addEventListener('load', ()=>{ document.body.setAttribute('data-ready','true'); setTimeout(()=>{ const el=document.getElementById('leading'); if(el) el.style.display='none'; },300); });
 </script>
 </body>
 </html>

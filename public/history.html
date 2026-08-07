@@ -22,15 +22,10 @@ body{background:#070709;color:#fff;font-family:Inter,sans-serif;padding-bottom:9
 </style>
 </head>
 <body>
-  <div class="leading-overlay" id="leading">
-    <img src="assets/logo-watch2earn.svg" class="logo" alt="logo">
-    <div class="loader"></div>
-    <div class="text">Loading history…</div>
-  </div>
 <div class="top">
   <i class="fas fa-arrow-left" onclick="location.href='home.html'" style="cursor:pointer;padding:8px"></i>
   <b><i class="fas fa-clock-rotate-left" style="color:#4CAF50"></i> Withdrawal History</b>
-<link rel="stylesheet" href="leading.css">
+
   <i class="fas fa-rotate" style="margin-left:auto;cursor:pointer;color:#777" onclick="loadHistory()"></i>
 </div>
 
@@ -98,7 +93,6 @@ async function loadHistory(){
   }).join('');
 }
 loadHistory();
-window.addEventListener('load', ()=>{ document.body.setAttribute('data-ready','true'); setTimeout(()=>{ const el=document.getElementById('leading'); if(el) el.style.display='none'; },300); });
 </script>
 </body>
 </html>

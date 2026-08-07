@@ -4,7 +4,6 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Earn - Watch2Earn</title>
 <link rel="stylesheet" href="user.css">
-<link rel="stylesheet" href="leading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script async="async" data-cfasync="false" src="https://pl30708907.effectivecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js"></script>
 <!-- popunder/script removed per request -->
@@ -42,11 +41,6 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 </style>
 </head>
 <body>
-  <div class="leading-overlay" id="leading">
-    <img src="assets/logo-watch2earn.svg" class="logo" alt="logo">
-    <div class="loader"></div>
-    <div class="text">Preparing ads…</div>
-  </div>
 <div class="top-bar">
   <div class="top-left">
     <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
@@ -280,29 +274,36 @@ async function startAdFlow(btn, ad){
     const interval = setInterval(async ()=>{
       remaining--; adTimerEl.innerText = remaining + 's';
       if(remaining <= 0){ clearInterval(interval); document.removeEventListener('visibilitychange', handleVis); 
-        // credit
+        // credit using new /api/ads/watch endpoint
         try{
           const user = firebase.auth().currentUser;
           let credited = false;
           if(user){
             const token = await user.getIdToken();
-            const payload = { nairaAmount: AD_REWARD_NAIRA, source: 'ad', title: adId, referrerId: localStorage.getItem('watch2earn_referrer') || null };
-            const res = await fetch('/api/transactions/earn', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
+            const payload = { adDuration: ad.seconds || 15 };
+            const res = await fetch('/api/ads/watch', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
             if(res.ok){
+              const result = await res.json();
               credited = true;
+              localStorage.setItem('watch2earn_balance', String(Number(localStorage.getItem('watch2earn_balance')||0) + result.paymentUsd));
+              localStorage.setItem('watch2earn_ads', String(result.adsToday));
+              updateAfterWatch();
               const balanceRes = await fetch('/api/transactions/balance', { headers: { 'Authorization': 'Bearer ' + token } });
-              if(balanceRes.ok){
-                const balanceData = await balanceRes.json();
-                localStorage.setItem('watch2earn_balance', String(balanceData.balanceUsd || 0));
-                localStorage.setItem('watch2earn_ads', String(balanceData.adCount || 0));
+              alert(`✅ Ad completed — +₦${result.payment.toFixed(2)} added! (${result.adsToday}/${result.adsToday + result.remaining} ads today)`);
+            }else{
+              const error = await res.json();
+              if(res.status === 403 && error.error && error.error.includes('Daily ad limit')){
+                alert(`⚠️ Daily limit reached!\nYou watched 5 ads today. Limit resets at 12:00 AM tomorrow.`);
+              }else if(res.status === 400 && error.error && error.error.includes('too short')){
+                alert(`⚠️ Ad too short! Must be at least 15 seconds for payment.`);
+              }else{
+                alert('Error: ' + (error.error || error.message || 'Failed to credit ad'));
               }
             }
           }
           if(!credited){ const prevBal = Number(localStorage.getItem('watch2earn_balance')||'0'); localStorage.setItem('watch2earn_balance', String(prevBal + AD_REWARD_USD)); let txs = JSON.parse(localStorage.getItem('watch2earn_tx')||'[]'); txs.unshift({ type:'ad', title: adId, amount: AD_REWARD_NAIRA, date: new Date().toISOString() }); localStorage.setItem('watch2earn_tx', JSON.stringify(txs)); localStorage.setItem('watch2earn_ads', String(Number(localStorage.getItem('watch2earn_ads')||0) + 1)); }
           markAdWatched(adId);
-          updateAfterWatch();
-          alert('✅ Ad completed — +$' + AD_REWARD_USD.toFixed(4) + ' added to your balance.');
-        }catch(e){ console.error('credit error', e); alert('Credit failed'); }
+        }catch(e){ console.error('credit error', e); alert('Credit failed: ' + (e.message||'Unknown error')); }
         cleanup(true);
       }
     },1000);
@@ -350,7 +351,6 @@ function switchTab(tabName, button){
 
 // make page responsive and ensure ads only on this page: already scoped to this file
 </script>
-<script>window.addEventListener('load', ()=>{ document.body.setAttribute('data-ready','true'); setTimeout(()=>{ const el=document.getElementById('leading'); if(el) el.style.display='none'; },300); });</script>
 <script>
   atOptions = {
     'key' : '457f65cbe904e42fea908d570f00bbb2',

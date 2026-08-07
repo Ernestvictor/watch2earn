@@ -188,14 +188,20 @@ router.post('/signup-bonus', verifyToken, (req, res) => {
     users.unshift(user);
   }
 
-  if (user.signupBonusGiven) {
+  // Also check transactions to ensure we haven't already given a signup bonus (defense-in-depth)
+  const existingTxs = loadTransactions();
+  const existingSignup = existingTxs.find(t => (t.userId === userId) && (t.type === 'signup_bonus' || t.type === 'signup-bonus'));
+  if (existingSignup || user.signupBonusGiven) {
+    // Ensure the flag is consistent with transactions
+    user.signupBonusGiven = true;
+    writeUsers(users);
     return res.json({ message: 'Signup bonus already granted' });
   }
 
   // Give 100 NGN => convert to USD
   const naira = 100;
   const usd = +(naira / 1500).toFixed(6);
-  const txs = loadTransactions();
+  const txs = existingTxs;
   const bonusTx = {
     id: Date.now().toString(),
     userId,

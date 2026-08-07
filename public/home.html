@@ -149,18 +149,7 @@ firebase.auth().onAuthStateChanged(async user => {
   // Refresh balance every 5 seconds for real-time updates
   loadBonuses();
 
-  // Attempt to award signup bonus once (server side prevents duplicates)
-  try {
-    const refId = new URLSearchParams(location.search).get('ref') || null;
-    const token = await user.getIdToken();
-    fetch('/api/transactions/signup-bonus', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ referrerId: refId })
-    }).catch(e => console.warn('signup-bonus call failed', e));
-  } catch (e) {
-    console.warn('signup-bonus call error', e);
-  }
+  // NOTE: signup bonus is handled server-side and is idempotent; do not call it on every page load.
 
   setInterval(load, 5000);
   setInterval(loadBonuses, 30000);

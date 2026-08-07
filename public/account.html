@@ -154,25 +154,25 @@ firebase.auth().onAuthStateChanged(async user => {
   async function loadProfile(){
     try {
       const token = await user.getIdToken();
-      const res = await fetch('/api/users/profile', { headers: { Authorization: 'Bearer ' + token } });
-      if(!res.ok) throw new Error('Profile fetch failed');
+      const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
+      if(!res.ok) throw new Error('Balance fetch failed');
       const data = await res.json();
       const usd = Number(data.balanceUsd || 0);
-      const naira = usd * 1500;
+      const naira = Math.round(usd * 1500);
       document.getElementById('mainBal').innerText = usd.toFixed(2);
       document.getElementById('mainNaira').innerText = naira.toLocaleString();
-      document.getElementById('adsEarn').innerText = (data.adsEarn || 0).toFixed(2);
-      document.getElementById('gameEarn').innerText = (data.gameEarn || 0).toFixed(2);
-      document.getElementById('surveyEarn').innerText = (data.surveyEarn || 0).toFixed(2);
-      document.getElementById('refEarn').innerText = (data.refEarn || 0).toFixed(2);
+      document.getElementById('adsEarn').innerText = (Number(data.adsEarnUsd || 0)).toFixed(2);
+      document.getElementById('gameEarn').innerText = (Number(data.gameEarnUsd || 0)).toFixed(2);
+      document.getElementById('surveyEarn').innerText = (Number(data.surveyEarnUsd || 0)).toFixed(2);
+      document.getElementById('refEarn').innerText = (Number(data.referralEarnUsd || 0)).toFixed(2);
       document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
-      document.getElementById('invitedCount').innerText = data.invitedCount || 0;
-      document.getElementById('refEarnStat').innerText = '$' + (data.refEarn || 0).toFixed(2);
-      if (data.announcement) {
-        document.getElementById('announcementText').innerText = data.announcement;
-        document.getElementById('announcementBanner').style.display = 'block';
-      }
+      // Estimate invited count from referral earnings (rough calc)
+      const refEarnUsd = Number(data.referralEarnUsd || 0);
+      const estimatedInvites = Math.floor(refEarnUsd / 0.0067); // ~₦10 per signup = $0.0067
+      document.getElementById('invitedCount').innerText = estimatedInvites;
+      document.getElementById('refEarnStat').innerText = '$' + refEarnUsd.toFixed(2);
     } catch (e) {
+      console.warn('Balance fetch failed, falling back to localStorage', e);
       const usd = Number(localStorage.getItem('watch2earn_balance') || '0');
       const naira = usd * 1500;
       document.getElementById('mainBal').innerText = usd.toFixed(2);

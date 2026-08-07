@@ -158,31 +158,54 @@ firebase.auth().onAuthStateChanged(async user => {
 async function load(){
   const user = firebase.auth().currentUser;
   let bal = 0;
+  let adsEarn = 0;
+  let adCount = 0;
   
   // Try to get live balance from server first
   if(user){
     try{
       const token = await user.getIdToken();
-      const res = await fetch('/api/transactions/history', { headers: { Authorization: 'Bearer ' + token } });
+      const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
       if(res.ok){
-        const txs = await res.json();
-        bal = txs.reduce((sum, t) => sum + (t.amountUsd || 0), 0);
+        const data = await res.json();
+        bal = Number(data.balanceUsd || 0);
+        adsEarn = Number(data.adsEarnUsd || 0);
+        adCount = Number(data.adCount || 0);
         localStorage.setItem('watch2earn_balance', bal.toString());
+        localStorage.setItem('watch2earn_ads', adCount.toString());
       }
     }catch(e){ 
       console.warn('Failed to fetch live balance', e);
       bal = parseFloat(localStorage.getItem('watch2earn_balance')||'0');
+      adCount = Number(localStorage.getItem('watch2earn_ads')||'0');
     }
   } else {
     bal = parseFloat(localStorage.getItem('watch2earn_balance')||'0');
+    adCount = Number(localStorage.getItem('watch2earn_ads')||'0');
   }
   
   document.getElementById('usd').innerText=bal.toFixed(2);
   const naira=Math.round(bal*1500);
   document.getElementById('naira').innerText=naira.toLocaleString();
   document.getElementById('nairaTop').innerText=naira.toLocaleString();
-  document.getElementById('adsWatched').innerText=localStorage.getItem('watch2earn_ads')||'0';
+  document.getElementById('adsWatched').innerText=adCount;
   document.getElementById('streak').innerText=localStorage.getItem('watch2earn_streak')||'1';
+  
+  // Show referral earnings if available
+  try{
+    if(user){
+      const token = await user.getIdToken();
+      const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
+      if(res.ok){
+        const data = await res.json();
+        const refUsd = Number(data.referralEarnUsd || 0);
+        const refCount = Math.floor(refUsd / 0.0067); // estimate invite count
+        document.getElementById('referralUsd').innerText = '$' + refUsd.toFixed(2);
+        document.getElementById('referralCount').innerText = refCount;
+      }
+    }
+  }catch(e){ }
+  
   const btn=document.getElementById('withdrawBtn');
   if(bal>=5){ btn.disabled=false; btn.innerHTML='<i class="fas fa-wallet"></i> Withdraw $'+bal.toFixed(2); }
 }

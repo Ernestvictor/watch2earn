@@ -5,8 +5,15 @@
 <title>Earn - Watch2Earn</title>
 <link rel="stylesheet" href="user.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- Ad Network 1: EffectiveCPM -->
 <script async="async" data-cfasync="false" src="https://pl30708907.effectivecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js"></script>
-<!-- popunder/script removed per request -->
+<div id="container-4b1cf630fa653f9661f13acbf3b9bcf9" style="display:none"></div>
+
+<!-- Ad Network 2: EffectiveCPM Secondary -->
+<script src="https://pl30708908.effectivecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js" async></script>
+
+<!-- Ad Network 3: HighPerformance Format -->
+<script src="https://www.highperformanceformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js" async></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding-bottom:85px}
@@ -88,23 +95,21 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
     <div style="background:#14230f;border:1px solid #2a4a2a;border-radius:14px;padding:12px;margin-bottom:12px;font-size:12px">
       <b style="color:#4CAF50">💎 Why Earn Here?</b>
       <ul style="margin:8px 0 0 16px;line-height:1.6;font-size:11px;color:#aaa">
-        <li>Watch videos till finish to earn $0.005</li>
-        <li>15-second videos required</li>
+        <li>Watch ads for 15 seconds to earn ₦2.00</li>
         <li>Max 5 ads per day • Resets at 12:00 AM</li>
         <li>Cancel anytime, but no reward</li>
       </ul>
     </div>
-    
-    <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin-bottom:12px;text-align:center">
-      <div style="font-weight:700;color:#4CAF50;margin-bottom:10px">Available Ads</div>
+    <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin-bottom:12px">
+      <div style="font-weight:700;color:#4CAF50;margin-bottom:10px">Live Ads</div>
       <div id="adsList"></div>
-      <div id="adPlayer" style="margin-top:12px;display:none;background:#000;border-radius:10px;padding:10px">
-        <div style="margin-bottom:8px;color:#aaa;text-align:center">Ad playing • 15s required</div>
-        <iframe id="adIframe" src="about:blank" style="width:100%;height:250px;border:0;border-radius:10px;background:#000"></iframe>
-        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-          <button id="cancelAd" class="btn-watch" style="flex:1;background:#f44336">Cancel</button>
-          <div id="adTimer" style="min-width:60px;text-align:center;color:#4CAF50;font-weight:700;font-size:16px">15s</div>
-        </div>
+    </div>
+    <div id="networkAdViewer" style="display:none;background:#000;border:1px solid #2a4a2a;border-radius:14px;padding:14px;margin-bottom:12px;text-align:center">
+      <div style="margin-bottom:12px;color:#aaa;font-size:12px">Viewing Ad • Keep window open</div>
+      <div id="adNetworkContainer" style="min-height:300px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center">
+        <button onclick="closeNetworkAd()" class="btn-watch" style="width:auto;flex:1">Stop Watching</button>
+        <div id="networkAdTimer" style="min-width:60px;text-align:center;color:#4CAF50;font-weight:700;font-size:16px">15s</div>
       </div>
     </div>
   </div>
@@ -143,6 +148,96 @@ const MAX_DAILY_ADS = 5;
 const AD_REWARD_USD = 0.005; // reward in USD when ad completes ($0.005)
 const NAIRA_PER_USD = 1500;
 const AD_REWARD_NAIRA = AD_REWARD_USD * NAIRA_PER_USD; // 7.50
+
+// Network ad viewer state
+let networkAdTimer = null;
+let networkAdStartTime = null;
+let networkAdCurrentId = null;
+
+// Show network ad viewer with countdown
+function viewNetworkAd(adId, title){
+  const viewer = document.getElementById('networkAdViewer');
+  const container = document.getElementById('adNetworkContainer');
+  const timer = document.getElementById('networkAdTimer');
+  
+  viewer.style.display = 'block';
+  container.innerHTML = `<p style="color:#aaa">${title}</p>`;
+  timer.innerText = '15s';
+  networkAdCurrentId = adId;
+  networkAdStartTime = Date.now();
+  
+  let remaining = 15;
+  timer.innerText = remaining + 's';
+  
+  // Show the ad network container if it exists
+  const networkContainer = document.getElementById('container-4b1cf630fa653f9661f13acbf3b9bcf9');
+  if(networkContainer && adId.includes('effectivecpm1')) {
+    networkContainer.style.display = 'block';
+    container.innerHTML = '';
+    container.appendChild(networkContainer.cloneNode(true));
+  }
+  
+  networkAdTimer = setInterval(()=>{
+    remaining--;
+    timer.innerText = remaining + 's';
+    if(remaining <= 0){
+      clearInterval(networkAdTimer);
+      networkAdTimer = null;
+      creditNetworkAd(adId, title);
+    }
+  }, 1000);
+}
+
+// Close network ad viewer early (no credit)
+function closeNetworkAd(){
+  if(networkAdTimer){
+    clearInterval(networkAdTimer);
+    networkAdTimer = null;
+  }
+  const viewer = document.getElementById('networkAdViewer');
+  viewer.style.display = 'none';
+  document.getElementById('adNetworkContainer').innerHTML = '';
+  networkAdCurrentId = null;
+  showToast('Ad closed — no reward', 'warn');
+}
+
+// Credit user for watching network ad
+async function creditNetworkAd(adId, title){
+  const viewer = document.getElementById('networkAdViewer');
+  viewer.style.display = 'none';
+  document.getElementById('adNetworkContainer').innerHTML = '';
+  
+  try{
+    const user = firebase.auth().currentUser;
+    if(user){
+      const token = await user.getIdToken();
+      const res = await fetch('/api/ads/watch', { 
+        method: 'POST', 
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': 'Bearer ' + token 
+        }, 
+        body: JSON.stringify({ adDuration: 15 }) 
+      });
+      if(res.ok){
+        const result = await res.json();
+        markAdWatched(adId);
+        updateAfterWatch();
+        showToast(`✅ ${title} completed — +₦${(result.payment||2).toFixed(2)} earned! (${result.adsToday}/5 today)`, 'success');
+      } else {
+        const err = await res.json().catch(()=>({error:'Failed'}));
+        showToast(err.error || 'Error crediting ad', 'error');
+      }
+    } else {
+      showToast('Login required', 'warn');
+    }
+  }catch(e){
+    console.error('Credit error', e);
+    showToast('Credit failed', 'error');
+  }
+  networkAdCurrentId = null;
+}
+
 
 // Save referrer if present in URL
 function saveRefFromUrl(){
@@ -185,7 +280,7 @@ function renderAds(ads, watchedIds, todaysCount){
   const container = document.getElementById('adsList');
   container.innerHTML = '';
   ads.forEach(ad => {
-    // ad expected shape: { id, title, seconds }
+    // ad expected shape: { id, title, seconds, isNetwork }
     const adId = ad.id || ('ad_' + (ad.title||'').replace(/\s+/g,'_') );
     const seconds = ad.seconds || 15;
     const disabled = watchedIds.has(adId) || (todaysCount >= MAX_DAILY_ADS);
@@ -194,18 +289,24 @@ function renderAds(ads, watchedIds, todaysCount){
     card.innerHTML = `
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
         <div style="flex:1">
-          <b style="font-size:14px">${ad.title || 'Sponsored Ad'}</b><br><small style="color:#777">${seconds}s</small>
+          <b style="font-size:14px">${ad.title || 'Sponsored Ad'}</b><br><small style="color:#777">${seconds}s • ${ad.isNetwork ? '🌐 Network' : '📺 Video'}</small>
         </div>
-        <div class="payout-box"><div class="company">≈ ₦${(AD_REWARD_NAIRA).toFixed(2)}</div><div class="you">You</div></div>
+        <div class="payout-box"><div class="company">≈ ₦2.00</div><div class="you">You</div></div>
       </div>
       <div style="margin-top:10px;display:flex;gap:8px">
-        <button class="btn-watch" data-ad-id="${adId}" data-ad-url="${ad.url||''}" ${disabled? 'disabled' : ''}>${disabled? 'Watched / Limit' : 'Start Ad'}</button>
+        <button class="btn-watch" data-ad-id="${adId}" data-ad-url="${ad.url||''}" data-is-network="${ad.isNetwork||false}" ${disabled? 'disabled' : ''}>${disabled? 'Watched / Limit' : 'Start Ad'}</button>
         <div class="ad-timer" id="timer-${adId}" style="min-width:80px;text-align:center;color:#aaa"></div>
       </div>
     `;
     container.appendChild(card);
     const btn = card.querySelector('.btn-watch');
-    btn.addEventListener('click', ()=> startAdFlow(btn, { id: adId, title: ad.title, seconds }));
+    btn.addEventListener('click', ()=> {
+      if(btn.getAttribute('data-is-network') === 'true'){
+        viewNetworkAd(adId, ad.title);
+      } else {
+        startAdFlow(btn, { id: adId, title: ad.title, seconds });
+      }
+    });
   });
 }
 
@@ -259,71 +360,113 @@ async function startAdFlow(btn, ad){
   if(activeAd) return; // only one at a time
   const adId = ad.id;
   btn.disabled = true;
-  btn.innerText = 'Loading ad...';
-  const adPlayer = document.getElementById('adPlayer');
-  const adIframe = document.getElementById('adIframe');
-  const adTimerEl = document.getElementById('adTimer');
-  const cancelBtn = document.getElementById('cancelAd');
+  btn.innerText = 'Starting...';
   const adUrl = btn.getAttribute('data-ad-url') || ad.url || '';
+  const requiredSeconds = Number(ad.seconds || 15);
   if(!adUrl){ showToast('Ad has no URL', 'error'); btn.disabled = false; btn.innerText = 'Start Ad'; return; }
-  adIframe.src = adUrl;
-  adPlayer.style.display = 'block';
-  btn.innerText = 'Playing...';
-  let started = false;
-  function cleanup(success){
-    adPlayer.style.display = 'none';
-    adIframe.src = 'about:blank';
-    cancelBtn.onclick = null;
-    activeAd = null;
-    if(!success){ btn.disabled = false; btn.innerText = 'Start Ad'; }
-  }
-  cancelBtn.onclick = ()=>{ cleanup(false); showToast('You left before the ad finished — no reward.', 'warn'); };
-  // start when iframe loads
-  adIframe.onload = async ()=>{
-    if(started) return; started = true;
-    let remaining = ad.seconds || 15;
-    adTimerEl.innerText = remaining + 's';
-    function handleVis(){ if(document.hidden){ cleanup(false); showToast('You left the tab — no reward.', 'warn'); } }
-    document.addEventListener('visibilitychange', handleVis);
-    const interval = setInterval(async ()=>{
-      remaining--; adTimerEl.innerText = remaining + 's';
-      if(remaining <= 0){ clearInterval(interval); document.removeEventListener('visibilitychange', handleVis); 
-        // credit using new /api/ads/watch endpoint
-        try{
-          const user = firebase.auth().currentUser;
-          let credited = false;
-          if(user){
-            const token = await user.getIdToken();
-            const payload = { adDuration: ad.seconds || 15 };
-            const res = await fetch('/api/ads/watch', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
-            if(res.ok){
-              const result = await res.json();
-              credited = true;
-              localStorage.setItem('watch2earn_balance', String(Number(localStorage.getItem('watch2earn_balance')||0) + result.paymentUsd));
-              localStorage.setItem('watch2earn_ads', String(result.adsToday));
-              // notify other pages to update profile
-              localStorage.setItem('profile_sync', Date.now());
-              updateAfterWatch();
-              showToast(`✅ Ad completed — +₦${result.payment.toFixed(2)} added! (${result.adsToday} today)`, 'success');
-            }else{
-              const error = await res.json();
-              if(res.status === 403 && error.error && error.error.includes('Daily ad limit')){
-                showToast('⚠️ Daily limit reached! You watched 5 ads today. Limit resets at 12:00 AM tomorrow.', 'warn');
-              }else if(res.status === 400 && error.error && error.error.includes('too short')){
-                showToast('⚠️ Ad too short! Must be at least 15 seconds for payment.', 'warn');
-              }else{
-                showToast('Error: ' + (error.error || error.message || 'Failed to credit ad'), 'error');
-              }
-            }
-          }
-          if(!credited){ const prevBal = Number(localStorage.getItem('watch2earn_balance')||'0'); localStorage.setItem('watch2earn_balance', String(prevBal + AD_REWARD_USD)); let txs = JSON.parse(localStorage.getItem('watch2earn_tx')||'[]'); txs.unshift({ type:'ad', title: adId, amount: AD_REWARD_NAIRA, date: new Date().toISOString() }); localStorage.setItem('watch2earn_tx', JSON.stringify(txs)); localStorage.setItem('watch2earn_ads', String(Number(localStorage.getItem('watch2earn_ads')||0) + 1)); localStorage.setItem('profile_sync', Date.now()); showToast(`✅ Ad completed — +₦${AD_REWARD_NAIRA.toFixed(2)} added!`, 'success'); }
-          markAdWatched(adId);
-        }catch(e){ console.error('credit error', e); showToast('Credit failed: ' + (e.message||'Unknown error'), 'error'); }
-        cleanup(true);
+
+  // If the ad URL is an embed we can play in iframe; otherwise open a new window and monitor
+  const isEmbed = adUrl.includes('youtube.com/embed') || adUrl.includes('player') || adUrl.includes('embed');
+
+  // helper to call server credit endpoint
+  async function creditServer(duration){
+    try{
+      const user = firebase.auth().currentUser;
+      if(user){
+        const token = await user.getIdToken();
+        const payload = { adDuration: duration };
+        const res = await fetch('/api/ads/watch', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
+        if(res.ok){
+          const result = await res.json();
+          // refresh profile and UI from server
+          updateAfterWatch();
+          showToast(`✅ Ad completed — +₦${(result.payment||0).toFixed(2)} added! (${result.adsToday} today)`, 'success');
+        } else {
+          const err = await res.json().catch(()=>({error:'Unknown'}));
+          if(res.status === 403) showToast(err.error || 'Daily limit reached', 'warn');
+          else showToast(err.error || 'Failed to credit ad', 'error');
+        }
+      } else {
+        showToast('Login required to be credited', 'warn');
       }
-    },1000);
-  };
-  activeAd = { id: adId };
+    }catch(e){ console.error('credit error', e); showToast('Credit failed', 'error'); }
+  }
+
+  if(isEmbed){
+    // Keep existing iframe flow for embed players
+    const adPlayer = document.getElementById('adPlayer');
+    const adIframe = document.getElementById('adIframe');
+    const adTimerEl = document.getElementById('adTimer');
+    const cancelBtn = document.getElementById('cancelAd');
+    adIframe.src = adUrl;
+    adPlayer.style.display = 'block';
+    btn.innerText = 'Playing...';
+    let started = false;
+    function cleanup(success){
+      adPlayer.style.display = 'none';
+      adIframe.src = 'about:blank';
+      cancelBtn.onclick = null;
+      activeAd = null;
+      if(!success){ btn.disabled = false; btn.innerText = 'Start Ad'; }
+    }
+    cancelBtn.onclick = ()=>{ cleanup(false); showToast('You left before the ad finished — no reward.', 'warn'); };
+    adIframe.onload = ()=>{
+      if(started) return; started = true;
+      let remaining = requiredSeconds;
+      adTimerEl.innerText = remaining + 's';
+      function handleVis(){ if(document.hidden){ cleanup(false); showToast('You left the tab — no reward.', 'warn'); } }
+      document.addEventListener('visibilitychange', handleVis);
+      const interval = setInterval(async ()=>{
+        remaining--; adTimerEl.innerText = remaining + 's';
+        if(remaining <= 0){ clearInterval(interval); document.removeEventListener('visibilitychange', handleVis);
+          creditServer(requiredSeconds);
+          markAdWatched(adId);
+          cleanup(true);
+        }
+      },1000);
+    };
+    activeAd = { id: adId };
+    return;
+  }
+
+  // For redirect/open-in-new-window type ads: open a new window and monitor
+  const win = window.open(adUrl, '_blank');
+  if(!win){ showToast('Popup blocked. Allow popups for this site.', 'error'); btn.disabled = false; btn.innerText = 'Start Ad'; return; }
+  btn.innerText = 'Ad opened...';
+  activeAd = { id: adId, win };
+  const start = Date.now();
+  let credited = false;
+  const maxWait = requiredSeconds * 1000;
+
+  // Poll every 500ms to see if window closed
+  const checker = setInterval(()=>{
+    try{
+      if(win.closed){
+        const elapsed = Date.now() - start;
+        clearInterval(checker);
+        activeAd = null;
+        if(elapsed >= maxWait){
+          creditServer(requiredSeconds);
+          markAdWatched(adId);
+        } else {
+          showToast('Returned too soon — no reward.', 'warn');
+        }
+        btn.disabled = false; btn.innerText = 'Start Ad';
+      }
+    }catch(e){ /* cross-origin may throw; ignore */ }
+  }, 500);
+
+  // Also set a safety timeout: if user leaves window open for requiredSeconds, auto-credit and close
+  setTimeout(()=>{
+    if(activeAd && activeAd.win && !activeAd.win.closed){
+      try{ activeAd.win.close(); }catch(e){}
+      clearInterval(checker);
+      activeAd = null;
+      creditServer(requiredSeconds);
+      markAdWatched(adId);
+      btn.disabled = false; btn.innerText = 'Start Ad';
+    }
+  }, maxWait + 1000);
 }
 
 function markAdWatched(adId){
@@ -357,17 +500,23 @@ async function refreshProfile(){
   try{
     const user = firebase.auth().currentUser; if(!user) return;
     const token = await user.getIdToken();
-    const res = await fetch('/api/users/profile', { headers: { Authorization: 'Bearer ' + token } });
+    const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
     if(!res.ok) return;
     const data = await res.json();
-    const adsUsd = Number(data.adsEarn || 0);
+    const adsUsd = Number(data.adsEarnUsd || data.adsEarn || 0);
     const adsNaira = Math.round(adsUsd * NAIRA_PER_USD);
-    const adCount = Number(localStorage.getItem('watch2earn_ads')||0);
+    const adCount = Number(data.adCount || 0);
     const adCounter = document.getElementById('adCounter');
     if(adCounter) adCounter.innerText = `Daily ads watched: ${adCount}/${MAX_DAILY_ADS} • ₦${adsNaira.toFixed(2)} earned`;
     const live = document.getElementById('liveAdStatus');
     if(live) { live.innerText = `You watched ${adCount} ads today — you earned ₦${adsNaira.toFixed(2)} from ads.`; live.style.display = 'block'; }
-  }catch(e){ /* ignore */ }
+  }catch(e){
+    // fallback to localStorage when server unreachable
+    const adsNaira = Math.round(AD_REWARD_NAIRA * Number(localStorage.getItem('watch2earn_ads')||0));
+    const adCount = Number(localStorage.getItem('watch2earn_ads')||0);
+    const adCounter = document.getElementById('adCounter');
+    if(adCounter) adCounter.innerText = `Daily ads watched: ${adCount}/${MAX_DAILY_ADS} • ₦${adsNaira.toFixed(2)} earned`;
+  }
 }
 
 // listen for profile sync from other pages

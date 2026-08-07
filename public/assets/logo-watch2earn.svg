@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="80" viewBox="0 0 320 80">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1">
+      <stop offset="0" stop-color="#4caf50"/>
+      <stop offset="1" stop-color="#81c784"/>
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="transparent"/>
+  <g transform="translate(12,12)">
+    <circle cx="28" cy="28" r="24" fill="url(#g)" />
+    <path d="M18 28 L28 20 L38 28 L28 36 Z" fill="#072" opacity="0.95"/>
+    <text x="64" y="36" font-family="Segoe UI, Inter, Arial" font-size="20" font-weight="800" fill="#e6f4ea">Watch<span fill="#aaf2b0">2</span>Earn</text>
+    <text x="64" y="54" font-family="Segoe UI, Inter, Arial" font-size="10" fill="#9fbfa6">Watch ads. Earn rewards.</text>
+  </g>
+</svg>

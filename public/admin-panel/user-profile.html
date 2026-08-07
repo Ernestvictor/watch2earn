@@ -1,32 +1,241 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>User Profile - Admin</title>
-<link rel="stylesheet" href="/admin.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>User Profile - Admin Panel</title>
+  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0b0c0f;color:#e0e0e0;font-family:'Segoe UI',Inter,Arial,sans-serif;padding-bottom:90px}
+    .top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#121214;border-bottom:1px solid #232326;position:sticky;top:0;z-index:10}
+    .back-btn{cursor:pointer;font-size:20px;color:#4CAF50}
+    .logo{font-weight:900;font-size:20px;color:#4CAF50}
+    .container{max-width:960px;margin:0 auto;padding:16px}
+    .card{background:#1a1a1d;border:1px solid #232326;border-radius:20px;padding:20px;margin-bottom:14px}
+    .stat{background:#222326;border:1px solid #333;border-radius:16px;padding:16px;text-align:center;display:inline-block;margin-right:12px;margin-bottom:12px}
+    .stat b{display:block;font-size:22px;color:#4CAF50}
+    .profile-header{background:linear-gradient(135deg,#1a3d1a,#0d2a0d);border:1px solid #1f3d1f;border-radius:20px;padding:20px;margin-bottom:14px}
+    .profile-header h2{color:#4CAF50;margin-bottom:10px}
+    .profile-header p{color:#aaa;margin:4px 0}
+    .table{width:100%;border-collapse:collapse}
+    .table th{background:#222326;padding:12px;text-align:left;color:#4CAF50;font-weight:700;border-bottom:1px solid #333}
+    .table td{background:#1a1a1d;padding:12px;border-bottom:1px solid #232326}
+    .table tr:hover{background:#222326}
+    .badge{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;display:inline-block}
+    .badge.ad{background:#132a18;color:#4CAF50}
+    .badge.referral{background:#1a2a3d;color:#64b5f6}
+    .badge.withdrawal{background:#2a1915;color:#ff9800}
+    .badge.strike{background:#2a1f15;color:#f59e0b}
+    .tab-container{display:flex;gap:8px;border-bottom:1px solid #232326;margin-bottom:16px;flex-wrap:wrap}
+    .tab-btn{padding:10px 16px;background:#222326;border:none;color:#aaa;cursor:pointer;border-radius:8px 8px 0 0;font-weight:600}
+    .tab-btn.active{background:#4CAF50;color:#fff}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    .empty{text-align:center;padding:40px 20px;color:#777}
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
+    .bottom-nav a{color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+    .bottom-nav a.active{color:#4CAF50;font-weight:700}
+  </style>
 </head>
-<body style="background:#070709;color:#fff;padding:16px;font-family:Segoe UI,Arial,sans-serif">
-<h2>User Profile</h2>
-<input id="uid" placeholder="Enter user id" style="width:100%;padding:8px;margin:8px 0">
-<button id="load">Load Profile</button>
-<div id="profile" style="margin-top:12px"></div>
-<script>
-document.getElementById('load').onclick = async ()=>{
-  const id = document.getElementById('uid').value.trim();
-  if(!id) return alert('Enter user id');
-  const res = await fetch('/api/admin/user/' + id);
-  const data = await res.json();
-  const html = [];
-  html.push('<h3>Transactions</h3>');
-  html.push('<ul>');
-  (data.transactions||[]).forEach(t=> html.push('<li>'+ (t.type||'') + ' • ' + (t.amountUsd||t.amountNaira||t.amount||0) + ' • ' + (t.date||'') + '</li>'));
-  html.push('</ul>');
-  html.push('<h3>Referrals</h3>');
-  html.push('<ul>');
-  (data.referrals||[]).forEach(r=> html.push('<li>'+ (r.id||'') + ' • $' + (r.amountUsd||0) + '</li>'));
-  html.push('</ul>');
-  document.getElementById('profile').innerHTML = html.join('');
-}
-</script>
+<body>
+  <div class="top">
+    <div style="display:flex;align-items:center;gap:12px">
+      <i class="fas fa-arrow-left back-btn" onclick="goBack()" title="Go Back"></i>
+      <div class="logo">User <span style="color:#fff">Profile</span></div>
+    </div>
+    <i class="fas fa-refresh" style="cursor:pointer;color:#777;font-size:18px" onclick="loadUserProfile()" title="Refresh"></i>
+  </div>
+
+  <div class="container">
+    <div class="profile-header" id="profileHeader">
+      <h2>Loading...</h2>
+      <p>Fetching user profile data</p>
+    </div>
+
+    <div class="card">
+      <div class="tab-container">
+        <button class="tab-btn active" onclick="switchTab('earnings')"><i class="fas fa-chart-line"></i> Earnings History</button>
+        <button class="tab-btn" onclick="switchTab('referrals')"><i class="fas fa-users"></i> Referrals</button>
+        <button class="tab-btn" onclick="switchTab('summary')"><i class="fas fa-gauge"></i> Summary</button>
+      </div>
+
+      <!-- Earnings History Tab -->
+      <div id="earnings" class="tab-content active">
+        <h3 style="margin-bottom:12px"><i class="fas fa-history"></i> Earning History</h3>
+        <div style="overflow-x:auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Amount (USD)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="earningsTable">
+              <tr><td colspan="4" class="empty"><i class="fas fa-spinner"></i> Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Referrals Tab -->
+      <div id="referrals" class="tab-content">
+        <h3 style="margin-bottom:12px"><i class="fas fa-gift"></i> Referrals</h3>
+        <div id="referralsList">
+          <div class="empty"><i class="fas fa-spinner"></i> Loading...</div>
+        </div>
+      </div>
+
+      <!-- Summary Tab -->
+      <div id="summary" class="tab-content">
+        <h3 style="margin-bottom:12px"><i class="fas fa-chart-pie"></i> Summary</h3>
+        <div id="summaryStats"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/leaderboard.html"><i class="fas fa-trophy"></i>Leaderboard</a>
+    <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
+  </div>
+
+  <script>
+    const userId = new URLSearchParams(location.search).get('id');
+    
+    function goBack() { history.back(); }
+    
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(tab).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    async function loadUserProfile() {
+      if (!userId) {
+        document.querySelector('.profile-header').innerHTML = '<i class="fas fa-exclamation-circle"></i> No user ID provided';
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch(`/api/admin/user/${userId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        // Profile Header
+        const transactions = data.transactions || [];
+        const totalEarnings = transactions.reduce((sum, t) => sum + (Number(t.amountUsd) || 0), 0);
+        const adCount = transactions.filter(t => t.type === 'ad').length;
+        const referralCount = data.referrals ? data.referrals.length : 0;
+
+        document.querySelector('.profile-header').innerHTML = `
+          <h2>${data.name || 'User'}</h2>
+          <p><strong>ID:</strong> ${userId}</p>
+          <p><strong>Email:</strong> ${data.email || 'N/A'}</p>
+          <div style="margin-top:12px">
+            <span class="stat"><b>$${totalEarnings.toFixed(2)}</b><small>Total Earned</small></span>
+            <span class="stat"><b>${adCount}</b><small>Ads Watched</small></span>
+            <span class="stat"><b>${referralCount}</b><small>Referrals</small></span>
+          </div>
+        `;
+
+        // Earnings History
+        renderEarnings(transactions);
+
+        // Referrals
+        renderReferrals(data.referrals || []);
+
+        // Summary
+        renderSummary(transactions, data.referrals || []);
+
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        document.querySelector('.profile-header').innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed to load profile';
+      }
+    }
+
+    function renderEarnings(transactions) {
+      const sorted = transactions.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+      const html = sorted.map(t => `
+        <tr>
+          <td>${new Date(t.date || Date.now()).toLocaleDateString()}</td>
+          <td><span class="badge ${t.type}">${(t.type || 'other').toUpperCase()}</span></td>
+          <td>$${(Number(t.amountUsd) || 0).toFixed(3)}</td>
+          <td><span class="badge ad" style="background:#132a18;color:#4CAF50">Earned</span></td>
+        </tr>
+      `).join('');
+      
+      document.getElementById('earningsTable').innerHTML = html || '<tr><td colspan="4" class="empty">No earning history</td></tr>';
+    }
+
+    function renderReferrals(referrals) {
+      if (!referrals || referrals.length === 0) {
+        document.getElementById('referralsList').innerHTML = '<div class="empty"><i class="fas fa-users"></i> No referrals yet</div>';
+        return;
+      }
+
+      const html = referrals.map((ref, idx) => `
+        <div style="background:#1a1a1d;border:1px solid #232326;border-radius:12px;padding:12px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <b>Referral ${idx + 1}</b><br>
+              <small style="color:#777">User ID: ${ref.id || 'Unknown'}</small>
+            </div>
+            <div style="text-align:right">
+              <div style="color:#4CAF50;font-weight:700">$${(Number(ref.amountUsd) || 0).toFixed(3)}</div>
+              <small style="color:#777">${new Date(ref.date || Date.now()).toLocaleDateString()}</small>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('referralsList').innerHTML = html;
+    }
+
+    function renderSummary(transactions, referrals) {
+      const adCount = transactions.filter(t => t.type === 'ad').length;
+      const adEarnings = transactions.filter(t => t.type === 'ad').reduce((sum, t) => sum + (Number(t.amountUsd) || 0), 0);
+      const referralEarnings = transactions.filter(t => t.type === 'referral').reduce((sum, t) => sum + (Number(t.amountUsd) || 0), 0);
+      const strikeEarnings = transactions.filter(t => t.type === 'strike').reduce((sum, t) => sum + (Number(t.amountUsd) || 0), 0);
+      const totalEarnings = transactions.reduce((sum, t) => sum + (Number(t.amountUsd) || 0), 0);
+
+      document.getElementById('summaryStats').innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+          <div class="card" style="text-align:center">
+            <small style="color:#4CAF50">Total Earnings</small>
+            <h2 style="color:#fff;font-size:28px;margin:10px 0">$${totalEarnings.toFixed(2)}</h2>
+            <small style="color:#777">≈ ₦${Math.round(totalEarnings * 1500).toLocaleString()}</small>
+          </div>
+          <div class="card" style="text-align:center">
+            <small style="color:#64b5f6">From Ads</small>
+            <h2 style="color:#fff;font-size:28px;margin:10px 0">$${adEarnings.toFixed(3)}</h2>
+            <small style="color:#777">${adCount} ads watched</small>
+          </div>
+          <div class="card" style="text-align:center">
+            <small style="color:#81c784">From Referrals</small>
+            <h2 style="color:#fff;font-size:28px;margin:10px 0">$${referralEarnings.toFixed(3)}</h2>
+            <small style="color:#777">${referrals.length} referrals</small>
+          </div>
+          <div class="card" style="text-align:center">
+            <small style="color:#f59e0b">From Strikes</small>
+            <h2 style="color:#fff;font-size:28px;margin:10px 0">$${strikeEarnings.toFixed(3)}</h2>
+            <small style="color:#777">Daily bonuses</small>
+          </div>
+        </div>
+      `;
+    }
+
+    loadUserProfile();
+    setInterval(loadUserProfile, 10000); // Refresh every 10 seconds for live data
+  </script>
 </body>
 </html>

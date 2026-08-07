@@ -6,6 +6,7 @@
   <title>Admin Dashboard</title>
   <!-- Admin CSS -->
 <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="/leading.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -25,6 +26,11 @@
   </style>
 </head>
 <body>
+  <div class="leading-overlay" id="leading">
+    <img src="/assets/logo-watch2earn.svg" class="logo" alt="logo">
+    <div class="loader"></div>
+    <div class="text">Loading admin dashboard…</div>
+  </div>
   <div class="top">
     <div class="logo">Admin <span>Panel</span></div>
     <a href="/logout" class="logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
@@ -55,13 +61,55 @@
       <h3>Recent Activity</h3>
       <div id="recentActivity"></div>
     </div>
+    <div class="card">
+      <h3><i class="fas fa-gift" style="color:#f59e0b;margin-right:8px"></i>Send User Bonus</h3>
+      <p style="color:#aaa;margin-bottom:16px;font-size:13px">Reward users who meet specific requirements (high referrals, many ads watched, etc.)</p>
+      
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div>
+          <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Bonus Amount (USD)</label>
+          <input type="number" id="bonusAmount" placeholder="0.10" step="0.01" min="0" style="width:100%;padding:10px;background:#222326;border:1px solid #333;border-radius:8px;color:#fff">
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Send To</label>
+          <select id="bonusTarget" style="width:100%;padding:10px;background:#222326;border:1px solid #333;border-radius:8px;color:#fff">
+            <option value="all">All Users</option>
+            <option value="top_referrers">Top Referrers</option>
+            <option value="top_ad_watchers">Top Ad Watchers</option>
+            <option value="specific">Specific User ID</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="specificUserDiv" style="display:none;margin-bottom:14px">
+        <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">User ID</label>
+        <input type="text" id="specificUserId" placeholder="Enter user ID" style="width:100%;padding:10px;background:#222326;border:1px solid #333;border-radius:8px;color:#fff">
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Bonus Title</label>
+        <input type="text" id="bonusTitle" placeholder="e.g., Referral Reward" style="width:100%;padding:10px;background:#222326;border:1px solid #333;border-radius:8px;color:#fff">
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Description</label>
+        <textarea id="bonusDescription" placeholder="Tell users why they got this bonus" style="width:100%;padding:10px;background:#222326;border:1px solid #333;border-radius:8px;color:#fff;min-height:60px"></textarea>
+      </div>
+
+      <button onclick="sendBonus()" style="width:100%;padding:12px;background:#4CAF50;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">
+        <i class="fas fa-paper-plane"></i> Send Bonus
+      </button>
+
+      <div id="bonusStatus" style="margin-top:12px;padding:12px;border-radius:8px;display:none"></div>
+      
+      <h4 style="margin-top:20px;margin-bottom:12px">Sent Bonuses</h4>
+      <div id="bonusList" style="max-height:300px;overflow-y:auto"></div>
+    </div>
   </div>
   <div class="bottom-nav">
     <a href="/admin-panel/carbinate.html" class="active"><i class="fas fa-house"></i>Home</a>
     <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
-    <a href="/admin-panel/withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
-    <a href="/admin-panel/past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
-    <a href="/admin-panel/charts.html"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="/admin-panel/leaderboard.html"><i class="fas fa-trophy"></i>Leaderboard</a>
     <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
   </div>
   <script>
@@ -73,6 +121,106 @@
         return false;
       }
       return true;
+    }
+
+    // Toggle specific user input
+    document.getElementById('bonusTarget').addEventListener('change', function() {
+      document.getElementById('specificUserDiv').style.display = this.value === 'specific' ? 'block' : 'none';
+    });
+
+    // Send bonus to users
+    async function sendBonus() {
+      const amount = parseFloat(document.getElementById('bonusAmount').value);
+      const target = document.getElementById('bonusTarget').value;
+      const title = document.getElementById('bonusTitle').value;
+      const description = document.getElementById('bonusDescription').value;
+
+      if (!amount || amount <= 0) return alert('Enter valid bonus amount');
+      if (!title) return alert('Enter bonus title');
+
+      const statusDiv = document.getElementById('bonusStatus');
+      statusDiv.style.display = 'block';
+      statusDiv.style.background = '#2a1f13';
+      statusDiv.style.borderLeft = '4px solid #f59e0b';
+      statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending bonus...';
+
+      try {
+        const token = localStorage.getItem('adminToken');
+        const payload = {
+          amountUsd: amount,
+          targetType: target,
+          targetUserId: target === 'specific' ? document.getElementById('specificUserId').value : null,
+          title: title,
+          description: description || `You received a ${title} bonus of $${amount.toFixed(2)}!`
+        };
+
+        const res = await fetch('/api/admin/send-bonus', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        statusDiv.style.background = '#132a18';
+        statusDiv.style.borderLeft = '4px solid #4CAF50';
+        statusDiv.innerHTML = `<i class="fas fa-check-circle"></i> Bonus sent successfully to ${data.count || 1} user(s)!`;
+
+        // Clear form
+        document.getElementById('bonusAmount').value = '';
+        document.getElementById('bonusTitle').value = '';
+        document.getElementById('bonusDescription').value = '';
+        document.getElementById('specificUserId').value = '';
+
+        // Reload bonuses list
+        loadBonuses();
+        loadDashboard();
+
+        setTimeout(() => { statusDiv.style.display = 'none'; }, 5000);
+      } catch (error) {
+        console.error('Bonus send error:', error);
+        statusDiv.style.background = '#2a1515';
+        statusDiv.style.borderLeft = '4px solid #ff6b6b';
+        statusDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> Failed to send bonus: ${error.message}`;
+      }
+    }
+
+    // Load sent bonuses
+    async function loadBonuses() {
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/bonuses', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const bonuses = await res.json();
+
+        const listDiv = document.getElementById('bonusList');
+        if (!bonuses || bonuses.length === 0) {
+          listDiv.innerHTML = '<p style="color:#777;text-align:center">No bonuses sent yet</p>';
+          return;
+        }
+
+        listDiv.innerHTML = bonuses.slice(0, 10).map(b => `
+          <div style="background:#222326;border:1px solid #333;border-radius:8px;padding:10px;margin-bottom:8px;font-size:12px">
+            <div style="display:flex;justify-content:space-between">
+              <strong style="color:#4CAF50">$${b.amountUsd.toFixed(2)} - ${b.title}</strong>
+              <small style="color:#999">${new Date(b.createdAt).toLocaleDateString()}</small>
+            </div>
+            <small style="color:#aaa">${b.description}</small>
+            <div style="margin-top:6px;color:#999">
+              <small>${b.targetType === 'specific' ? `To: ${b.targetUserId}` : `To: ${b.targetType.replace(/_/g, ' ').toUpperCase()}`}</small>
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error('Load bonuses error:', error);
+      }
     }
 
     // Fetch dashboard data with error handling
@@ -106,6 +254,10 @@
 
     if (checkAuth()) {
       loadDashboard();
+      loadBonuses();
+      setInterval(loadBonuses, 30000);
+      // hide leading overlay when admin page is ready
+      window.addEventListener('load', ()=>{ document.body.setAttribute('data-ready','true'); setTimeout(()=>{ const el=document.getElementById('leading'); if(el) el.style.display='none'; },300); });
     }
   </script>
 </body>

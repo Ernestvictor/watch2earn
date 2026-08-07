@@ -116,6 +116,40 @@ function writeTransactions(transactions) {
   fs.writeFileSync(TRANSACTIONS_PATH, JSON.stringify(transactions, null, 2));
 }
 
+function readAlerts() {
+  ensureDataFiles();
+  try {
+    const p = path.join(DATA_DIR, 'alerts.json');
+    if (!fs.existsSync(p)) fs.writeFileSync(p, '[]');
+    return JSON.parse(fs.readFileSync(p, 'utf8')) || [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function writeAlerts(alerts) {
+  ensureDataFiles();
+  const p = path.join(DATA_DIR, 'alerts.json');
+  fs.writeFileSync(p, JSON.stringify(alerts, null, 2));
+}
+
+function readPublicMessages() {
+  ensureDataFiles();
+  try {
+    const p = path.join(DATA_DIR, 'public_messages.json');
+    if (!fs.existsSync(p)) fs.writeFileSync(p, '[]');
+    return JSON.parse(fs.readFileSync(p, 'utf8')) || [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function writePublicMessages(msgs) {
+  ensureDataFiles();
+  const p = path.join(DATA_DIR, 'public_messages.json');
+  fs.writeFileSync(p, JSON.stringify(msgs, null, 2));
+}
+
 function transactionsByDay(transactions, days = 7) {
   const today = new Date();
   const labels = [];
@@ -374,6 +408,64 @@ router.get('/history', (req, res) => {
   });
 });
 
+// POST /api/alerts - generic alert endpoint (used by backend code to report fraud, vpn, clicks etc.)
+router.post('/alerts', (req, res) => {
+  const payload = req.body || {};
+  try {
+    const alerts = readAlerts();
+    const alert = {
+      id: Date.now().toString() + '_' + Math.random().toString(36).slice(2,8),
+      type: payload.type || 'red_alert', // help, red_alert, withdrawal, signup
+      userId: payload.userId || null,
+      name: payload.name || payload.user || 'Unknown',
+      email: payload.email || payload.userEmail || '',
+      message: payload.message || payload.reason || '',
+      meta: payload.meta || {},
+      createdAt: new Date().toISOString(),
+      read: false
+    };
+    alerts.unshift(alert);
+    writeAlerts(alerts);
+    res.json({ success: true, alert });
+  } catch (err) {
+    console.error('Alert write error:', err);
+    res.status(500).json({ error: 'Failed to save alert' });
+  }
+});
+
+// GET /api/admin/inbox - admin inbox aggregation
+router.get('/inbox', verifyAdminToken, (req, res) => {
+  try {
+    const helpMessages = readPublicMessages();
+    const alerts = readAlerts();
+    const withdrawals = readWithdrawals();
+    const users = readUsers();
+    res.json({ help: helpMessages, alerts, withdrawals, recentSignups: users.slice(0,50) });
+  } catch (err) {
+    console.error('Inbox error:', err);
+    res.status(500).json({ error: 'Failed to load inbox' });
+  }
+});
+
+// Admin reply to public help message
+router.post('/reply-message/:id', verifyAdminToken, (req, res) => {
+  const id = req.params.id;
+  const payload = req.body || {};
+  try {
+    const msgs = readPublicMessages();
+    const m = msgs.find(x => x.id === id);
+    if (!m) return res.status(404).json({ error: 'Message not found' });
+    m.reply = payload.reply || payload.message || '';
+    m.repliedBy = req.admin?.id || 'admin';
+    m.repliedAt = new Date().toISOString();
+    writePublicMessages(msgs);
+    res.json({ success: true, message: m });
+  } catch (err) {
+    console.error('Reply error:', err);
+    res.status(500).json({ error: 'Failed to reply' });
+  }
+});
+
 router.get('/history/export', (req, res) => {
   const format = req.query.format || 'csv';
   res.json({ success: true, message: `Export endpoint called for ${format}.` });
@@ -553,6 +645,90 @@ router.get('/withdrawals/:id', (req, res) => {
   const target = sampleWithdrawals.find(item => item.id === req.params.id);
   if (!target) return res.status(404).json({ error: 'Withdrawal not found' });
   res.json(target);
+});
+
+// POST /api/admin/send-bonus - Send bonus to users
+router.post('/send-bonus', verifyAdminToken, (req, res) => {
+  const { amountUsd, targetType, targetUserId, title, description } = req.body;
+
+  if (!amountUsd || amountUsd <= 0) return res.status(400).json({ error: 'Invalid bonus amount' });
+  if (!title) return res.status(400).json({ error: 'Bonus title required' });
+
+  try {
+    const BONUS_PATH = path.join(DATA_DIR, 'bonuses.json');
+    ensureDataFiles();
+    if (!fs.existsSync(BONUS_PATH)) fs.writeFileSync(BONUS_PATH, '[]');
+
+    const allBonuses = JSON.parse(fs.readFileSync(BONUS_PATH, 'utf8'));
+    const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8')) || [];
+    
+    let targetUsers = [];
+    let count = 0;
+
+    if (targetType === 'all') {
+      targetUsers = users.map(u => u.id);
+      count = targetUsers.length;
+    } else if (targetType === 'top_referrers') {
+      const transactions = JSON.parse(fs.readFileSync(TRANSACTIONS_PATH, 'utf8')) || [];
+      const refMap = {};
+      transactions.filter(t => t.type === 'referral').forEach(t => {
+        refMap[t.userId] = (refMap[t.userId] || 0) + 1;
+      });
+      targetUsers = Object.keys(refMap).sort((a, b) => refMap[b] - refMap[a]).slice(0, 20);
+      count = targetUsers.length;
+    } else if (targetType === 'top_ad_watchers') {
+      const transactions = JSON.parse(fs.readFileSync(TRANSACTIONS_PATH, 'utf8')) || [];
+      const adsMap = {};
+      transactions.filter(t => t.type === 'ad').forEach(t => {
+        adsMap[t.userId] = (adsMap[t.userId] || 0) + 1;
+      });
+      targetUsers = Object.keys(adsMap).sort((a, b) => adsMap[b] - adsMap[a]).slice(0, 20);
+      count = targetUsers.length;
+    } else if (targetType === 'specific' && targetUserId) {
+      targetUsers = [targetUserId];
+      count = 1;
+    }
+
+    // Create bonus record for each target user
+    targetUsers.forEach(userId => {
+      const bonus = {
+        id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9),
+        amountUsd: amountUsd,
+        title: title,
+        description: description || `You received a ${title} bonus of $${amountUsd.toFixed(2)}!`,
+        targetType: targetType,
+        targetUserId: userId,
+        createdAt: new Date().toISOString(),
+        claimed: false,
+        claimedBy: []
+      };
+      allBonuses.push(bonus);
+    });
+
+    fs.writeFileSync(BONUS_PATH, JSON.stringify(allBonuses, null, 2));
+    res.json({ success: true, count: count, message: `Bonus sent to ${count} user(s)` });
+
+  } catch (error) {
+    console.error('Send bonus error:', error);
+    res.status(500).json({ error: 'Failed to send bonus' });
+  }
+});
+
+// GET /api/admin/bonuses - Get all sent bonuses
+router.get('/bonuses', verifyAdminToken, (req, res) => {
+  try {
+    const BONUS_PATH = path.join(DATA_DIR, 'bonuses.json');
+    ensureDataFiles();
+    if (!fs.existsSync(BONUS_PATH)) fs.writeFileSync(BONUS_PATH, '[]');
+
+    const allBonuses = JSON.parse(fs.readFileSync(BONUS_PATH, 'utf8'));
+    const sorted = allBonuses.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json(sorted);
+
+  } catch (error) {
+    console.error('Get bonuses error:', error);
+    res.status(500).json({ error: 'Failed to load bonuses' });
+  }
 });
 
 module.exports = router;

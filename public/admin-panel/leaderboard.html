@@ -1,25 +1,222 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Leaderboard - Admin</title>
-<link rel="stylesheet" href="/admin.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Leaderboards - Admin Panel</title>
+  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0b0c0f;color:#e0e0e0;font-family:'Segoe UI',Inter,Arial,sans-serif;padding-bottom:90px}
+    .top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#121214;border-bottom:1px solid #232326;position:sticky;top:0;z-index:10}
+    .logo{font-weight:900;font-size:20px;color:#4CAF50}
+    .container{max-width:960px;margin:0 auto;padding:16px}
+    .card{background:#1a1a1d;border:1px solid #232326;border-radius:20px;padding:20px;margin-bottom:14px}
+    .tab-container{display:flex;gap:8px;border-bottom:1px solid #232326;margin-bottom:16px;flex-wrap:wrap;overflow-x:auto}
+    .tab-btn{padding:10px 16px;background:#222326;border:none;color:#aaa;cursor:pointer;border-radius:8px 8px 0 0;font-weight:600;white-space:nowrap}
+    .tab-btn.active{background:#4CAF50;color:#fff}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    .leaderboard-item{background:#1a1a1d;border:1px solid #232326;border-radius:12px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .rank{width:40px;height:40px;background:#222326;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;color:#4CAF50}
+    .rank.top{background:#4CAF50;color:#fff}
+    .rank.top2{background:#64b5f6;color:#fff}
+    .rank.top3{background:#81c784;color:#fff}
+    .info{flex:1}
+    .info-name{font-weight:700;color:#fff}
+    .info-detail{font-size:12px;color:#777}
+    .value{font-weight:700;color:#4CAF50;font-size:16px}
+    .filter-btn{padding:8px 12px;background:#222326;border:1px solid #333;color:#aaa;cursor:pointer;border-radius:8px;font-size:12px}
+    .filter-btn.active{background:#4CAF50;color:#fff;border-color:#4CAF50}
+    .empty{text-align:center;padding:40px 20px;color:#777}
+    .medal{font-size:20px;margin-right:6px}
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
+    .bottom-nav a{color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+    .bottom-nav a.active{color:#4CAF50;font-weight:700}
+  </style>
 </head>
-<body style="background:#070709;color:#fff;padding:16px;font-family:Segoe UI,Arial,sans-serif">
-<h2>Leaderboards</h2>
-<div id="boards"></div>
-<script>
-async function load(){
-  const res = await fetch('/api/admin/leaderboard');
-  const data = await res.json();
-  const container = document.getElementById('boards');
-  const html = [];
-  html.push('<h3>Referral Leaderboard</h3><ol>'); data.referral.slice(0,10).forEach(r=> html.push('<li>'+ (r.name||r.userId) + ' • $' + (r.amountUsd||0).toFixed(2) + '</li>')); html.push('</ol>');
-  html.push('<h3>Ads Leaderboard</h3><ol>'); data.ads.slice(0,10).forEach(r=> html.push('<li>'+ (r.name||r.userId) + ' • ' + (r.count||0) + ' ads</li>')); html.push('</ol>');
-  html.push('<h3>Withdrawals Leaderboard</h3><ol>'); data.withdrawals.slice(0,10).forEach(r=> html.push('<li>'+ (r.name||r.userId) + ' • $' + (r.amountUsd||0).toFixed(2) + '</li>')); html.push('</ol>');
-  container.innerHTML = html.join('');
-}
-load();
-</script>
+<body>
+  <div class="top">
+    <div class="logo"><i class="fas fa-trophy" style="color:#f59e0b"></i> Leaderboards</div>
+    <i class="fas fa-refresh" style="cursor:pointer;color:#777;font-size:18px" onclick="loadAllLeaderboards()" title="Refresh"></i>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <div class="tab-container">
+        <button class="tab-btn active" onclick="switchTab('referral')"><i class="fas fa-gift"></i> Referrals</button>
+        <button class="tab-btn" onclick="switchTab('ads')"><i class="fas fa-play-circle"></i> Ads Watched</button>
+        <button class="tab-btn" onclick="switchTab('withdrawals')"><i class="fas fa-wallet"></i> Withdrawals</button>
+        <button class="tab-btn" onclick="switchTab('surveys')"><i class="fas fa-poll"></i> Surveys</button>
+        <button class="tab-btn" onclick="switchTab('games')"><i class="fas fa-gamepad"></i> Games</button>
+      </div>
+
+      <!-- Referral Leaderboard -->
+      <div id="referral" class="tab-content active">
+        <h3 style="margin-bottom:12px"><i class="fas fa-gift" style="color:#81c784"></i> Top Referrers</h3>
+        <div style="margin-bottom:12px">
+          <button class="filter-btn active" onclick="filterReferral('all')">All</button>
+          <button class="filter-btn" onclick="filterReferral('top3')">Top 3</button>
+          <button class="filter-btn" onclick="filterReferral('top10')">Top 10</button>
+          <button class="filter-btn" onclick="filterReferral('top20')">Top 20</button>
+        </div>
+        <div id="referralList"></div>
+      </div>
+
+      <!-- Ads Leaderboard -->
+      <div id="ads" class="tab-content">
+        <h3 style="margin-bottom:12px"><i class="fas fa-play-circle" style="color:#64b5f6"></i> Most Ads Watched</h3>
+        <div style="margin-bottom:12px">
+          <button class="filter-btn active" onclick="filterAds('all')">All</button>
+          <button class="filter-btn" onclick="filterAds('top3')">Top 3</button>
+          <button class="filter-btn" onclick="filterAds('top10')">Top 10</button>
+          <button class="filter-btn" onclick="filterAds('top20')">Top 20</button>
+        </div>
+        <div id="adsList"></div>
+      </div>
+
+      <!-- Withdrawals Leaderboard -->
+      <div id="withdrawals" class="tab-content">
+        <h3 style="margin-bottom:12px"><i class="fas fa-wallet" style="color:#f59e0b"></i> Highest Withdrawals</h3>
+        <div style="margin-bottom:12px">
+          <button class="filter-btn active" onclick="filterWithdrawal('all')">All</button>
+          <button class="filter-btn" onclick="filterWithdrawal('top3')">Top 3</button>
+          <button class="filter-btn" onclick="filterWithdrawal('top10')">Top 10</button>
+          <button class="filter-btn" onclick="filterWithdrawal('top20')">Top 20</button>
+        </div>
+        <div id="withdrawalsList"></div>
+      </div>
+
+      <!-- Surveys Leaderboard -->
+      <div id="surveys" class="tab-content">
+        <h3 style="margin-bottom:12px"><i class="fas fa-poll" style="color:#81c784"></i> Most Surveys Completed</h3>
+        <div id="surveysList" class="empty"><i class="fas fa-inbox"></i> Survey leaderboard coming soon</div>
+      </div>
+
+      <!-- Games Leaderboard -->
+      <div id="games" class="tab-content">
+        <h3 style="margin-bottom:12px"><i class="fas fa-gamepad" style="color:#f59e0b"></i> Most Games Played</h3>
+        <div id="gamesList" class="empty"><i class="fas fa-inbox"></i> Games leaderboard coming soon</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/leaderboard.html" class="active"><i class="fas fa-trophy"></i>Leaderboard</a>
+    <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
+  </div>
+
+  <script>
+    let leaderboardData = {};
+    
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(tab).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    function getMedalEmoji(idx) {
+      const medals = ['🥇', '🥈', '🥉'];
+      return medals[idx] || '⭐';
+    }
+
+    function renderLeaderboard(boardType, data, filterType = 'all') {
+      let items = data || [];
+      
+      if (filterType === 'top3') items = items.slice(0, 3);
+      else if (filterType === 'top10') items = items.slice(0, 10);
+      else if (filterType === 'top20') items = items.slice(0, 20);
+
+      if (items.length === 0) {
+        return '<div class="empty"><i class="fas fa-inbox"></i> No data yet</div>';
+      }
+
+      return items.map((item, idx) => {
+        const rankNum = idx + 1;
+        const rankClass = rankNum <= 3 ? ['top', 'top2', 'top3'][idx] : '';
+        const medal = getMedalEmoji(idx);
+        
+        if (boardType === 'referral' || boardType === 'withdrawal') {
+          return `
+            <div class="leaderboard-item">
+              <div class="rank ${rankClass}">${rankNum}</div>
+              <div class="info">
+                <div class="info-name">${medal} ${item.name || item.userId || 'User'}</div>
+                <div class="info-detail">ID: ${item.userId || 'N/A'}</div>
+              </div>
+              <div style="text-align:right">
+                <div class="value">$${(Number(item.amountUsd) || 0).toFixed(2)}</div>
+                <button onclick="viewUserProfile('${item.userId}')" style="background:#4CAF50;border:none;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px">View</button>
+              </div>
+            </div>
+          `;
+        } else if (boardType === 'ads') {
+          return `
+            <div class="leaderboard-item">
+              <div class="rank ${rankClass}">${rankNum}</div>
+              <div class="info">
+                <div class="info-name">${medal} ${item.name || item.userId || 'User'}</div>
+                <div class="info-detail">ID: ${item.userId || 'N/A'}</div>
+              </div>
+              <div style="text-align:right">
+                <div class="value">${item.count || 0} ads</div>
+                <button onclick="viewUserProfile('${item.userId}')" style="background:#4CAF50;border:none;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px">View</button>
+              </div>
+            </div>
+          `;
+        }
+      }).join('');
+    }
+
+    function filterReferral(type) {
+      event.target.parentElement.querySelectorAll('.filter-btn').forEach(e => e.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('referralList').innerHTML = renderLeaderboard('referral', leaderboardData.referral, type);
+    }
+
+    function filterAds(type) {
+      event.target.parentElement.querySelectorAll('.filter-btn').forEach(e => e.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('adsList').innerHTML = renderLeaderboard('ads', leaderboardData.ads, type);
+    }
+
+    function filterWithdrawal(type) {
+      event.target.parentElement.querySelectorAll('.filter-btn').forEach(e => e.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('withdrawalsList').innerHTML = renderLeaderboard('withdrawal', leaderboardData.withdrawals, type);
+    }
+
+    function viewUserProfile(userId) {
+      location.href = `user-profile.html?id=${userId}`;
+    }
+
+    async function loadAllLeaderboards() {
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/leaderboard', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        leaderboardData = await res.json();
+
+        // Render all leaderboards
+        document.getElementById('referralList').innerHTML = renderLeaderboard('referral', leaderboardData.referral, 'all');
+        document.getElementById('adsList').innerHTML = renderLeaderboard('ads', leaderboardData.ads, 'all');
+        document.getElementById('withdrawalsList').innerHTML = renderLeaderboard('withdrawal', leaderboardData.withdrawals, 'all');
+
+      } catch (error) {
+        console.error('Error loading leaderboards:', error);
+        document.getElementById('referralList').innerHTML = '<div class="empty"><i class="fas fa-exclamation-circle"></i> Failed to load data</div>';
+      }
+    }
+
+    loadAllLeaderboards();
+    setInterval(loadAllLeaderboards, 15000); // Refresh every 15 seconds for live data
+  </script>
 </body>
 </html>

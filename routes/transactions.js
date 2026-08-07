@@ -152,4 +152,195 @@ router.get('/history', verifyToken, (req, res) => {
   res.json(transactions);
 });
 
+// POST /api/transactions/signup-bonus - Award signup bonus once and referral small bonus
+router.post('/signup-bonus', verifyToken, (req, res) => {
+  const userId = req.user.uid || req.user.id;
+  const users = loadUsers();
+  let user = users.find(u => u.id === userId || u.uid === userId);
+  if (!user) {
+    user = { id: userId, createdAt: new Date().toISOString(), signupBonusGiven: false };
+    users.unshift(user);
+  }
+
+  if (user.signupBonusGiven) {
+    return res.json({ message: 'Signup bonus already granted' });
+  }
+
+  // Give 100 NGN => convert to USD
+  const naira = 100;
+  const usd = +(naira / 1500).toFixed(6);
+  const txs = loadTransactions();
+  const bonusTx = {
+    id: Date.now().toString(),
+    userId,
+    type: 'signup_bonus',
+    source: 'signup',
+    title: 'Signup bonus',
+    amountUsd: usd,
+    amountNaira: naira,
+    date: new Date().toISOString()
+  };
+  txs.unshift(bonusTx);
+  saveTransactions(txs);
+
+  // Mark user as given
+  user.signupBonusGiven = true;
+  writeUsers(users);
+
+  // If referrer id passed in body, give them 10 NGN
+  const referrerId = req.body.referrerId;
+  if (referrerId) {
+    const refUsd = +(10 / 1500).toFixed(6);
+    const refTx = {
+      id: Date.now().toString() + '_ref',
+      userId: referrerId,
+      type: 'signup_referral',
+      source: 'referral_signup',
+      title: 'Invitee signup bonus',
+      amountUsd: refUsd,
+      amountNaira: 10,
+      date: new Date().toISOString(),
+      referredUserId: userId
+    };
+    txs.unshift(refTx);
+    saveTransactions(txs);
+  }
+
+  res.json({ message: 'Signup bonus granted', amountUsd: usd });
+});
+
+// Consecutive claim bonus endpoints
+router.get('/consecutive-status', verifyToken, (req, res) => {
+  const userId = req.user.uid || req.user.id;
+  const users = loadUsers();
+  const u = users.find(x => x.id === userId) || {};
+  const consecutive = (u.consecutiveBonus && u.consecutiveBonus.streak) || 0;
+  res.json({ streak: consecutive });
+});
+
+router.post('/claim-consecutive', verifyToken, (req, res) => {
+  const userId = req.user.uid || req.user.id;
+  const users = loadUsers();
+  let u = users.find(x => x.id === userId);
+  if (!u) { u = { id: userId }; users.unshift(u); }
+
+  const now = new Date();
+  const cb = u.consecutiveBonus || { streak: 0, lastClaim: null };
+  const last = cb.lastClaim ? new Date(cb.lastClaim) : null;
+  let streak = cb.streak || 0;
+
+  // If last claim was yesterday, increment streak, if today already claimed -> error, else reset to 1
+  if (last) {
+    const diff = Math.floor((now - last) / (1000 * 60 * 60 * 24));
+    if (diff === 0) return res.status(403).json({ error: 'Already claimed today' });
+    if (diff === 1) streak = streak + 1; else streak = 1;
+  } else {
+    streak = 1;
+  }
+
+  // Reward tiers: days 1-7 => 0.001 USD, days 8-14 => 0.005, days 15-21 => 0.01
+  let reward = 0.001;
+  if (streak >= 8 && streak <= 14) reward = 0.005;
+  if (streak >= 15) reward = 0.01;
+
+  // Record transaction
+  const txs = loadTransactions();
+  const tx = {
+    id: Date.now().toString(),
+    userId,
+    type: 'consecutive_bonus',
+    source: 'consecutive_claim',
+    title: `Consecutive bonus day ${streak}`,
+    amountUsd: reward,
+    amountNaira: Math.round(reward * 1500),
+    date: now.toISOString()
+  };
+  txs.unshift(tx);
+  saveTransactions(txs);
+
+  // Update user record
+  u.consecutiveBonus = { streak, lastClaim: now.toISOString() };
+  writeUsers(users);
+
+  res.json({ success: true, streak, reward });
+});
+
+// GET /api/user/bonuses - Get user's available bonuses
+router.get('/bonuses', verifyToken, async (req, res) => {
+  const userId = req.user.uid || req.user.id;
+  try {
+    const bonusPath = path.join(DATA_DIR, 'bonuses.json');
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (!fs.existsSync(bonusPath)) fs.writeFileSync(bonusPath, '[]');
+    
+    const allBonuses = JSON.parse(fs.readFileSync(bonusPath, 'utf8'));
+    const userBonuses = allBonuses.filter(b => 
+      (b.targetType === 'all' || b.targetUserId === userId || (b.targetUsers && b.targetUsers.includes(userId))) &&
+      !b.claimed
+    );
+    
+    res.json({ bonuses: userBonuses });
+  } catch (e) {
+    console.error('Error loading bonuses:', e);
+    res.json({ bonuses: [] });
+  }
+});
+
+// POST /api/user/claim-bonus - Claim a bonus
+router.post('/claim-bonus', verifyToken, async (req, res) => {
+  const userId = req.user.uid || req.user.id;
+  const { bonusId } = req.body;
+  
+  if (!bonusId) return res.status(400).json({ error: 'Bonus ID required' });
+
+  try {
+    const bonusPath = path.join(DATA_DIR, 'bonuses.json');
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (!fs.existsSync(bonusPath)) fs.writeFileSync(bonusPath, '[]');
+    
+    const allBonuses = JSON.parse(fs.readFileSync(bonusPath, 'utf8'));
+    const bonus = allBonuses.find(b => b.id === bonusId);
+    
+    if (!bonus) return res.status(404).json({ error: 'Bonus not found' });
+    if (bonus.claimed) return res.status(403).json({ error: 'Bonus already claimed' });
+
+    // Check if user is eligible
+    if (bonus.targetType === 'specific' && bonus.targetUserId !== userId) {
+      return res.status(403).json({ error: 'Not eligible for this bonus' });
+    }
+    if (bonus.targetType !== 'all' && bonus.targetType !== 'specific') {
+      return res.status(403).json({ error: 'Not eligible for this bonus' });
+    }
+
+    // Mark as claimed and record user claim
+    bonus.claimed = true;
+    bonus.claimedBy = bonus.claimedBy || [];
+    bonus.claimedBy.push({ userId, claimedAt: new Date().toISOString() });
+    
+    fs.writeFileSync(bonusPath, JSON.stringify(allBonuses, null, 2));
+
+    // Add bonus to user's transactions
+    const bonusTx = {
+      id: Date.now().toString(),
+      userId,
+      type: 'bonus',
+      source: 'admin_bonus',
+      title: bonus.title || 'Admin Bonus',
+      amountUsd: bonus.amountUsd,
+      amountNaira: Math.round(bonus.amountUsd * 1500),
+      date: new Date().toISOString(),
+      bonusId: bonusId
+    };
+
+    const transactions = loadTransactions();
+    transactions.unshift(bonusTx);
+    saveTransactions(transactions);
+
+    res.json({ message: 'Bonus claimed successfully', amount: bonus.amountUsd });
+  } catch (e) {
+    console.error('Error claiming bonus:', e);
+    res.status(500).json({ error: 'Failed to claim bonus' });
+  }
+});
+
 module.exports = router;

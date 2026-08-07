@@ -4,6 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Earn - Watch2Earn</title>
 <link rel="stylesheet" href="user.css">
+<link rel="stylesheet" href="leading.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script async="async" data-cfasync="false" src="https://pl30708907.effectivecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js"></script>
 <!-- popunder/script removed per request -->
@@ -41,6 +42,11 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 </style>
 </head>
 <body>
+  <div class="leading-overlay" id="leading">
+    <img src="assets/logo-watch2earn.svg" class="logo" alt="logo">
+    <div class="loader"></div>
+    <div class="text">Preparing ads…</div>
+  </div>
 <div class="top-bar">
   <div class="top-left">
     <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
@@ -344,6 +350,7 @@ function switchTab(tabName, button){
 
 // make page responsive and ensure ads only on this page: already scoped to this file
 </script>
+<script>window.addEventListener('load', ()=>{ document.body.setAttribute('data-ready','true'); setTimeout(()=>{ const el=document.getElementById('leading'); if(el) el.style.display='none'; },300); });</script>
 <script>
   atOptions = {
     'key' : '457f65cbe904e42fea908d570f00bbb2',

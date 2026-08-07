@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Message Management</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/leading.css">
   <style>
     body{background:#0b0c0f;color:#e0e0e0;font-family:'Segoe UI',Inter,Arial,sans-serif;padding-bottom:90px;margin:0}
     .top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#121214;border-bottom:1px solid #232326;position:sticky;top:0;z-index:10}
@@ -58,6 +59,11 @@
   </style>
 </head>
 <body>
+  <div class="leading-overlay" id="leading">
+    <img src="/assets/logo-watch2earn.svg" class="logo" alt="logo">
+    <div class="loader"></div>
+    <div class="text">Loading messages…</div>
+  </div>
   <div class="top"><div class="logo">Message Management System</div></div>
   <div class="container">
     <!-- TABS -->
@@ -614,6 +620,7 @@
     if (checkAuth()) {
       loadAllUsers();
       loadMessages();
+      window.addEventListener('load', ()=>{ document.body.setAttribute('data-ready','true'); setTimeout(()=>{ const el=document.getElementById('leading'); if(el) el.style.display='none'; },300); });
     }
   </script>
 </body>

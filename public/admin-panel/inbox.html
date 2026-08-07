@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Inbox</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body{background:#0b0c0f;color:#e0e0e0;font-family:Inter,Segoe UI,Arial;padding:0;margin:0}
+    .top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#121214;border-bottom:1px solid #232326}
+    .container{max-width:1000px;margin:16px auto;padding:12px}
+    .card{background:#1a1a1d;border:1px solid #232326;border-radius:12px;padding:12px;margin-bottom:12px}
+    .section-row{display:flex;gap:12px}
+    .section{flex:1}
+    .item{background:#131316;border:1px solid #232326;border-radius:8px;padding:10px;margin-bottom:8px}
+    .item small{color:#999}
+    .reply-box{width:100%;padding:8px;background:#0f0f10;border:1px solid #333;color:#fff;border-radius:6px}
+    .btn{padding:8px 12px;border-radius:8px;border:none;background:#4CAF50;color:#fff;cursor:pointer}
+    .danger{background:#f44336}
+  </style>
+</head>
+<body>
+  <div class="top"><div style="font-weight:900;color:#4CAF50">Admin Inbox</div><div><a href="carbinate.html" style="color:#888;text-decoration:none"><i class="fas fa-arrow-left"></i> Back</a></div></div>
+  <div class="container">
+    <div class="card">
+      <h3>Inbox Overview</h3>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        <div style="background:#0f0f10;border:1px solid #232326;padding:8px;border-radius:8px">Help Messages: <span id="helpCount">0</span></div>
+        <div style="background:#0f0f10;border:1px solid #232326;padding:8px;border-radius:8px">Red Alerts: <span id="alertCount">0</span></div>
+        <div style="background:#0f0f10;border:1px solid #232326;padding:8px;border-radius:8px">Withdrawals: <span id="wdCount">0</span></div>
+      </div>
+    </div>
+
+    <div class="section-row">
+      <div class="section">
+        <div class="card">
+          <h4>Help Inbox</h4>
+          <div id="helpList">Loading...</div>
+        </div>
+
+        <div class="card">
+          <h4>Withdrawal Notifications</h4>
+          <div id="withdrawalList">Loading...</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="card">
+          <h4>Red Alerts</h4>
+          <div id="alertList">Loading...</div>
+        </div>
+
+        <div class="card">
+          <h4>Recent Signups</h4>
+          <div id="signupList">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4>Reply / Quick Response</h4>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <textarea id="replyText" class="reply-box" placeholder="Type reply here..."></textarea>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn" onclick="sendReply()">Send Reply</button>
+          <button class="btn" style="background:#2196F3" onclick="useAutoReply('thanks')">Auto: Thanks</button>
+          <button class="btn" style="background:#FF9800" onclick="useAutoReply('checking')">Auto: We are checking</button>
+        </div>
+      </div>
+      <div id="replyStatus" style="color:#aaa"></div>
+    </div>
+  </div>
+
+<script>
+async function loadInbox(){
+  try{
+    const token = localStorage.getItem('adminToken');
+    const res = await fetch('/api/admin/inbox', { headers: { 'Authorization': `Bearer ${token}` } });
+    if(!res.ok) throw new Error('Inbox load failed');
+    const data = await res.json();
+    const help = data.help || [];
+    const alerts = (data.alerts || []).filter(a=>a.type==='red_alert');
+    const withdrawals = data.withdrawals || [];
+    const signups = data.recentSignups || [];
+
+    document.getElementById('helpCount').innerText = help.length;
+    document.getElementById('alertCount').innerText = alerts.length;
+    document.getElementById('wdCount').innerText = withdrawals.length;
+
+    document.getElementById('helpList').innerHTML = help.map(m=>`<div class="item"><strong>${m.name||m.email}</strong> <small>${new Date(m.createdAt).toLocaleString()}</small><div style="margin-top:6px;color:#ccc">${m.message}</div><div style="margin-top:8px"><button class="btn" onclick="selectMessage('${m.id}')">Select</button></div></div>`).join('') || '<div style="color:#777">No help messages</div>';
+
+    document.getElementById('alertList').innerHTML = alerts.map(a=>`<div class="item"><strong>${a.name||a.email}</strong> <small>${a.type} • ${new Date(a.createdAt).toLocaleString()}</small><div style="margin-top:6px;color:#ccc">${a.message}</div></div>`).join('') || '<div style="color:#777">No alerts</div>';
+
+    document.getElementById('withdrawalList').innerHTML = withdrawals.map(w=>`<div class="item"><strong>${w.name||w.user}</strong> <small>${w.status||''} • ${w.amount||w.netAmount||0}</small><div style="margin-top:6px;color:#ccc">Method: ${w.method||''}</div></div>`).join('') || '<div style="color:#777">No withdrawals</div>';
+
+    document.getElementById('signupList').innerHTML = signups.map(u=>`<div class="item"><strong>${u.name||u.email}</strong> <small>${u.email||''}</small><div style="margin-top:6px;color:#ccc">ID: ${u.id||u.uid}</div></div>`).join('') || '<div style="color:#777">No signups</div>';
+
+  }catch(e){ console.error(e); }
+}
+
+let selectedMessageId = null;
+function selectMessage(id){ selectedMessageId = id; document.getElementById('replyStatus').innerText = 'Selected message ' + id; }
+function useAutoReply(type){ if(type==='thanks') document.getElementById('replyText').value = 'Thanks for reaching out — we received your message and will follow up shortly.'; if(type==='checking') document.getElementById('replyText').value = 'We are checking this now and will update you within 24 hours.'; }
+
+async function sendReply(){
+  if(!selectedMessageId) return alert('Select a message to reply to');
+  const reply = document.getElementById('replyText').value.trim();
+  if(!reply) return alert('Enter reply text');
+  try{
+    const token = localStorage.getItem('adminToken');
+    const res = await fetch('/api/admin/reply-message/' + selectedMessageId, {
+      method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ reply })
+    });
+    if(!res.ok) throw new Error('Reply failed');
+    document.getElementById('replyStatus').innerText = 'Reply sent';
+    document.getElementById('replyText').value = '';
+    loadInbox();
+  }catch(e){ console.error(e); alert('Failed to send reply'); }
+}
+
+if(localStorage.getItem('adminToken')){ loadInbox(); setInterval(loadInbox,15000); } else { document.getElementById('helpList').innerText='Please login as admin'; }
+</script>
+</body>
+</html>

@@ -22,6 +22,16 @@ function writeWithdrawals(items) {
   fs.writeFileSync(WITHDRAWALS_PATH, JSON.stringify(items, null, 2));
 }
 
+// transactions helpers for creating withdrawal deduction txs
+const TXN_PATH = path.join(DATA_DIR, 'transactions.json');
+function readTransactions() { ensureFiles(); try { if (!fs.existsSync(TXN_PATH)) fs.writeFileSync(TXN_PATH, '[]'); return JSON.parse(fs.readFileSync(TXN_PATH,'utf8')||'[]'); } catch(e){ return []; } }
+function saveTransactions(items) { ensureFiles(); fs.writeFileSync(TXN_PATH, JSON.stringify(items, null, 2)); }
+
+// alerts helper (admin inbox)
+const ALERTS_PATH = path.join(DATA_DIR, 'alerts.json');
+function readAlerts() { ensureFiles(); try { if (!fs.existsSync(ALERTS_PATH)) fs.writeFileSync(ALERTS_PATH, '[]'); return JSON.parse(fs.readFileSync(ALERTS_PATH,'utf8')||'[]'); } catch(e){ return []; } }
+function saveAlerts(items) { ensureFiles(); fs.writeFileSync(ALERTS_PATH, JSON.stringify(items, null, 2)); }
+
 function chargeFor(amount) {
   const amountNum = Number(amount || 0);
   const charge = amountNum >= 20000 ? 0 : 500;
@@ -74,6 +84,53 @@ router.post('/request', verifyToken, (req, res) => {
 
     withdrawals.unshift(item);
     writeWithdrawals(withdrawals);
+
+    // Create an admin alert/inbox item for this withdrawal
+    try {
+      const alerts = readAlerts();
+      const alert = {
+        id: Date.now().toString() + '_' + Math.random().toString(36).slice(2,8),
+        type: 'withdrawal',
+        userId,
+        name: item.name,
+        email: req.user.email || '',
+        message: `Withdrawal requested: ₦${amountNum}. Review required.`,
+        meta: { amount: amountNum, method },
+        createdAt: new Date().toISOString(),
+        read: false
+      };
+      alerts.unshift(alert);
+      saveAlerts(alerts);
+    } catch (e) { console.warn('Failed to write withdrawal alert', e); }
+
+    // Auto-approve if user's earning history is clean (no red alerts) and they have enough earned
+    try {
+      const allAlerts = readAlerts().filter(a => a.userId === userId && a.type && a.type === 'red_alert');
+      const transactions = readTransactions().filter(t=>t.userId===userId && (Number(t.amountNaira||t.amountUsd*1500)||0) > 0);
+      const totalEarned = transactions.reduce((s,t)=> s + (Number(t.amountNaira||Math.round((t.amountUsd||0)*1500))||0), 0);
+      if (!allAlerts.length && totalEarned >= amountNum) {
+        item.status = 'Approved';
+        item.approvedAt = new Date().toISOString();
+        // create deduction transaction (subtract amount from user's balance)
+        const txs = readTransactions();
+        const withdrawTx = {
+          id: Date.now().toString(),
+          userId,
+          type: 'withdrawal',
+          source: 'withdrawal_processed',
+          title: 'User withdrawal processed',
+          amountUsd: +( -amountNum / 1500 ).toFixed(6),
+          amountNaira: -amountNum,
+          date: new Date().toISOString(),
+          metaWithdrawalId: item.id
+        };
+        txs.unshift(withdrawTx);
+        saveTransactions(txs);
+        item.applied = true;
+        writeWithdrawals(withdrawals);
+      }
+    } catch (e) { console.warn('Auto-approve check failed', e); }
+
     res.json({ success: true, withdrawal: item, charge, netAmount });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -105,8 +162,32 @@ router.post('/:id/approve', (req, res) => {
   const withdrawals = readWithdrawals();
   const target = withdrawals.find(w => w.id === req.params.id);
   if (!target) return res.status(404).json({ error: 'Withdrawal not found' });
+  if (target.status === 'Approved') return res.json({ success: true, id: req.params.id, status: 'Already Approved' });
   target.status = 'Approved';
+  target.approvedAt = new Date().toISOString();
   writeWithdrawals(withdrawals);
+
+  // ensure we record deduction transaction once
+  try {
+    const txs = readTransactions();
+    const already = txs.find(t => t.metaWithdrawalId === target.id);
+    if (!already) {
+      const withdrawTx = {
+        id: Date.now().toString(),
+        userId: target.userId,
+        type: 'withdrawal',
+        source: 'withdrawal_processed',
+        title: 'Withdrawal processed',
+        amountUsd: +( - (target.amount || 0) / 1500 ).toFixed(6),
+        amountNaira: - (target.amount || 0),
+        date: new Date().toISOString(),
+        metaWithdrawalId: target.id
+      };
+      txs.unshift(withdrawTx);
+      saveTransactions(txs);
+    }
+  } catch (e) { console.warn('Failed to write withdrawal transaction', e); }
+
   res.json({ success: true, id: req.params.id, status: 'Approved' });
 });
 

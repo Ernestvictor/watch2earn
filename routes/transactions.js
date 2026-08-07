@@ -41,6 +41,9 @@ function saveUsers(items) {
   fs.writeFileSync(USERS_PATH, JSON.stringify(items, null, 2));
 }
 
+// alias expected by other modules
+function writeUsers(items){ return saveUsers(items); }
+
 function isToday(value) {
   const date = new Date(value);
   const today = new Date();
@@ -140,10 +143,33 @@ router.get('/referral-earnings', verifyToken, (req, res) => {
 router.get('/balance', verifyToken, (req, res) => {
   const userId = req.user.uid || req.user.id;
   const transactions = loadTransactions().filter(t => t.userId === userId);
-  const balanceUsd = transactions.reduce((sum, t) => sum + (Number(t.amountUsd) || 0), 0);
-  const balanceNaira = Math.round(balanceUsd * 1500);
-  const adCount = transactions.filter(t => t.type === 'ad' && isToday(t.date)).length;
-  res.json({ balanceUsd, balanceNaira, adCount });
+  // compute breakdown by type
+  const breakdown = transactions.reduce((acc, t) => {
+    const type = (t.type || 'other').toLowerCase();
+    acc.totalUsd += Number(t.amountUsd || 0);
+    acc.totalNaira += Number(t.amountNaira || Math.round((t.amountUsd||0) * 1500));
+    if (type.includes('ad')) acc.adsUsd += Number(t.amountUsd || 0);
+    if (type.includes('referral') || type.includes('commission')) acc.referralUsd += Number(t.amountUsd || 0);
+    if (type.includes('bonus') || type === 'signup_bonus' || type === 'consecutive_bonus') acc.bonusUsd += Number(t.amountUsd || 0);
+    if (type.includes('game')) acc.gameUsd += Number(t.amountUsd || 0);
+    if (type.includes('survey')) acc.surveyUsd += Number(t.amountUsd || 0);
+    if (type.includes('withdraw')) acc.withdrawalsUsd += Number(t.amountUsd || 0);
+    return acc;
+  }, { totalUsd:0, totalNaira:0, adsUsd:0, referralUsd:0, bonusUsd:0, gameUsd:0, surveyUsd:0, withdrawalsUsd:0 });
+
+  const adCount = transactions.filter(t => (t.type && t.type.toLowerCase().includes('ad')) && isToday(t.date)).length;
+
+  res.json({
+    balanceUsd: +breakdown.totalUsd.toFixed(6),
+    balanceNaira: Math.round(breakdown.totalUsd * 1500),
+    adsEarnUsd: +breakdown.adsUsd.toFixed(6),
+    referralEarnUsd: +breakdown.referralUsd.toFixed(6),
+    bonusEarnUsd: +breakdown.bonusUsd.toFixed(6),
+    gameEarnUsd: +breakdown.gameUsd.toFixed(6),
+    surveyEarnUsd: +breakdown.surveyUsd.toFixed(6),
+    withdrawalsUsd: +breakdown.withdrawalsUsd.toFixed(6),
+    adCount
+  });
 });
 
 router.get('/history', verifyToken, (req, res) => {

@@ -41,6 +41,13 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 @media (min-width: 768px){
   .container{max-width:760px}
 }
+@media (max-width:480px){
+  body{font-size:18px}
+  .container{padding:20px}
+  .site-logo{height:44px}
+  .main-balance h1{font-size:36px}
+  .break-item b{font-size:15px}
+}
 </style>
 </head>
 <body>
@@ -143,32 +150,41 @@ firebase.auth().onAuthStateChanged(async user => {
   }
   document.getElementById('displayName').innerText = user.displayName || 'User';
   document.getElementById('emailText').innerText = user.email || 'user@email.com';
-  try {
-    const token = await user.getIdToken();
-    const res = await fetch('/api/users/profile', { headers: { Authorization: 'Bearer ' + token } });
-    const data = await res.json();
-    const usd = Number(data.balanceUsd || 0);
-    const naira = usd * 1500;
-    document.getElementById('mainBal').innerText = usd.toFixed(2);
-    document.getElementById('mainNaira').innerText = naira.toLocaleString();
-    document.getElementById('adsEarn').innerText = (data.adsEarn || 0).toFixed(2);
-    document.getElementById('gameEarn').innerText = (data.gameEarn || 0).toFixed(2);
-    document.getElementById('surveyEarn').innerText = (data.surveyEarn || 0).toFixed(2);
-    document.getElementById('refEarn').innerText = (data.refEarn || 0).toFixed(2);
-    document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
-    document.getElementById('invitedCount').innerText = data.invitedCount || 0;
-    document.getElementById('refEarnStat').innerText = '$' + (data.refEarn || 0).toFixed(2);
-    if (data.announcement) {
-      document.getElementById('announcementText').innerText = data.announcement;
-      document.getElementById('announcementBanner').style.display = 'block';
+
+  async function loadProfile(){
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/users/profile', { headers: { Authorization: 'Bearer ' + token } });
+      if(!res.ok) throw new Error('Profile fetch failed');
+      const data = await res.json();
+      const usd = Number(data.balanceUsd || 0);
+      const naira = usd * 1500;
+      document.getElementById('mainBal').innerText = usd.toFixed(2);
+      document.getElementById('mainNaira').innerText = naira.toLocaleString();
+      document.getElementById('adsEarn').innerText = (data.adsEarn || 0).toFixed(2);
+      document.getElementById('gameEarn').innerText = (data.gameEarn || 0).toFixed(2);
+      document.getElementById('surveyEarn').innerText = (data.surveyEarn || 0).toFixed(2);
+      document.getElementById('refEarn').innerText = (data.refEarn || 0).toFixed(2);
+      document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
+      document.getElementById('invitedCount').innerText = data.invitedCount || 0;
+      document.getElementById('refEarnStat').innerText = '$' + (data.refEarn || 0).toFixed(2);
+      if (data.announcement) {
+        document.getElementById('announcementText').innerText = data.announcement;
+        document.getElementById('announcementBanner').style.display = 'block';
+      }
+    } catch (e) {
+      const usd = Number(localStorage.getItem('watch2earn_balance') || '0');
+      const naira = usd * 1500;
+      document.getElementById('mainBal').innerText = usd.toFixed(2);
+      document.getElementById('mainNaira').innerText = naira.toLocaleString();
+      document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
     }
-  } catch (e) {
-    const usd = Number(localStorage.getItem('watch2earn_balance') || '0');
-    const naira = usd * 1500;
-    document.getElementById('mainBal').innerText = usd.toFixed(2);
-    document.getElementById('mainNaira').innerText = naira.toLocaleString();
-    document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
   }
+
+  // initial load
+  loadProfile();
+  // refresh when other pages write profile_sync
+  window.addEventListener('storage', (e)=>{ if(e.key === 'profile_sync') loadProfile(); });
 });
 
 function toggleInvite() {

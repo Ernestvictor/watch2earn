@@ -90,16 +90,20 @@ router.delete('/:id', auth, (req,res)=>{
 // POST /api/ads/watch - Watch an ad and earn money based on duration
 // Body: { adDuration: number (seconds) }
 router.post('/watch', verifyToken, (req, res) => {
-  const { adDuration } = req.body;
+  const { adDuration, adId } = req.body;
   const userId = req.user.uid || req.user.id;
   
   if (!adDuration || typeof adDuration !== 'number') {
     return res.status(400).json({ error: 'Invalid ad duration' });
   }
 
+  if (!adId || typeof adId !== 'string') {
+    return res.status(400).json({ error: 'Ad ID is required' });
+  }
+
   // Check daily ad limit (5 ads per day)
   const transactions = loadTransactions();
-  const todaysAds = transactions.filter(t => 
+  const todaysAds = transactions.filter(t =>
     t.userId === userId && t.type === 'ad_watch' && isToday(t.date)
   );
 
@@ -132,6 +136,7 @@ router.post('/watch', verifyToken, (req, res) => {
   const adTx = {
     id: Date.now().toString(),
     userId,
+    adId,
     type: 'ad_watch',
     source: 'video_ad',
     title: `Watched ${adDuration}s ad`,

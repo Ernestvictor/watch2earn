@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Videos - Watch2Earn</title>
+  <link rel="stylesheet" href="user.css">
+  <style>
+    body{margin:0;background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding-bottom:80px}
+    .wrap{max-width:560px;margin:auto;padding:16px}.top{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#111;border-bottom:1px solid #252525}.top a{color:#fff;text-decoration:none}.card{background:#111;border:1px solid #292929;border-radius:16px;padding:16px;margin:12px 0}.muted{color:#999;font-size:13px}.ad-slot{min-height:120px;text-align:center;border:1px dashed #3d3d3d;border-radius:12px;padding:12px;margin-top:12px}.ad-btn{width:100%;padding:12px;border:0;border-radius:10px;background:#4caf50;color:#fff;font-weight:700;cursor:pointer;margin-top:12px}.ad-btn:disabled{background:#3a3a3a;color:#999;cursor:not-allowed}.timer{font-size:22px;color:#4caf50;font-weight:800;text-align:center;margin:10px}.notice{padding:10px;border-radius:10px;background:#211d12;color:#ffc857;margin-top:10px}.nav{position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid #292929;display:flex;justify-content:space-around;padding:12px}.nav a{color:#aaa;text-decoration:none;font-size:12px}.nav a.active{color:#4caf50}
+  </style>
+</head>
+<body>
+  <header class="top"><a href="earn.html">← Earn</a><strong>Video Ads</strong><a href="account.html">Account</a></header>
+  <main class="wrap">
+    <div class="card"><h2>Watch and earn ₦2.00</h2><p class="muted">Keep the sponsored page open for 15 seconds. Returning early earns nothing. Maximum 5 completed ads per day.</p><div id="status" class="notice" style="display:none"></div></div>
+    <section class="card">
+      <h3>Sponsored video ads</h3>
+      <p id="loading" class="muted">Loading live ads...</p>
+      <div id="adList"></div>
+    </section>
+  </main>
+  <nav class="nav"><a href="home.html">Home</a><a class="active" href="video.html">Videos</a><a href="survey.html">Surveys</a><a href="game.html">Games</a><a href="account.html">Account</a></nav>
+
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script>
+    if(!firebase.apps.length) firebase.initializeApp({apiKey:'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',authDomain:'enable-authentication-1b56c.firebaseapp.com',projectId:'enable-authentication-1b56c',storageBucket:'enable-authentication-1b56c.firebasestorage.app',messagingSenderId:'946417281410',appId:'1:946417281410:web:7f4e06e3b4b03946d0079b'});
+    const MAX_ADS=5;
+    let current=null;
+    const statusEl=document.getElementById('status');
+    function status(message){statusEl.textContent=message;statusEl.style.display='block';}
+    async function token(){const user=firebase.auth().currentUser;if(!user) throw new Error('Please sign in first.');return user.getIdToken();}
+    async function liveAds(){
+      const response=await fetch('/api/ads',{cache:'no-store'});
+      if(!response.ok) throw new Error('Unable to load ads.');
+      return response.json();
+    }
+    async function state(){
+      const authToken=await token();
+      const response=await fetch('/api/transactions/balance',{headers:{Authorization:'Bearer '+authToken},cache:'no-store'});
+      if(!response.ok) throw new Error('Unable to load account state.');
+      return response.json();
+    }
+    function render(ads,data){
+      const count=Number(data.adCount||0); document.getElementById('loading').textContent=`${count}/${MAX_ADS} ads completed today.`;
+      const list=document.getElementById('adList'); list.innerHTML='';
+      ads.filter(ad=>ad.redirectUrl||ad.url).forEach(ad=>{
+        const button=document.createElement('button');button.className='ad-btn';button.textContent=count>=MAX_ADS?'Daily limit reached':'Start 15-second ad';button.disabled=count>=MAX_ADS;
+        const card=document.createElement('div');card.className='ad-slot';card.innerHTML=`<strong>${ad.title||'Sponsored ad'}</strong><div class="muted">15 seconds • ₦2.00</div>`;
+        const timer=document.createElement('div');timer.className='timer';card.append(timer,button);list.appendChild(card);
+        button.onclick=()=>watch(ad,button,timer);
+      });
+    }
+    async function watch(ad,button,timer){
+      if(current) return; current={ad,button,timer};button.disabled=true;button.textContent='Ad opened — keep it open';
+      const url=ad.redirectUrl||ad.url;const popup=window.open(url,'_blank','noopener');
+      if(!popup){current=null;button.disabled=false;button.textContent='Start 15-second ad';status('Allow pop-ups to open the sponsored page.');return;}
+      const started=Date.now();let remaining=15;timer.textContent=remaining+'s';
+      const interval=setInterval(()=>{remaining--;timer.textContent=remaining+'s';},1000);
+      const finish=async completed=>{
+        clearInterval(interval);if(current!==null) current=null;timer.textContent='';button.disabled=false;button.textContent='Start 15-second ad';
+        if(!completed){status('Returned before 15 seconds. No reward was added.');return;}
+        try{
+          const authToken=await token();
+          const response=await fetch('/api/ads/watch',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+authToken},body:JSON.stringify({adId:ad.id,adDuration:15})});
+          const result=await response.json();
+          if(!response.ok){status(result.error||'The ad could not be credited.');return;}
+          status(`Ad completed. ₦${Number(result.payment||2).toFixed(2)} was saved to your server account. ${result.adsToday}/${MAX_ADS} today.`);
+          const fresh=await state();render([ad],fresh);
+        }catch(error){status(error.message||'Unable to credit the ad.');}
+      };
+      const check=setInterval(()=>{if(popup.closed){clearInterval(check);finish(Date.now()-started>=15000);}},500);
+      setTimeout(()=>{if(current&&current.ad.id===ad.id){clearInterval(check);try{popup.close();}catch(e){}finish(true);}},16000);
+    }
+    firebase.auth().onAuthStateChanged(async user=>{
+      if(!user){location.href='login.html';return;}
+      try{const [ads,data]=await Promise.all([liveAds(),state()]);render(ads,data);}catch(error){status(error.message);document.getElementById('loading').textContent='Live data unavailable.';}
+    });
+  </script>
+
+  <!-- Supplied network tags are kept on the dedicated video page only. -->
+  <script src="https://pl30708906.effectivecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js"></script>
+  <script async data-cfasync="false" src="https://pl30708907.effectivecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js"></script>
+  <div id="container-4b1cf630fa653f9661f13acbf3b9bcf9"></div>
+  <script src="https://pl30708908.effectivecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js"></script>
+  <script>window.atOptions={key:'457f65cbe904e42fea908d570f00bbb2',format:'iframe',height:250,width:300,params:{}};</script>
+  <script src="https://www.highperformanceformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js"></script>
+</body>
+</html>

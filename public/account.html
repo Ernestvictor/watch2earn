@@ -172,12 +172,9 @@ firebase.auth().onAuthStateChanged(async user => {
       document.getElementById('invitedCount').innerText = estimatedInvites;
       document.getElementById('refEarnStat').innerText = '$' + refEarnUsd.toFixed(2);
     } catch (e) {
-      console.warn('Balance fetch failed, falling back to localStorage', e);
-      const usd = Number(localStorage.getItem('watch2earn_balance') || '0');
-      const naira = usd * 1500;
-      document.getElementById('mainBal').innerText = usd.toFixed(2);
-      document.getElementById('mainNaira').innerText = naira.toLocaleString();
-      document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
+      console.warn('Live balance request failed', e);
+      document.getElementById('mainBal').innerText = '—';
+      document.getElementById('mainNaira').innerText = '—';
     }
   }
 

@@ -5,18 +5,6 @@
 <title>Earn - Watch2Earn</title>
 <link rel="stylesheet" href="user.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<!-- Ad Network 0: EffectiveCPM Starter -->
-<script async="async" data-cfasync="false" src="https://pl30708906.effectivecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js"></script>
-
-<!-- Ad Network 1: EffectiveCPM -->
-<script async="async" data-cfasync="false" src="https://pl30708907.effectivecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js"></script>
-<div id="container-4b1cf630fa653f9661f13acbf3b9bcf9" style="display:none"></div>
-
-<!-- Ad Network 2: EffectiveCPM Secondary -->
-<script src="https://pl30708908.effectivecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js" async></script>
-
-<!-- Ad Network 3: HighPerformance Format -->
-<script src="https://www.highperformanceformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js" async></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding-bottom:85px}
@@ -89,9 +77,9 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 
   <div class="dashboard">
   <div class="tabs">
-    <div class="tab active" onclick="switchTab('videos',this)">Videos</div> 
-    <div class="tab" onclick="switchTab('games',this)">Games</div>
-    <div class="tab" onclick="switchTab('surveys',this)">Surveys</div>
+    <a class="tab active" href="video.html">Videos</a>
+    <a class="tab" href="game.html">Games</a>
+    <a class="tab" href="survey.html">Surveys</a>
   </div>
   
   <div id="videosTab">
@@ -119,13 +107,13 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
   
   <div id="gamesTab" style="display:none">
     <div style="background:#111;border:1px solid #222;border-radius:14px;padding:14px;text-align:center;color:#aaa">
-      Coming soon! Games coming to Watch2Earn soon.
+      <a href="game.html" style="color:#4CAF50">Open Games</a>
     </div>
   </div>
   
   <div id="surveysTab" style="display:none">
     <div style="background:#111;border:1px solid #222;border-radius:14px;padding:14px;text-align:center;color:#aaa">
-      Coming soon! Surveys coming to Watch2Earn soon.
+      <a href="survey.html" style="color:#4CAF50">Open Surveys</a>
     </div>
   </div>
 </div>
@@ -220,7 +208,7 @@ async function creditNetworkAd(adId, title){
           'Content-Type': 'application/json', 
           'Authorization': 'Bearer ' + token 
         }, 
-        body: JSON.stringify({ adDuration: 15 }) 
+        body: JSON.stringify({ adId, adDuration: 15 }) 
       });
       if(res.ok){
         const result = await res.json();
@@ -243,11 +231,7 @@ async function creditNetworkAd(adId, title){
 
 
 // Save referrer if present in URL
-function saveRefFromUrl(){
-  const params = new URLSearchParams(window.location.search);
-  const ref = params.get('ref') || params.get('r');
-  if(ref) localStorage.setItem('watch2earn_referrer', ref);
-}
+function saveRefFromUrl(){ return; }
 
 // Get today's ad transactions from server (if logged in) to enforce limits and per-ad watched state
 async function loadUserAdState(){
@@ -272,8 +256,7 @@ async function loadUserAdState(){
       }
     }catch(e){ console.warn('loadUserAdState failed',e); }
   }
-  const localCount = Number(localStorage.getItem('watch2earn_ads')||0);
-  return { watchedIds, todaysCount: localCount };
+  return { watchedIds, todaysCount };
 }
 
 // Render ads list (simple inline ads, each ad has id)
@@ -371,7 +354,7 @@ async function startAdFlow(btn, ad){
       const user = firebase.auth().currentUser;
       if(user){
         const token = await user.getIdToken();
-        const payload = { adDuration: duration };
+        const payload = { adId, adDuration: duration };
         const res = await fetch('/api/ads/watch', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
         if(res.ok){
           const result = await res.json();
@@ -458,21 +441,12 @@ function openRedirectAd(btn, adId, redirectUrl, title){
   }, requiredSeconds + 1000);
 }
 
-function markAdWatched(adId){
-  const watched = JSON.parse(localStorage.getItem('watch2earn_watched_ads')||'[]');
-  if(!watched.includes(adId)) watched.push(adId);
-  localStorage.setItem('watch2earn_watched_ads', JSON.stringify(watched));
-  const newCount = Number(localStorage.getItem('watch2earn_ads')||0) + 1;
-  localStorage.setItem('watch2earn_ads', String(newCount));
-}
+function markAdWatched(){ return; }
 
 function updateAfterWatch(){
   // re-load state and re-render
   loadUserAdState().then(s=>{
     const watched = s.watchedIds;
-    // include local watched as fallback
-    const localWatched = JSON.parse(localStorage.getItem('watch2earn_watched_ads')||'[]');
-    localWatched.forEach(id=>watched.add(id));
     getLiveAds().then(ads=> renderAds(ads, watched, s.todaysCount));
   });
   // also refresh profile summary
@@ -500,11 +474,8 @@ async function refreshProfile(){
     const live = document.getElementById('liveAdStatus');
     if(live) { live.innerText = `You watched ${adCount} ads today — you earned ₦${adsNaira.toFixed(2)} from ads.`; live.style.display = 'block'; }
   }catch(e){
-    // fallback to localStorage when server unreachable
-    const adsNaira = Math.round(AD_REWARD_NAIRA * Number(localStorage.getItem('watch2earn_ads')||0));
-    const adCount = Number(localStorage.getItem('watch2earn_ads')||0);
     const adCounter = document.getElementById('adCounter');
-    if(adCounter) adCounter.innerText = `Daily ads watched: ${adCount}/${MAX_DAILY_ADS} • ₦${adsNaira.toFixed(2)} earned`;
+    if(adCounter) adCounter.innerText = 'Live ad data is temporarily unavailable.';
   }
 }
 
@@ -515,9 +486,6 @@ window.addEventListener('storage', (e)=>{ if(e.key === 'profile_sync') refreshPr
 saveRefFromUrl();
 firebase.auth().onAuthStateChanged(user=>{
   loadUserAdState().then(s=>{
-    // merge local watched as fallback
-    const localWatched = JSON.parse(localStorage.getItem('watch2earn_watched_ads')||'[]');
-    localWatched.forEach(id=>s.watchedIds.add(id));
     getLiveAds().then(ads=> renderAds(ads, s.watchedIds, s.todaysCount));
     document.getElementById('adCounter').innerText = `Daily ads watched: ${s.todaysCount}/${MAX_DAILY_ADS}`;
   });
@@ -532,15 +500,5 @@ function switchTab(tabName, button){
 
 // make page responsive and ensure ads only on this page: already scoped to this file
 </script>
-<script>
-  atOptions = {
-    'key' : '457f65cbe904e42fea908d570f00bbb2',
-    'format' : 'iframe',
-    'height' : 250,
-    'width' : 300,
-    'params' : {}
-  };
-</script>
-<script src="https://pl30708908.effectivecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js"></script>
 </body>
 </html>

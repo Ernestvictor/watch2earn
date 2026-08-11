@@ -47,17 +47,20 @@ body{background:#070709;color:#fff;font-family:Inter,sans-serif;padding-bottom:9
   <a href="account.html"><i class="fas fa-wallet"></i>Account</a>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script>
+if(!firebase.apps.length) firebase.initializeApp({apiKey:'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',authDomain:'enable-authentication-1b56c.firebaseapp.com',projectId:'enable-authentication-1b56c',storageBucket:'enable-authentication-1b56c.firebasestorage.app',messagingSenderId:'946417281410',appId:'1:946417281410:web:7f4e06e3b4b03946d0079b'});
 async function loadHistory(){
   const list=document.getElementById('historyList');
   let withdrawals=[];
+  const user=firebase.auth().currentUser;
+  if(!user){ location.href='login.html'; return; }
   try{
-    const res=await fetch('/api/withdrawals/my',{credentials:'include'});
+    const authToken=await user.getIdToken();
+    const res=await fetch('/api/withdrawals/my',{headers:{Authorization:'Bearer '+authToken},cache:'no-store'});
     if(res.ok){ withdrawals=await res.json(); }
-  }catch(e){ console.log('Backend fetch failed, using local',e); }
-  if(withdrawals.length===0){
-    withdrawals=JSON.parse(localStorage.getItem('watch2earn_withdrawals')||'[]');
-  }
+  }catch(e){ console.log('Backend fetch failed',e); }
   withdrawals.sort((a,b)=> new Date(b.createdAt||b.date) - new Date(a.createdAt||a.date));
   let total=0, pending=0;
   withdrawals.forEach(w=>{ if(w.status==='Approved') total+= (w.netAmount||w.net||0); if(w.status==='Pending') pending++; });
@@ -92,7 +95,10 @@ async function loadHistory(){
     </div>`;
   }).join('');
 }
-loadHistory();
+firebase.auth().onAuthStateChanged(user=>{
+  if(user) loadHistory();
+  else location.href='login.html';
+});
 </script>
 </body>
 </html>

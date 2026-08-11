@@ -157,9 +157,12 @@
         return;
       }
       token = await user.getIdToken();
-      currentBalance = Number(localStorage.getItem('watch2earn_balance') || '0') * 1500;
+      const balanceResponse = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+      if (!balanceResponse.ok) throw new Error('Unable to load live balance');
+      const balanceData = await balanceResponse.json();
+      currentBalance = Number(balanceData.balanceNaira || 0);
       document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
-      document.getElementById('usdBal').innerText = Number(localStorage.getItem('watch2earn_balance') || '0').toFixed(2);
+      document.getElementById('usdBal').innerText = Number(balanceData.balanceUsd || 0).toFixed(2);
       document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
       await fetchAndRenderAccounts();
     });

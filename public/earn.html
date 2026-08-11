@@ -5,6 +5,9 @@
 <title>Earn - Watch2Earn</title>
 <link rel="stylesheet" href="user.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- Ad Network 0: EffectiveCPM Starter -->
+<script async="async" data-cfasync="false" src="https://pl30708906.effectivecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js"></script>
+
 <!-- Ad Network 1: EffectiveCPM -->
 <script async="async" data-cfasync="false" src="https://pl30708907.effectivecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js"></script>
 <div id="container-4b1cf630fa653f9661f13acbf3b9bcf9" style="display:none"></div>
@@ -260,18 +263,17 @@ async function loadUserAdState(){
         const todayStr = new Date().toDateString();
         txs.forEach(t => {
           if(new Date(t.date).toDateString() !== todayStr) return;
-          if(t.type === 'ad'){
+          if(t.type === 'ad' || t.type === 'ad_watch'){
             todaysCount++;
             if(t.title) watchedIds.add(t.title);
           }
         });
+        return { watchedIds, todaysCount };
       }
     }catch(e){ console.warn('loadUserAdState failed',e); }
   }
-  // also merge localStorage fallback
   const localCount = Number(localStorage.getItem('watch2earn_ads')||0);
-  const totalCount = Math.max(todaysCount, localCount);
-  return { watchedIds, todaysCount: totalCount };
+  return { watchedIds, todaysCount: localCount };
 }
 
 // Render ads list (simple inline ads, each ad has id)
@@ -280,9 +282,9 @@ function renderAds(ads, watchedIds, todaysCount){
   const container = document.getElementById('adsList');
   container.innerHTML = '';
   ads.forEach(ad => {
-    // ad expected shape: { id, title, seconds, isNetwork }
     const adId = ad.id || ('ad_' + (ad.title||'').replace(/\s+/g,'_') );
     const seconds = ad.seconds || 15;
+    const redirectUrl = ad.redirectUrl || ad.url || '';
     const disabled = watchedIds.has(adId) || (todaysCount >= MAX_DAILY_ADS);
     const card = document.createElement('div');
     card.className = 'ad-card';
@@ -294,17 +296,18 @@ function renderAds(ads, watchedIds, todaysCount){
         <div class="payout-box"><div class="company">≈ ₦2.00</div><div class="you">You</div></div>
       </div>
       <div style="margin-top:10px;display:flex;gap:8px">
-        <button class="btn-watch" data-ad-id="${adId}" data-ad-url="${ad.url||''}" data-is-network="${ad.isNetwork||false}" ${disabled? 'disabled' : ''}>${disabled? 'Watched / Limit' : 'Start Ad'}</button>
+        <button class="btn-watch" data-ad-id="${adId}" data-ad-url="${redirectUrl}" data-is-network="${ad.isNetwork||false}" ${disabled? 'disabled' : ''}>${disabled? 'Watched / Limit' : 'Start Ad'}</button>
         <div class="ad-timer" id="timer-${adId}" style="min-width:80px;text-align:center;color:#aaa"></div>
       </div>
     `;
     container.appendChild(card);
     const btn = card.querySelector('.btn-watch');
     btn.addEventListener('click', ()=> {
-      if(btn.getAttribute('data-is-network') === 'true'){
-        viewNetworkAd(adId, ad.title);
+      if(disabled) return;
+      if(ad.isNetwork && redirectUrl){
+        openRedirectAd(btn, adId, redirectUrl, ad.title);
       } else {
-        startAdFlow(btn, { id: adId, title: ad.title, seconds });
+        startAdFlow(btn, { id: adId, title: ad.title, seconds, url: redirectUrl });
       }
     });
   });
@@ -321,11 +324,9 @@ async function getLiveAds(){
   }catch(e){ /* ignore */ }
   // fallback default list
   return [
-    { id:'ad_a1', title:'Daily Short Ad A', seconds:15 },
-    { id:'ad_b2', title:'Daily Short Ad B', seconds:15 },
-    { id:'ad_c3', title:'Daily Short Ad C', seconds:15 },
-    { id:'ad_d4', title:'Daily Short Ad D', seconds:15 },
-    { id:'ad_e5', title:'Daily Short Ad E', seconds:15 }
+    { id:'ad_1', title:'EffectiveCPM Network A', seconds:15, isNetwork:true, redirectUrl:'https://pl30708906.effectivecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js' },
+    { id:'ad_2', title:'EffectiveCPM Network B', seconds:15, isNetwork:true, redirectUrl:'https://www.effectivecpmnetwork.com/ke7tsjm03d?key=a96268fc04237d289e7e7bd64904e2f6' },
+    { id:'ad_3', title:'HighPerformance Format', seconds:15, isNetwork:true, redirectUrl:'https://www.highperformanceformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js' }
   ];
 }
 
@@ -357,18 +358,14 @@ function showCountdown(btn, seconds, onComplete, onCancel){
 }
 
 async function startAdFlow(btn, ad){
-  if(activeAd) return; // only one at a time
+  if(activeAd) return;
   const adId = ad.id;
   btn.disabled = true;
   btn.innerText = 'Starting...';
-  const adUrl = btn.getAttribute('data-ad-url') || ad.url || '';
+  const adUrl = ad.url || ad.redirectUrl || '';
   const requiredSeconds = Number(ad.seconds || 15);
   if(!adUrl){ showToast('Ad has no URL', 'error'); btn.disabled = false; btn.innerText = 'Start Ad'; return; }
 
-  // If the ad URL is an embed we can play in iframe; otherwise open a new window and monitor
-  const isEmbed = adUrl.includes('youtube.com/embed') || adUrl.includes('player') || adUrl.includes('embed');
-
-  // helper to call server credit endpoint
   async function creditServer(duration){
     try{
       const user = firebase.auth().currentUser;
@@ -378,9 +375,8 @@ async function startAdFlow(btn, ad){
         const res = await fetch('/api/ads/watch', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
         if(res.ok){
           const result = await res.json();
-          // refresh profile and UI from server
           updateAfterWatch();
-          showToast(`✅ Ad completed — +₦${(result.payment||0).toFixed(2)} added! (${result.adsToday} today)`, 'success');
+          showToast(`✅ Ad completed — +₦${(result.payment||2).toFixed(2)} added! (${result.adsToday} today)`, 'success');
         } else {
           const err = await res.json().catch(()=>({error:'Unknown'}));
           if(res.status === 403) showToast(err.error || 'Daily limit reached', 'warn');
@@ -392,53 +388,13 @@ async function startAdFlow(btn, ad){
     }catch(e){ console.error('credit error', e); showToast('Credit failed', 'error'); }
   }
 
-  if(isEmbed){
-    // Keep existing iframe flow for embed players
-    const adPlayer = document.getElementById('adPlayer');
-    const adIframe = document.getElementById('adIframe');
-    const adTimerEl = document.getElementById('adTimer');
-    const cancelBtn = document.getElementById('cancelAd');
-    adIframe.src = adUrl;
-    adPlayer.style.display = 'block';
-    btn.innerText = 'Playing...';
-    let started = false;
-    function cleanup(success){
-      adPlayer.style.display = 'none';
-      adIframe.src = 'about:blank';
-      cancelBtn.onclick = null;
-      activeAd = null;
-      if(!success){ btn.disabled = false; btn.innerText = 'Start Ad'; }
-    }
-    cancelBtn.onclick = ()=>{ cleanup(false); showToast('You left before the ad finished — no reward.', 'warn'); };
-    adIframe.onload = ()=>{
-      if(started) return; started = true;
-      let remaining = requiredSeconds;
-      adTimerEl.innerText = remaining + 's';
-      function handleVis(){ if(document.hidden){ cleanup(false); showToast('You left the tab — no reward.', 'warn'); } }
-      document.addEventListener('visibilitychange', handleVis);
-      const interval = setInterval(async ()=>{
-        remaining--; adTimerEl.innerText = remaining + 's';
-        if(remaining <= 0){ clearInterval(interval); document.removeEventListener('visibilitychange', handleVis);
-          creditServer(requiredSeconds);
-          markAdWatched(adId);
-          cleanup(true);
-        }
-      },1000);
-    };
-    activeAd = { id: adId };
-    return;
-  }
-
-  // For redirect/open-in-new-window type ads: open a new window and monitor
   const win = window.open(adUrl, '_blank');
   if(!win){ showToast('Popup blocked. Allow popups for this site.', 'error'); btn.disabled = false; btn.innerText = 'Start Ad'; return; }
   btn.innerText = 'Ad opened...';
   activeAd = { id: adId, win };
   const start = Date.now();
-  let credited = false;
   const maxWait = requiredSeconds * 1000;
 
-  // Poll every 500ms to see if window closed
   const checker = setInterval(()=>{
     try{
       if(win.closed){
@@ -453,10 +409,9 @@ async function startAdFlow(btn, ad){
         }
         btn.disabled = false; btn.innerText = 'Start Ad';
       }
-    }catch(e){ /* cross-origin may throw; ignore */ }
+    }catch(e){ }
   }, 500);
 
-  // Also set a safety timeout: if user leaves window open for requiredSeconds, auto-credit and close
   setTimeout(()=>{
     if(activeAd && activeAd.win && !activeAd.win.closed){
       try{ activeAd.win.close(); }catch(e){}
@@ -467,6 +422,40 @@ async function startAdFlow(btn, ad){
       btn.disabled = false; btn.innerText = 'Start Ad';
     }
   }, maxWait + 1000);
+}
+
+function openRedirectAd(btn, adId, redirectUrl, title){
+  btn.disabled = true;
+  btn.innerText = 'Ad opened...';
+  const start = Date.now();
+  const requiredSeconds = 15000;
+  const win = window.open(redirectUrl, '_blank');
+  if(!win){ showToast('Popup blocked. Allow popups for this site.', 'error'); btn.disabled = false; btn.innerText = 'Start Ad'; return; }
+  showToast('Ad opened. Keep the window open for 15 seconds to earn.', 'success');
+  const checker = setInterval(async ()=>{
+    try{
+      if(win.closed){
+        const elapsed = Date.now() - start;
+        clearInterval(checker);
+        if(elapsed >= requiredSeconds){
+          await creditNetworkAd(adId, title);
+        } else {
+          showToast('Returned too soon — no reward.', 'warn');
+        }
+        btn.disabled = false;
+        btn.innerText = 'Start Ad';
+      }
+    }catch(e){ }
+  }, 500);
+  setTimeout(async ()=>{
+    if(win && !win.closed){
+      try{ win.close(); }catch(e){}
+      clearInterval(checker);
+      await creditNetworkAd(adId, title);
+      btn.disabled = false;
+      btn.innerText = 'Start Ad';
+    }
+  }, requiredSeconds + 1000);
 }
 
 function markAdWatched(adId){
@@ -481,10 +470,10 @@ function updateAfterWatch(){
   // re-load state and re-render
   loadUserAdState().then(s=>{
     const watched = s.watchedIds;
-    // include local watched
+    // include local watched as fallback
     const localWatched = JSON.parse(localStorage.getItem('watch2earn_watched_ads')||'[]');
     localWatched.forEach(id=>watched.add(id));
-    getLiveAds().then(ads=> renderAds(ads, watched, Number(localStorage.getItem('watch2earn_ads')||0)));
+    getLiveAds().then(ads=> renderAds(ads, watched, s.todaysCount));
   });
   // also refresh profile summary
   refreshProfile();
@@ -526,11 +515,11 @@ window.addEventListener('storage', (e)=>{ if(e.key === 'profile_sync') refreshPr
 saveRefFromUrl();
 firebase.auth().onAuthStateChanged(user=>{
   loadUserAdState().then(s=>{
-    // merge local watched
+    // merge local watched as fallback
     const localWatched = JSON.parse(localStorage.getItem('watch2earn_watched_ads')||'[]');
     localWatched.forEach(id=>s.watchedIds.add(id));
-    getLiveAds().then(ads=> renderAds(ads, s.watchedIds, Number(localStorage.getItem('watch2earn_ads')||s.todaysCount||0)));
-    document.getElementById('adCounter').innerText = `Daily ads watched: ${Number(localStorage.getItem('watch2earn_ads')||s.todaysCount||0)}/${MAX_DAILY_ADS}`;
+    getLiveAds().then(ads=> renderAds(ads, s.watchedIds, s.todaysCount));
+    document.getElementById('adCounter').innerText = `Daily ads watched: ${s.todaysCount}/${MAX_DAILY_ADS}`;
   });
 });
 

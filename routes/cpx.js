@@ -51,10 +51,26 @@ router.get('/hash', verifyToken, (req, res) => {
   try {
     const userId = req.user.uid || req.user.id;
     const users = loadUsers();
-    const user = users.find(u => u.uid === userId || u.id === userId);
+    let user = users.find(u => u.uid === userId || u.id === userId);
 
+    // If user not present in local JSON store, try to create one from token payload
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      const tokenUser = req.user || {};
+      const newUser = {
+        id: userId,
+        uid: userId,
+        email: tokenUser.email || '',
+        displayName: tokenUser.name || tokenUser.displayName || 'User'
+      };
+      users.push(newUser);
+      try {
+        fs.writeFileSync(USERS_PATH, JSON.stringify(users, null, 2));
+        user = newUser;
+        console.log('Created missing user record for', userId);
+      } catch (e) {
+        console.error('Failed to write new user to users.json', e);
+        return res.status(500).json({ error: 'Failed to create user record' });
+      }
     }
 
     // Generate secure hash: MD5(user_id + user_email + CPX_SECURE_KEY)

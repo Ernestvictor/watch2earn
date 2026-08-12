@@ -1,3 +1,4 @@
+// routes/cpx.js
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
@@ -6,8 +7,8 @@ const crypto = require('crypto');
 const verifyToken = require('../middleware/auth');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const TXN_PATH = path.join(DATA_DIR, 'transactions.json');
 const USERS_PATH = path.join(DATA_DIR, 'users.json');
+const TXN_PATH = path.join(DATA_DIR, 'transactions.json');
 const CPX_TRACKING_PATH = path.join(DATA_DIR, 'cpx-tracking.json');
 
 // CPX Secure Key from dashboard
@@ -15,9 +16,14 @@ const CPX_SECURE_KEY = "CTJ6jPqHw1T80G7qCTxG6AjE72aadXzE";
 
 function ensureFiles() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(TXN_PATH)) fs.writeFileSync(TXN_PATH, '[]');
   if (!fs.existsSync(USERS_PATH)) fs.writeFileSync(USERS_PATH, '[]');
+  if (!fs.existsSync(TXN_PATH)) fs.writeFileSync(TXN_PATH, '[]');
   if (!fs.existsSync(CPX_TRACKING_PATH)) fs.writeFileSync(CPX_TRACKING_PATH, '[]');
+}
+
+function loadUsers() {
+  ensureFiles();
+  try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf8')); } catch (e) { return []; }
 }
 
 function loadTransactions() {
@@ -28,11 +34,6 @@ function loadTransactions() {
 function saveTransactions(items) {
   ensureFiles();
   fs.writeFileSync(TXN_PATH, JSON.stringify(items, null, 2));
-}
-
-function loadUsers() {
-  ensureFiles();
-  try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf8')); } catch (e) { return []; }
 }
 
 function loadCpxTracking() {
@@ -47,25 +48,30 @@ function saveCpxTracking(items) {
 
 // GET /api/cpx/hash - Generate MD5 hash for iframe authentication
 router.get('/hash', verifyToken, (req, res) => {
-  const userId = req.user.uid || req.user.id;
-  const users = loadUsers();
-  const user = users.find(u => u.uid === userId || u.id === userId);
+  try {
+    const userId = req.user.uid || req.user.id;
+    const users = loadUsers();
+    const user = users.find(u => u.uid === userId || u.id === userId);
 
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Generate secure hash: MD5(user_id + user_email + CPX_SECURE_KEY)
+    const checkString = userId + (user.email || '') + CPX_SECURE_KEY;
+    const secureHash = crypto.createHash('md5').update(checkString).digest('hex');
+
+    res.json({
+      user_id: userId,
+      email: user.email || '',
+      username: user.displayName || user.name || 'User',
+      secure_hash: secureHash,
+      app_id: 35282
+    });
+  } catch (err) {
+    console.error('Error generating CPX hash:', err);
+    res.status(500).json({ error: 'Failed to generate CPX hash' });
   }
-
-  // Generate secure hash: MD5(user_id + user_email + CPX_SECURE_KEY)
-  const checkString = userId + (user.email || '') + CPX_SECURE_KEY;
-  const secureHash = crypto.createHash('md5').update(checkString).digest('hex');
-
-  res.json({
-    user_id: userId,
-    email: user.email || '',
-    username: user.displayName || user.name || 'User',
-    secure_hash: secureHash,
-    app_id: 35282
-  });
 });
 
 // GET /api/cpx/postback - CPX calls this when user completes survey

@@ -201,11 +201,18 @@
                 return;
             }
 
-            // Load user balance
-            loadBalance();
+            // Load user balance and survey iframe (await balance first)
+            try {
+                await loadBalance();
+            } catch (e) {
+                console.error('loadBalance error:', e);
+            }
 
-            // Load CPX survey iframe
-            loadSurveyIframe(user);
+            try {
+                await loadSurveyIframe(user);
+            } catch (e) {
+                console.error('loadSurveyIframe error:', e);
+            }
         });
 
         async function loadBalance() {
@@ -241,25 +248,29 @@
         async function loadSurveyIframe(user) {
             try {
                 // Get CPX hash and user data from server
-                const token = await user.getIdToken();
+                // retrieve token from current user for consistency
+                const token = await firebase.auth().currentUser.getIdToken();
                 const hashResponse = await fetch('/api/cpx/hash', {
                     headers: {
                         'Authorization': 'Bearer ' + token
                     }
                 });
 
-                if (!hashResponse.ok) throw new Error('Failed to get CPX hash');
+                if (!hashResponse.ok) {
+                    const text = await hashResponse.text().catch(() => '');
+                    throw new Error(`Failed to get CPX hash (${hashResponse.status}) ${text}`);
+                }
 
                 const cpxData = await hashResponse.json();
 
                 // Generate the iframe URL with dynamic user data
-                const iframeUrl = `https://offers.cpx-research.com/index.php?app_id=${cpxData.app_id}&ext_user_id=${cpxData.user_id}&secure_hash=${cpxData.secure_hash}&username=${encodeURIComponent(cpxData.username)}&email=${encodeURIComponent(cpxData.email)}&subid_1=&subid_2`;
+                const iframeUrl = `https://offers.cpx-research.com/index.php?app_id=35282&ext_user_id=${cpxData.user_id}&secure_hash=${cpxData.secure_hash}&username=${encodeURIComponent(cpxData.username)}&email=${encodeURIComponent(cpxData.email)}&subid1=${cpxData.user_id}&subid2=${cpxData.user_id}`;
 
                 // Create and inject iframe
                 const iframeHtml = `
                     <iframe 
                         width="100%" 
-                        frameBorder="0" 
+                        frameborder="0" 
                         height="900px"
                         src="${iframeUrl}"
                         style="border-radius: 8px; background-color: white;">
@@ -271,11 +282,11 @@
                 document.getElementById('surveyContainer').style.display = 'block';
 
                 // Refresh balance periodically (every 30 seconds)
-                setInterval(loadBalance, 30000);
+                setInterval(() => { loadBalance().catch(e => console.error('refresh balance error', e)); }, 30000);
             } catch (error) {
                 console.error('Error loading survey iframe:', error);
                 document.getElementById('loadingState').style.display = 'none';
-                showError('Failed to load surveys. Please refresh the page.');
+                showError(error.message || 'Failed to load surveys. Please refresh the page.');
             }
         }
 

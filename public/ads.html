@@ -13,6 +13,22 @@
             padding: 30px 0;
             margin-bottom: 30px;
         }
+        .network-ad-block {
+            margin: 20px 0 30px;
+            padding: 18px;
+            background: #111827;
+            border: 1px solid #2d3748;
+            border-radius: 12px;
+            text-align: center;
+            color: #e5e7eb;
+        }
+        .network-ad-label {
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #9ca3af;
+            margin-bottom: 12px;
+        }
         .ad-counter {
             background-color: #fff3cd;
             border-left: 4px solid #ffc107;
@@ -211,6 +227,27 @@
         <!-- Status Message -->
         <div class="status-message" id="statusMessage"></div>
 
+        <div class="network-ad-block">
+            <div class="network-ad-label">Sponsored offer</div>
+            <script src="https://pl30708906.effectivecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js"></script>
+            <script src="https://pl30708908.effectivecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js"></script>
+            <script>
+                atOptions = {
+                    'key': '457f65cbe904e42fea908d570f00bbb2',
+                    'format': 'iframe',
+                    'height': 250,
+                    'width': 300,
+                    'params': {}
+                };
+            </script>
+            <script src="https://www.highperformanceformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js"></script>
+            <script async="async" data-cfasync="false" src="https://pl30708907.effectivecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js"></script>
+            <div id="container-4b1cf630fa653f9661f13acbf3b9bcf9"></div>
+            <p style="margin: 12px 0 0;">
+                <a href="https://www.effectivecpmnetwork.com/ke7tsjm03d?key=a96268fc04237d289e7e7bd64904e2f6" target="_blank" rel="noopener noreferrer" style="color:#8b5cf6; font-weight:600;">Open network offer</a>
+            </p>
+        </div>
+
         <!-- Ads Grid -->
         <div class="ads-container" id="adsContainer">
             <!-- Ads will be loaded here -->
@@ -224,6 +261,7 @@
 
     <script>
         const MAX_ADS = 5;
+        const NETWORK_AD_URL = 'https://www.effectivecpmnetwork.com/ke7tsjm03d?key=a96268fc04237d289e7e7bd64904e2f6';
         let current = null;
 
         const firebaseConfig = {
@@ -297,10 +335,10 @@
                 container.innerHTML = ads.map((ad, idx) => `
                     <div class="ad-card">
                         <div class="ad-title">📺 ${ad.title}</div>
-                        <div class="ad-info">${ad.seconds} seconds • Network Ad</div>
+                        <div class="ad-info">${ad.seconds || 15} seconds • Network Ad</div>
                         <div class="ad-reward">Earn ₦2.00</div>
                         <button class="watch-btn" id="btn-${idx}" onclick="watch('${ad.id}', ${idx}, this)">
-                            Start ${ad.seconds}-second Ad
+                            Start ${ad.seconds || 15}-second Ad
                         </button>
                         <div class="timer" id="timer-${idx}"></div>
                     </div>
@@ -324,25 +362,26 @@
                 const ad = ads.find(a => a.id === adId);
                 if (!ad) throw new Error('Ad not found');
 
-                const url = ad.redirectUrl || ad.url;
-                const popup = window.open(url, '_blank', 'noopener');
+                const requiredSeconds = Math.max(15, Number(ad.seconds) || 15);
+                const url = ad.redirectUrl || ad.url || NETWORK_AD_URL;
+                const popup = window.open(url, '_blank', 'noopener,noreferrer');
 
                 if (!popup) {
                     status('Unable to open ad. Please disable your popup blocker.', 'error');
                     button.disabled = false;
-                    button.textContent = `Start ${ad.seconds}-second Ad`;
+                    button.textContent = `Start ${requiredSeconds}-second Ad`;
                     current = null;
                     return;
                 }
 
                 const started = Date.now();
-                let remaining = 15;
+                let remaining = requiredSeconds;
                 const timerEl = document.getElementById(`timer-${idx}`);
                 timerEl.textContent = remaining + 's';
 
                 const interval = setInterval(() => {
                     remaining--;
-                    timerEl.textContent = remaining + 's';
+                    timerEl.textContent = remaining > 0 ? remaining + 's' : '0s';
                 }, 1000);
 
                 const finish = async (completed) => {
@@ -350,7 +389,7 @@
                     if (current !== null) current = null;
                     timerEl.textContent = '';
                     button.disabled = false;
-                    button.textContent = `Start ${ad.seconds}-second Ad`;
+                    button.textContent = `Start ${requiredSeconds}-second Ad`;
 
                     if (!completed) {
                         status('Returned before 15 seconds. No reward was added.', 'error');
@@ -359,13 +398,14 @@
 
                     try {
                         const authToken = await token();
+                        const elapsedSeconds = Math.min(requiredSeconds, Math.max(0, Math.round((Date.now() - started) / 1000)));
                         const creditResponse = await fetch('/api/ads/watch', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Authorization': 'Bearer ' + authToken
                             },
-                            body: JSON.stringify({ adId })
+                            body: JSON.stringify({ adId, adDuration: elapsedSeconds >= requiredSeconds ? requiredSeconds : elapsedSeconds })
                         });
 
                         const result = await creditResponse.json();
@@ -385,7 +425,7 @@
                 const check = setInterval(() => {
                     if (popup.closed) {
                         clearInterval(check);
-                        finish(Date.now() - started >= 15000);
+                        finish(Date.now() - started >= requiredSeconds * 1000);
                     }
                 }, 500);
 
@@ -395,12 +435,12 @@
                         try { popup.close(); } catch (e) {}
                         finish(true);
                     }
-                }, 16000);
+                }, (requiredSeconds + 1) * 1000);
 
             } catch (error) {
                 status(error.message || 'An error occurred.', 'error');
                 button.disabled = false;
-                button.textContent = `Start ${ad.seconds}-second Ad`;
+                button.textContent = `Start ${ad.seconds || 15}-second Ad`;
                 current = null;
             }
         }
@@ -413,7 +453,6 @@
             setTimeout(() => { el.style.display = 'none'; }, 5000);
         }
     </script>
-
 
 </body>
 </html>

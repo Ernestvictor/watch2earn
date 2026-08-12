@@ -248,8 +248,8 @@
         async function loadSurveyIframe(user) {
             try {
                 // Get CPX hash and user data from server
-                // retrieve token from current user for consistency
                 const token = await firebase.auth().currentUser.getIdToken();
+                console.log('Fetching CPX hash with token...');
                 const hashResponse = await fetch('/api/cpx/hash', {
                     headers: {
                         'Authorization': 'Bearer ' + token
@@ -262,9 +262,11 @@
                 }
 
                 const cpxData = await hashResponse.json();
+                console.log('✅ CPX hash received:', cpxData);
 
                 // Generate the iframe URL with dynamic user data using exact CPX parameter names
                 const iframeUrl = `https://offers.cpx-research.com/index.php?app_id=${encodeURIComponent(cpxData.app_id)}&ext_user_id=${encodeURIComponent(cpxData.user_id)}&secure_hash=${encodeURIComponent(cpxData.secure_hash)}&username=${encodeURIComponent(cpxData.username)}&email=${encodeURIComponent(cpxData.email)}&subid_1=${encodeURIComponent(cpxData.user_id)}&subid_2=${encodeURIComponent(cpxData.user_id)}`;
+                console.log('📊 Built iframe URL:', iframeUrl);
 
                 // Create and inject iframe
                 const iframeHtml = `
@@ -273,13 +275,16 @@
                         frameborder="0" 
                         height="2000px"
                         src="${iframeUrl}"
-                        style="border-radius: 8px; background-color: white;">
+                        style="border-radius: 8px; background-color: white;"
+                        loading="eager">
                     </iframe>
                 `;
 
+                console.log('💾 Injecting iframe into DOM...');
                 document.getElementById('iframeWrapper').innerHTML = iframeHtml;
                 document.getElementById('loadingState').style.display = 'none';
                 document.getElementById('surveyContainer').style.display = 'block';
+                console.log('✅ Survey iframe loaded');
 
                 // Refresh balance periodically (every 30 seconds)
                 setInterval(() => { loadBalance().catch(e => console.error('refresh balance error', e)); }, 30000);

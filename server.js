@@ -124,6 +124,116 @@ app.use('/api/ads', adsRoutes);
 app.use('/api/referrals', referralsRoutes);
 app.use('/api/cpx', cpxRoutes);
 
+// ✅ CPX Postback Handler (direct route for CPX callbacks)
+const crypto = require('crypto');
+
+const CPX_SECURE_KEY = "CTJ6jPqHw1T80G7qCTxG6AjE72aadXzE";
+
+function loadCpxTracking() {
+  try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'cpx-tracking.json'), 'utf8')); } catch (e) { return []; }
+}
+
+function saveCpxTracking(items) {
+  fs.writeFileSync(path.join(DATA_DIR, 'cpx-tracking.json'), JSON.stringify(items, null, 2));
+}
+
+function loadTransactions() {
+  try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transactions.json'), 'utf8')); } catch (e) { return []; }
+}
+
+function saveTransactions(items) {
+  fs.writeFileSync(path.join(DATA_DIR, 'transactions.json'), JSON.stringify(items, null, 2));
+}
+
+app.get('/cpx-postback', (req, res) => {
+  const { status, trans_id, user_id, amount_usd, amount_local, hash } = req.query;
+
+  console.log('✅ CPX Postback received:', { status, trans_id, user_id, amount_usd, hash });
+
+  // Verify hash to prevent fraud
+  const checkString = status + trans_id + user_id + amount_usd + CPX_SECURE_KEY;
+  const myHash = crypto.createHash('md5').update(checkString).digest('hex');
+
+  if (myHash !== hash) {
+    console.log('❌ Hash mismatch! Expected:', myHash, 'Received:', hash);
+    return res.status(403).send('Invalid Hash');
+  }
+
+  // Prevent double payment
+  const tracking = loadCpxTracking();
+  if (tracking.find(t => t.trans_id === trans_id)) {
+    console.log('⚠️ trans_id already processed:', trans_id);
+    return res.send('OK - Already Processed');
+  }
+
+  // Status 1 = Completed, 2 = Reversed
+  if (status === '1') {
+    const amountUsd = parseFloat(amount_usd || 0);
+    const amountNaira = Math.round(amountUsd * 1500);
+
+    const transactions = loadTransactions();
+    const newTx = {
+      id: trans_id,
+      userId: user_id,
+      type: 'survey',
+      source: 'cpx',
+      title: 'CPX Survey Completed',
+      amountUsd: amountUsd,
+      amountNaira: amountNaira,
+      date: new Date().toISOString(),
+      cpxTransId: trans_id
+    };
+
+    transactions.unshift(newTx);
+    saveTransactions(transactions);
+
+    // Track this trans_id
+    tracking.push({
+      trans_id: trans_id,
+      user_id: user_id,
+      amount_usd: amountUsd,
+      status: 'completed',
+      date: new Date().toISOString()
+    });
+    saveCpxTracking(tracking);
+
+    console.log(`✅ Credited ₦${amountNaira} ($${amountUsd}) to user ${user_id} for CPX survey`);
+  } else if (status === '2') {
+    // Reversed - remove earnings
+    const amountUsd = parseFloat(amount_usd || 0);
+    const amountNaira = Math.round(amountUsd * 1500);
+
+    const transactions = loadTransactions();
+    const reversal = {
+      id: trans_id + '_reversed',
+      userId: user_id,
+      type: 'survey_reversal',
+      source: 'cpx',
+      title: 'CPX Survey Reversed',
+      amountUsd: -amountUsd,
+      amountNaira: -amountNaira,
+      date: new Date().toISOString(),
+      cpxTransId: trans_id
+    };
+
+    transactions.unshift(reversal);
+    saveTransactions(transactions);
+
+    // Track reversal
+    const idx = tracking.findIndex(t => t.trans_id === trans_id);
+    if (idx !== -1) {
+      tracking[idx].status = 'reversed';
+      tracking[idx].reversedAt = new Date().toISOString();
+    }
+    saveCpxTracking(tracking);
+
+    console.log(`⚠️ Reversed ₦${amountNaira} ($${amountUsd}) from user ${user_id}`);
+  }
+
+  // MUST return 'OK' or CPX will retry
+  res.send('OK');
+});
+
 // ✅ Middleware
 const authMiddleware = require('./middleware/auth');
 const fraudCheck = require('./middleware/fraudcheck');

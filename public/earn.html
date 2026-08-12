@@ -76,7 +76,6 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
   <div style="border-bottom: 2px solid #222; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 0;">
     <a href="ads.html" style="color: #4CAF50; border-bottom: 3px solid #4CAF50; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Ads</a>
     <a href="survey.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Surveys</a>
-    <a href="ads.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Videos</a>
     <a href="game.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Games</a>
     <a href="account.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Account</a>
   </div>
@@ -105,449 +104,84 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
     </div>
   </div>
 
-  <div id="liveAdStatus" class="live-status" style="display:none">You watched 0 ads today — keep earning!</div>
-
-  <div class="helper" id="adCounter" title="Tap to claim daily ₦0.01 bonus" onclick="window.location='dailystrike.html'">Your daily ad count is loading...</div>
+  <div id="adCounter" class="helper" title="Tap to claim daily ₦0.01 bonus" onclick="window.location='dailystrike.html'">Your daily ad count is loading...</div>
 
   <div class="dashboard">
-  <div class="tabs">
-    <a class="tab active" href="ads.html">Videos</a>
-    <a class="tab" href="game.html">Games</a>
-    <a class="tab" href="survey.html">Surveys</a>
-  </div>
-  
-  <div id="videosTab">
-    <div style="background:#14230f;border:1px solid #2a4a2a;border-radius:14px;padding:12px;margin-bottom:12px;font-size:12px">
-      <b style="color:#4CAF50">💎 Why Earn Here?</b>
-      <ul style="margin:8px 0 0 16px;line-height:1.6;font-size:11px;color:#aaa">
-        <li>Watch ads for 15 seconds to earn ₦2.00</li>
-        <li>Max 5 ads per day • Resets at 12:00 AM</li>
-        <li>Cancel anytime, but no reward</li>
-      </ul>
+    <div class="tabs">
+      <a class="tab active" href="ads.html">Ads</a>
+      <a class="tab" href="survey.html">Surveys</a>
+      <a class="tab" href="game.html">Games</a>
     </div>
-    <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin-bottom:12px">
-      <div style="font-weight:700;color:#4CAF50;margin-bottom:10px">Live Ads</div>
-      <div id="adsList"></div>
-    </div>
-    <div id="networkAdViewer" style="display:none;background:#000;border:1px solid #2a4a2a;border-radius:14px;padding:14px;margin-bottom:12px;text-align:center">
-      <div style="margin-bottom:12px;color:#aaa;font-size:12px">Viewing Ad • Keep window open</div>
-      <div id="adNetworkContainer" style="min-height:300px;margin-bottom:12px"></div>
-      <div style="display:flex;gap:8px;align-items:center;justify-content:center">
-        <button onclick="closeNetworkAd()" class="btn-watch" style="width:auto;flex:1">Stop Watching</button>
-        <div id="networkAdTimer" style="min-width:60px;text-align:center;color:#4CAF50;font-weight:700;font-size:16px">15s</div>
+    <div style="display:grid;gap:16px;margin-top:20px">
+      <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:18px">
+        <h3 style="margin-bottom:10px;color:#4CAF50">Watch Ads</h3>
+        <p style="color:#aaa;font-size:13px;line-height:1.6">Go to the ads page to click ad links, stay there for 15 seconds, and earn ₦2.00 per completed ad. Only ads.html shows ads.</p>
+        <a href="ads.html" class="btn-watch" style="text-align:center;display:block">Open Ads</a>
+      </div>
+      <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:18px">
+        <h3 style="margin-bottom:10px;color:#4CAF50">Complete Surveys</h3>
+        <p style="color:#aaa;font-size:13px;line-height:1.6">Click to go to surveys and earn with CPX Research. Survey actions are separate from ads.</p>
+        <a href="survey.html" class="btn-watch" style="text-align:center;display:block">Open Surveys</a>
+      </div>
+      <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:18px">
+        <h3 style="margin-bottom:10px;color:#4CAF50">Play Games</h3>
+        <p style="color:#aaa;font-size:13px;line-height:1.6">Go to games for future earning options. This page is the hub, not the ad viewer.</p>
+        <a href="game.html" class="btn-watch" style="text-align:center;display:block">Open Games</a>
       </div>
     </div>
   </div>
-  
-  <div id="gamesTab" style="display:none">
-    <div style="background:#111;border:1px solid #222;border-radius:14px;padding:14px;text-align:center;color:#aaa">
-      <a href="game.html" style="color:#4CAF50">Open Games</a>
-    </div>
-  </div>
-  
-  <div id="surveysTab" style="display:none">
-    <div style="background:#111;border:1px solid #222;border-radius:14px;padding:14px;text-align:center;color:#aaa">
-      <a href="survey.html" style="color:#4CAF50">Open Surveys</a>
-    </div>
-  </div>
-</div>
 
-<div class="bottom-nav">
-  <a href="home.html"><i class="fas fa-house"></i>Home</a>
-  <a href="earn.html" class="active"><i class="fas fa-coins"></i>Earn</a>
-  <a href="history.html"><i class="fas fa-receipt"></i>History</a>
-  <a href="account.html"><i class="fas fa-user"></i>Account</a>
-</div>
+  <div class="bottom-nav">
+    <a href="home.html"><i class="fas fa-house"></i>Home</a>
+    <a href="earn.html" class="active"><i class="fas fa-coins"></i>Earn</a>
+    <a href="history.html"><i class="fas fa-receipt"></i>History</a>
+    <a href="account.html"><i class="fas fa-user"></i>Account</a>
+  </div>
 <div id="toast" class="toast"></div>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script>
-// Firebase client init (uses same config as other pages)
-if(!firebase.apps.length){
-  const firebaseConfig={apiKey:'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',authDomain:'enable-authentication-1b56c.firebaseapp.com',projectId:'enable-authentication-1b56c',storageBucket:'enable-authentication-1b56c.firebasestorage.app',messagingSenderId:'946417281410',appId:'1:946417281410:web:7f4e06e3b4b03946d0079b'};
-  firebase.initializeApp(firebaseConfig);
-}
-
-// Configuration
-const MAX_DAILY_ADS = 5;
-const AD_REWARD_USD = 0.005; // reward in USD when ad completes ($0.005)
-const NAIRA_PER_USD = 1500;
-const AD_REWARD_NAIRA = AD_REWARD_USD * NAIRA_PER_USD; // 7.50
-
-// Network ad viewer state
-let networkAdTimer = null;
-let networkAdStartTime = null;
-let networkAdCurrentId = null;
-
-// Show network ad viewer with countdown
-function viewNetworkAd(adId, title){
-  const viewer = document.getElementById('networkAdViewer');
-  const container = document.getElementById('adNetworkContainer');
-  const timer = document.getElementById('networkAdTimer');
-  
-  viewer.style.display = 'block';
-  container.innerHTML = `<p style="color:#aaa">${title}</p>`;
-  timer.innerText = '15s';
-  networkAdCurrentId = adId;
-  networkAdStartTime = Date.now();
-  
-  let remaining = 15;
-  timer.innerText = remaining + 's';
-  
-  // Show the ad network container if it exists
-  const networkContainer = document.getElementById('container-4b1cf630fa653f9661f13acbf3b9bcf9');
-  if(networkContainer && adId.includes('effectivecpm1')) {
-    networkContainer.style.display = 'block';
-    container.innerHTML = '';
-    container.appendChild(networkContainer.cloneNode(true));
-  }
-  
-  networkAdTimer = setInterval(()=>{
-    remaining--;
-    timer.innerText = remaining + 's';
-    if(remaining <= 0){
-      clearInterval(networkAdTimer);
-      networkAdTimer = null;
-      creditNetworkAd(adId, title);
-    }
-  }, 1000);
-}
-
-// Close network ad viewer early (no credit)
-function closeNetworkAd(){
-  if(networkAdTimer){
-    clearInterval(networkAdTimer);
-    networkAdTimer = null;
-  }
-  const viewer = document.getElementById('networkAdViewer');
-  viewer.style.display = 'none';
-  document.getElementById('adNetworkContainer').innerHTML = '';
-  networkAdCurrentId = null;
-  showToast('Ad closed — no reward', 'warn');
-}
-
-// Credit user for watching network ad
-async function creditNetworkAd(adId, title){
-  const viewer = document.getElementById('networkAdViewer');
-  viewer.style.display = 'none';
-  document.getElementById('adNetworkContainer').innerHTML = '';
-  
-  try{
-    const user = firebase.auth().currentUser;
-    if(user){
-      const token = await user.getIdToken();
-      const res = await fetch('/api/ads/watch', { 
-        method: 'POST', 
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Authorization': 'Bearer ' + token 
-        }, 
-        body: JSON.stringify({ adId, adDuration: 15 }) 
-      });
-      if(res.ok){
-        const result = await res.json();
-        markAdWatched(adId);
-        updateAfterWatch();
-        showToast(`✅ ${title} completed — +₦${(result.payment||2).toFixed(2)} earned! (${result.adsToday}/5 today)`, 'success');
-      } else {
-        const err = await res.json().catch(()=>({error:'Failed'}));
-        showToast(err.error || 'Error crediting ad', 'error');
-      }
-    } else {
-      showToast('Login required', 'warn');
-    }
-  }catch(e){
-    console.error('Credit error', e);
-    showToast('Credit failed', 'error');
-  }
-  networkAdCurrentId = null;
-}
-
-
-// Save referrer if present in URL
-function saveRefFromUrl(){ return; }
-
-// Get today's ad transactions from server (if logged in) to enforce limits and per-ad watched state
-async function loadUserAdState(){
-  const user = firebase.auth().currentUser;
-  let watchedIds = new Set();
-  let todaysCount = 0;
-  if(user){
-    try{
-      const token = await user.getIdToken();
-      const res = await fetch('/api/transactions/history', { headers: { Authorization: 'Bearer ' + token } });
-      if(res.ok){
-        const txs = await res.json();
-        const todayStr = new Date().toDateString();
-        txs.forEach(t => {
-          if(new Date(t.date).toDateString() !== todayStr) return;
-          if(t.type === 'ad' || t.type === 'ad_watch'){
-            todaysCount++;
-            if(t.title) watchedIds.add(t.title);
-          }
-        });
-        return { watchedIds, todaysCount };
-      }
-    }catch(e){ console.warn('loadUserAdState failed',e); }
-  }
-  return { watchedIds, todaysCount };
-}
-
-// Render ads list (simple inline ads, each ad has id)
-// Render ads; accepts an ads array (from live feed) and watched state
-function renderAds(ads, watchedIds, todaysCount){
-  const container = document.getElementById('adsList');
-  container.innerHTML = '';
-  ads.forEach(ad => {
-    const adId = ad.id || ('ad_' + (ad.title||'').replace(/\s+/g,'_') );
-    const seconds = ad.seconds || 15;
-    const redirectUrl = ad.redirectUrl || ad.url || '';
-    const disabled = watchedIds.has(adId) || (todaysCount >= MAX_DAILY_ADS);
-    const card = document.createElement('div');
-    card.className = 'ad-card';
-    card.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-        <div style="flex:1">
-          <b style="font-size:14px">${ad.title || 'Sponsored Ad'}</b><br><small style="color:#777">${seconds}s • ${ad.isNetwork ? '🌐 Network' : '📺 Video'}</small>
-        </div>
-        <div class="payout-box"><div class="company">≈ ₦2.00</div><div class="you">You</div></div>
-      </div>
-      <div style="margin-top:10px;display:flex;gap:8px">
-        <button class="btn-watch" data-ad-id="${adId}" data-ad-url="${redirectUrl}" data-is-network="${ad.isNetwork||false}" ${disabled? 'disabled' : ''}>${disabled? 'Watched / Limit' : 'Start Ad'}</button>
-        <div class="ad-timer" id="timer-${adId}" style="min-width:80px;text-align:center;color:#aaa"></div>
-      </div>
-    `;
-    container.appendChild(card);
-    const btn = card.querySelector('.btn-watch');
-    btn.addEventListener('click', ()=> {
-      if(disabled) return;
-      if(ad.isNetwork && redirectUrl){
-        openRedirectAd(btn, adId, redirectUrl, ad.title);
-      } else {
-        startAdFlow(btn, { id: adId, title: ad.title, seconds, url: redirectUrl });
-      }
-    });
+if (!firebase.apps.length) {
+  firebase.initializeApp({
+    apiKey: 'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',
+    authDomain: 'enable-authentication-1b56c.firebaseapp.com',
+    projectId: 'enable-authentication-1b56c',
+    storageBucket: 'enable-authentication-1b56c.firebasestorage.app',
+    messagingSenderId: '946417281410',
+    appId: '1:946417281410:web:7f4e06e3b4b03946d0079b'
   });
 }
 
-// Try to fetch live ads from the server, fallback to defaults
-async function getLiveAds(){
-  try{
-    const res = await fetch('/api/ads');
-    if(res.ok){
-      const data = await res.json();
-      if(Array.isArray(data) && data.length) return data;
-    }
-  }catch(e){ /* ignore */ }
-  // fallback default list
-  return [
-    { id:'ad_1', title:'EffectiveCPM Network A', seconds:15, isNetwork:true, redirectUrl:'https://pl30708906.effectivecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js' },
-    { id:'ad_2', title:'EffectiveCPM Network B', seconds:15, isNetwork:true, redirectUrl:'https://www.effectivecpmnetwork.com/ke7tsjm03d?key=a96268fc04237d289e7e7bd64904e2f6' },
-    { id:'ad_3', title:'HighPerformance Format', seconds:15, isNetwork:true, redirectUrl:'https://www.highperformanceformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js' }
-  ];
-}
-
-let activeAd = null;
-let activeInterval = null;
-
-function showCountdown(btn, seconds, onComplete, onCancel){
-  const adId = btn.getAttribute('data-ad-id');
-  const timerEl = document.getElementById('timer-' + adId);
-  let remaining = seconds;
-  timerEl.innerText = remaining + 's';
-  document.addEventListener('visibilitychange', handleVis);
-  function handleVis(){
-    if(document.hidden){
-      cleanup(false);
-    }
+firebase.auth().onAuthStateChanged(async (user) => {
+  if (!user) {
+    window.location.href = 'index.html';
+    return;
   }
-  activeInterval = setInterval(()=>{
-    remaining--; timerEl.innerText = remaining + 's';
-    if(remaining <= 0){ cleanup(true); }
-  },1000);
-  function cleanup(success){
-    clearInterval(activeInterval); activeInterval = null;
-    document.removeEventListener('visibilitychange', handleVis);
-    timerEl.innerText = '';
-    if(success) onComplete(); else onCancel();
-  }
-  return ()=>{ if(activeInterval) cleanup(false); };
-}
-
-async function startAdFlow(btn, ad){
-  if(activeAd) return;
-  const adId = ad.id;
-  btn.disabled = true;
-  btn.innerText = 'Starting...';
-  const adUrl = ad.url || ad.redirectUrl || '';
-  const requiredSeconds = Number(ad.seconds || 15);
-  if(!adUrl){ showToast('Ad has no URL', 'error'); btn.disabled = false; btn.innerText = 'Start Ad'; return; }
-
-  async function creditServer(duration){
-    try{
-      const user = firebase.auth().currentUser;
-      if(user){
-        const token = await user.getIdToken();
-        const payload = { adId, adDuration: duration };
-        const res = await fetch('/api/ads/watch', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(payload) });
-        if(res.ok){
-          const result = await res.json();
-          updateAfterWatch();
-          showToast(`✅ Ad completed — +₦${(result.payment||2).toFixed(2)} added! (${result.adsToday} today)`, 'success');
-        } else {
-          const err = await res.json().catch(()=>({error:'Unknown'}));
-          if(res.status === 403) showToast(err.error || 'Daily limit reached', 'warn');
-          else showToast(err.error || 'Failed to credit ad', 'error');
-        }
-      } else {
-        showToast('Login required to be credited', 'warn');
-      }
-    }catch(e){ console.error('credit error', e); showToast('Credit failed', 'error'); }
-  }
-
-  const win = window.open(adUrl, '_blank');
-  if(!win){ showToast('Popup blocked. Allow popups for this site.', 'error'); btn.disabled = false; btn.innerText = 'Start Ad'; return; }
-  btn.innerText = 'Ad opened...';
-  activeAd = { id: adId, win };
-  const start = Date.now();
-  const maxWait = requiredSeconds * 1000;
-
-  const checker = setInterval(()=>{
-    try{
-      if(win.closed){
-        const elapsed = Date.now() - start;
-        clearInterval(checker);
-        activeAd = null;
-        if(elapsed >= maxWait){
-          creditServer(requiredSeconds);
-          markAdWatched(adId);
-        } else {
-          showToast('Returned too soon — no reward.', 'warn');
-        }
-        btn.disabled = false; btn.innerText = 'Start Ad';
-      }
-    }catch(e){ }
-  }, 500);
-
-  setTimeout(()=>{
-    if(activeAd && activeAd.win && !activeAd.win.closed){
-      try{ activeAd.win.close(); }catch(e){}
-      clearInterval(checker);
-      activeAd = null;
-      creditServer(requiredSeconds);
-      markAdWatched(adId);
-      btn.disabled = false; btn.innerText = 'Start Ad';
-    }
-  }, maxWait + 1000);
-}
-
-function openRedirectAd(btn, adId, redirectUrl, title){
-  btn.disabled = true;
-  btn.innerText = 'Ad opened...';
-  const start = Date.now();
-  const requiredSeconds = 15000;
-  const win = window.open(redirectUrl, '_blank');
-  if(!win){ showToast('Popup blocked. Allow popups for this site.', 'error'); btn.disabled = false; btn.innerText = 'Start Ad'; return; }
-  showToast('Ad opened. Keep the window open for 15 seconds to earn.', 'success');
-  const checker = setInterval(async ()=>{
-    try{
-      if(win.closed){
-        const elapsed = Date.now() - start;
-        clearInterval(checker);
-        if(elapsed >= requiredSeconds){
-          await creditNetworkAd(adId, title);
-        } else {
-          showToast('Returned too soon — no reward.', 'warn');
-        }
-        btn.disabled = false;
-        btn.innerText = 'Start Ad';
-      }
-    }catch(e){ }
-  }, 500);
-  setTimeout(async ()=>{
-    if(win && !win.closed){
-      try{ win.close(); }catch(e){}
-      clearInterval(checker);
-      await creditNetworkAd(adId, title);
-      btn.disabled = false;
-      btn.innerText = 'Start Ad';
-    }
-  }, requiredSeconds + 1000);
-}
-
-function markAdWatched(){ return; }
-
-function updateAfterWatch(){
-  // re-load state and re-render
-  loadUserAdState().then(s=>{
-    const watched = s.watchedIds;
-    getLiveAds().then(ads=> renderAds(ads, watched, s.todaysCount));
-  });
-  // also refresh profile summary
-  refreshProfile();
-}
-
-// toast helper + profile refresh sync
-function showToast(msg, type){
-  const t = document.getElementById('toast');
-  if(!t) return; t.className = 'toast ' + (type||''); t.innerText = msg; t.style.display = 'block'; clearTimeout(t._hide); t._hide = setTimeout(()=>{ t.style.display = 'none'; }, 5000);
-}
-
-async function refreshProfile(){
-  try{
-    const user = firebase.auth().currentUser; if(!user) return;
-    const token = await user.getIdToken();
-    const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
-    if(!res.ok) return;
-    const data = await res.json();
-    
-    // Convert USD to Naira (1 USD = 1500 NGN)
-    const totalNaira = (data.balanceUsd || 0) * 1500;
-    const adsNaira = (data.adsEarnUsd || 0) * 1500;
-    const surveysNaira = (data.surveyEarnUsd || 0) * 1500;
-    const gamesNaira = (data.gameEarnUsd || 0) * 1500;
-    const referralNaira = (data.referralEarnUsd || 0) * 1500;
-    
-    document.getElementById('totalBalance').textContent = '₦' + totalNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('adsEarned').textContent = '₦' + adsNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('surveysEarned').textContent = '₦' + surveysNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('gamesEarned').textContent = '₦' + gamesNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('referralEarned').textContent = '₦' + referralNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    
-    const adCount = Number(data.adCount || 0);
-    const adCounter = document.getElementById('adCounter');
-    if(adCounter) adCounter.innerText = `Daily ads watched: ${adCount}/${MAX_DAILY_ADS} • ₦${Math.round(adsNaira).toFixed(2)} earned`;
-    const live = document.getElementById('liveAdStatus');
-    if(live) { live.innerText = `You watched ${adCount} ads today — you earned ₦${Math.round(adsNaira).toFixed(2)} from ads.`; live.style.display = 'block'; }
-  }catch(e){
-    const adCounter = document.getElementById('adCounter');
-    if(adCounter) adCounter.innerText = 'Live ad data is temporarily unavailable.';
-  }
-}
-
-// listen for profile sync from other pages
-window.addEventListener('storage', (e)=>{ if(e.key === 'profile_sync') refreshProfile(); });
-
-// initial setup
-saveRefFromUrl();
-firebase.auth().onAuthStateChanged(user=>{
-  loadUserAdState().then(s=>{
-    getLiveAds().then(ads=> renderAds(ads, s.watchedIds, s.todaysCount));
-    document.getElementById('adCounter').innerText = `Daily ads watched: ${s.todaysCount}/${MAX_DAILY_ADS}`;
-  });
-  refreshProfile();
-  // Refresh balance every 30 seconds
-  setInterval(refreshProfile, 30000);
+  await loadBalance();
 });
 
-function switchTab(tabName, button){
-  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('#videosTab, #gamesTab, #surveysTab').forEach(el=>el.style.display='none');
-  button.classList.add('active');
-  document.getElementById(tabName + 'Tab').style.display = 'block';
+async function loadBalance() {
+  try {
+    const user = firebase.auth().currentUser;
+    if (!user) return;
+    const token = await user.getIdToken();
+    const response = await fetch('/api/transactions/balance', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    const totalNaira = (data.balanceUsd || 0) * 1500;
+    document.getElementById('totalBalance').textContent = '₦' + totalNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('adsEarned').textContent = '₦' + ((data.adsEarnUsd || 0) * 1500).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('surveysEarned').textContent = '₦' + ((data.surveyEarnUsd || 0) * 1500).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('gamesEarned').textContent = '₦' + ((data.gameEarnUsd || 0) * 1500).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('referralEarned').textContent = '₦' + ((data.referralEarnUsd || 0) * 1500).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+  } catch (error) {
+    console.error('Unable to load balance', error);
+  }
 }
-
-// make page responsive and ensure ads only on this page: already scoped to this file
 </script>
 </body>
 </html>
+
+

@@ -74,9 +74,9 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 
   <!-- Navigation Tabs -->
   <div style="border-bottom: 2px solid #222; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 0;">
-    <a href="earn.html" style="color: #4CAF50; border-bottom: 3px solid #4CAF50; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Ads</a>
+    <a href="ads.html" style="color: #4CAF50; border-bottom: 3px solid #4CAF50; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Ads</a>
     <a href="survey.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Surveys</a>
-    <a href="video.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Videos</a>
+    <a href="ads.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Videos</a>
     <a href="game.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Games</a>
     <a href="account.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Account</a>
   </div>
@@ -111,7 +111,7 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 
   <div class="dashboard">
   <div class="tabs">
-    <a class="tab active" href="video.html">Videos</a>
+    <a class="tab active" href="ads.html">Videos</a>
     <a class="tab" href="game.html">Games</a>
     <a class="tab" href="survey.html">Surveys</a>
   </div>
@@ -501,20 +501,24 @@ async function refreshProfile(){
     if(!res.ok) return;
     const data = await res.json();
     
-    // Update new balance card
-    document.getElementById('totalBalance').textContent = '₦' + (data.totalNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('adsEarned').textContent = '₦' + (data.adsEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('surveysEarned').textContent = '₦' + (data.surveyEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('gamesEarned').textContent = '₦' + (data.gameEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('referralEarned').textContent = '₦' + (data.referralEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    // Convert USD to Naira (1 USD = 1500 NGN)
+    const totalNaira = (data.balanceUsd || 0) * 1500;
+    const adsNaira = (data.adsEarnUsd || 0) * 1500;
+    const surveysNaira = (data.surveyEarnUsd || 0) * 1500;
+    const gamesNaira = (data.gameEarnUsd || 0) * 1500;
+    const referralNaira = (data.referralEarnUsd || 0) * 1500;
     
-    const adsUsd = Number(data.adsEarnUsd || data.adsEarn || 0);
-    const adsNaira = Math.round(adsUsd * NAIRA_PER_USD);
+    document.getElementById('totalBalance').textContent = '₦' + totalNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('adsEarned').textContent = '₦' + adsNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('surveysEarned').textContent = '₦' + surveysNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('gamesEarned').textContent = '₦' + gamesNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('referralEarned').textContent = '₦' + referralNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    
     const adCount = Number(data.adCount || 0);
     const adCounter = document.getElementById('adCounter');
-    if(adCounter) adCounter.innerText = `Daily ads watched: ${adCount}/${MAX_DAILY_ADS} • ₦${adsNaira.toFixed(2)} earned`;
+    if(adCounter) adCounter.innerText = `Daily ads watched: ${adCount}/${MAX_DAILY_ADS} • ₦${Math.round(adsNaira).toFixed(2)} earned`;
     const live = document.getElementById('liveAdStatus');
-    if(live) { live.innerText = `You watched ${adCount} ads today — you earned ₦${adsNaira.toFixed(2)} from ads.`; live.style.display = 'block'; }
+    if(live) { live.innerText = `You watched ${adCount} ads today — you earned ₦${Math.round(adsNaira).toFixed(2)} from ads.`; live.style.display = 'block'; }
   }catch(e){
     const adCounter = document.getElementById('adCounter');
     if(adCounter) adCounter.innerText = 'Live ad data is temporarily unavailable.';

@@ -157,13 +157,19 @@
         return;
       }
       token = await user.getIdToken();
-      const balanceResponse = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
-      if (!balanceResponse.ok) throw new Error('Unable to load live balance');
-      const balanceData = await balanceResponse.json();
-      currentBalance = Number(balanceData.balanceNaira || 0);
-      document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
-      document.getElementById('usdBal').innerText = Number(balanceData.balanceUsd || 0).toFixed(2);
-      document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+      try {
+        const balanceResponse = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+        if (!balanceResponse.ok) throw new Error('Unable to load live balance');
+        const balanceData = await balanceResponse.json();
+        // Convert USD to Naira (1 USD = 1500 NGN)
+        currentBalance = Number(balanceData.balanceUsd || 0) * 1500;
+        document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
+        document.getElementById('usdBal').innerText = Number(balanceData.balanceUsd || 0).toFixed(2);
+        document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+      } catch (err) {
+        console.error('Error loading balance:', err);
+        document.getElementById('statusMsg').innerText = 'Error loading balance. Please refresh.';
+      }
       await fetchAndRenderAccounts();
     });
 
@@ -221,6 +227,18 @@
       if (!selectedAccount) return alert('Please save and select an account first.');
       if (method === 'bank' && amount < 5500) return alert('Bank withdrawals start from ₦5,500.');
       if (method === 'crypto' && amount < 10) return alert('Crypto withdrawals start from 10 units.');
+        if (!selectedAccount) {
+          document.getElementById('statusMsg').innerText = '❌ Please save and select an account first.';
+          return;
+        }
+        if (method === 'bank' && amount < 5500) {
+          document.getElementById('statusMsg').innerText = '❌ Bank withdrawals start from ₦5,500.';
+          return;
+        }
+        if (method === 'crypto' && amount < 10) {
+          document.getElementById('statusMsg').innerText = '❌ Crypto withdrawals start from 10 units.';
+          return;
+        }
 
       const charge = amount >= 20000 ? 0 : 500;
       const payload = {
@@ -243,8 +261,11 @@
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      if (!res.ok) return alert(data.error || 'Withdrawal request failed');
-      document.getElementById('statusMsg').innerText = `Request submitted: ${method === 'bank' ? 'Bank' : 'Crypto'} • Charge ₦${data.charge} • Net ₦${data.netAmount}`;
+      if (!res.ok) {
+        document.getElementById('statusMsg').innerText = '❌ ' + (data.error || 'Withdrawal request failed');
+        return;
+      }
+      document.getElementById('statusMsg').innerText = `✅ Request submitted: ${method === 'bank' ? 'Bank' : 'Crypto'} • Charge ₦${data.charge} • Net ₦${data.netAmount}`;
       alert(`Withdrawal request submitted. Charge: ₦${data.charge}, Net: ₦${data.netAmount}`);
     }
   </script>

@@ -59,6 +59,14 @@ router.post('/request', verifyToken, (req, res) => {
       return res.status(400).json({ error: 'Crypto withdrawals start from 10 units.' });
     }
 
+    // Check if user has sufficient balance
+    const transactions = readTransactions().filter(t => t.userId === userId);
+    const totalEarned = transactions.reduce((s, t) => s + (Number(t.amountNaira || Math.round((t.amountUsd || 0) * 1500)) || 0), 0);
+    
+    if (totalEarned < amountNum) {
+      return res.status(400).json({ error: `Not enough balance. You have ₦${Math.round(totalEarned)}, but need ₦${amountNum}. Balance is insufficient for this withdrawal.` });
+    }
+
     const charge = chargeFor(amountNum);
     const netAmount = Math.max(0, amountNum - charge);
     const item = {

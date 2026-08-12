@@ -112,6 +112,7 @@ const userRoutes = require('./routes/users');
 const withdrawalRoutes = require('./routes/withdrawals');
 const adsRoutes = require('./routes/ads');
 const referralsRoutes = require('./routes/referrals');
+const cpxRoutes = require('./routes/cpx');
 
 app.use('/api/admin', adminRoutes);
 app.use('/api/accounts', accountRoutes);
@@ -121,6 +122,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/withdrawals', withdrawalRoutes);
 app.use('/api/ads', adsRoutes);
 app.use('/api/referrals', referralsRoutes);
+app.use('/api/cpx', cpxRoutes);
 
 // ✅ Middleware
 const authMiddleware = require('./middleware/auth');

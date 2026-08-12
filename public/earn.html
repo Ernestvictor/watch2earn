@@ -71,6 +71,40 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
   <div class="announcement" id="announcementBanner" style="display:none">
     <i class="fas fa-bullhorn"></i><span id="announcementText"></span>
   </div>
+
+  <!-- Navigation Tabs -->
+  <div style="border-bottom: 2px solid #222; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 0;">
+    <a href="earn.html" style="color: #4CAF50; border-bottom: 3px solid #4CAF50; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Ads</a>
+    <a href="survey.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Surveys</a>
+    <a href="video.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Videos</a>
+    <a href="game.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Games</a>
+    <a href="account.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Account</a>
+  </div>
+
+  <!-- Balance Card -->
+  <div style="background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2a2a2a;">
+      <span style="color: #888; font-size: 14px;">💵 Total Balance</span>
+      <span style="font-weight: bold; color: #4CAF50; font-size: 16px;" id="totalBalance">₦0.00</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2a2a2a;">
+      <span style="color: #888; font-size: 14px;">🎬 Ads Earned</span>
+      <span style="font-weight: bold; color: #999; font-size: 14px;" id="adsEarned">₦0.00</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2a2a2a;">
+      <span style="color: #888; font-size: 14px;">📝 Surveys Earned</span>
+      <span style="font-weight: bold; color: #999; font-size: 14px;" id="surveysEarned">₦0.00</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2a2a2a;">
+      <span style="color: #888; font-size: 14px;">🎮 Games Earned</span>
+      <span style="font-weight: bold; color: #999; font-size: 14px;" id="gamesEarned">₦0.00</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+      <span style="color: #888; font-size: 14px;">👥 Referral Bonus</span>
+      <span style="font-weight: bold; color: #999; font-size: 14px;" id="referralEarned">₦0.00</span>
+    </div>
+  </div>
+
   <div id="liveAdStatus" class="live-status" style="display:none">You watched 0 ads today — keep earning!</div>
 
   <div class="helper" id="adCounter" title="Tap to claim daily ₦0.01 bonus" onclick="window.location='dailystrike.html'">Your daily ad count is loading...</div>
@@ -466,6 +500,14 @@ async function refreshProfile(){
     const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
     if(!res.ok) return;
     const data = await res.json();
+    
+    // Update new balance card
+    document.getElementById('totalBalance').textContent = '₦' + (data.totalNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('adsEarned').textContent = '₦' + (data.adsEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('surveysEarned').textContent = '₦' + (data.surveyEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('gamesEarned').textContent = '₦' + (data.gameEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    document.getElementById('referralEarned').textContent = '₦' + (data.referralEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
+    
     const adsUsd = Number(data.adsEarnUsd || data.adsEarn || 0);
     const adsNaira = Math.round(adsUsd * NAIRA_PER_USD);
     const adCount = Number(data.adCount || 0);
@@ -489,6 +531,9 @@ firebase.auth().onAuthStateChanged(user=>{
     getLiveAds().then(ads=> renderAds(ads, s.watchedIds, s.todaysCount));
     document.getElementById('adCounter').innerText = `Daily ads watched: ${s.todaysCount}/${MAX_DAILY_ADS}`;
   });
+  refreshProfile();
+  // Refresh balance every 30 seconds
+  setInterval(refreshProfile, 30000);
 });
 
 function switchTab(tabName, button){

@@ -263,15 +263,15 @@
 
                 const cpxData = await hashResponse.json();
 
-                // Generate the iframe URL with dynamic user data
-                const iframeUrl = `https://offers.cpx-research.com/index.php?app_id=35282&ext_user_id=${cpxData.user_id}&secure_hash=${cpxData.secure_hash}&username=${encodeURIComponent(cpxData.username)}&email=${encodeURIComponent(cpxData.email)}&subid1=${cpxData.user_id}&subid2=${cpxData.user_id}`;
+                // Generate the iframe URL with dynamic user data using exact CPX parameter names
+                const iframeUrl = `https://offers.cpx-research.com/index.php?app_id=${encodeURIComponent(cpxData.app_id)}&ext_user_id=${encodeURIComponent(cpxData.user_id)}&secure_hash=${encodeURIComponent(cpxData.secure_hash)}&username=${encodeURIComponent(cpxData.username)}&email=${encodeURIComponent(cpxData.email)}&subid_1=${encodeURIComponent(cpxData.user_id)}&subid_2=${encodeURIComponent(cpxData.user_id)}`;
 
                 // Create and inject iframe
                 const iframeHtml = `
                     <iframe 
                         width="100%" 
                         frameborder="0" 
-                        height="900px"
+                        height="2000px"
                         src="${iframeUrl}"
                         style="border-radius: 8px; background-color: white;">
                     </iframe>

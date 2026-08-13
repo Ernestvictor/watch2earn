@@ -3,9 +3,23 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const db = require('./db'); // PostgreSQL connection
+const mongoose = require('mongoose');
 const app = express();
 
 app.use(express.json());
+
+// Connect to MongoDB (URI provided in Render environment as MONGODB_URI or MONGO_URI)
+mongoose.set('strictQuery', false);
+mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => { console.log('✅ Connected to MongoDB'); })
+  .catch(err => { console.error('❌ MongoDB connection error:', err); });
+
+// Simple User model used by CPAGrip postback
+const userSchema = new mongoose.Schema({
+  email: { type: String, unique: true, sparse: true },
+  balance: { type: Number, default: 0 }
+}, { timestamps: true });
+const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 const DATA_DIR = path.join(__dirname, 'data');
 const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
@@ -234,15 +248,12 @@ app.get('/cpx-postback', (req, res) => {
   res.send('OK');
 });
 
-// CPAGrip server-to-server postback handler
+// CPAGrip server-to-server postback handler (MongoDB with Mongoose)
 // Expected query params: subid (email), payout, secret
-app.get('/postback/cpagrip', (req, res) => {
+app.get('/postback/cpagrip', async (req, res) => {
   const { subid, payout, secret } = req.query;
 
   // Security check
-  if (!process.env.CPAGRIP_SECRET) {
-    console.warn('CPAGRIP_SECRET is not set in environment');
-  }
   if (secret !== process.env.CPAGRIP_SECRET) {
     console.warn('Invalid CPAGRIP secret on postback');
     return res.status(403).send('Invalid Secret');
@@ -254,51 +265,17 @@ app.get('/postback/cpagrip', (req, res) => {
   }
 
   try {
-    // Load users from JSON and find by email (subid)
-    const usersPath = path.join(DATA_DIR, 'users.json');
-    let users = [];
-    try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch (e) { users = []; }
+    // Use Mongoose to find or create user and increment balance
+    const result = await User.findOneAndUpdate(
+      { email: subid },
+      { $inc: { balance: amount } },
+      { new: true, upsert: true }
+    );
 
-    const email = (subid || '').toLowerCase();
-    const user = users.find(u => (u.email || '').toLowerCase() === email);
-
-    if (!user) {
-      console.log(`No user found with email: ${subid}`);
-      return res.status(404).send('User not found');
-    }
-
-    // Ensure user has a balance field (in USD)
-    user.balance = Number(user.balance || 0) + Number(amount);
-
-    // Persist users
-    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-
-    // Record transaction for audit (store payout as USD)
-    try {
-      const txPath = path.join(DATA_DIR, 'transactions.json');
-      let txs = [];
-      try { txs = JSON.parse(fs.readFileSync(txPath, 'utf8')); } catch (e) { txs = []; }
-      const tx = {
-        id: 'cpagrip_' + Date.now(),
-        userId: user.id || user.uid || null,
-        type: 'cpagrip_payout',
-        source: 'cpagrip',
-        title: 'CPAGrip Payout',
-        amountUsd: Number(amount),
-        amountNaira: Math.round(Number(amount) * 1500),
-        date: new Date().toISOString(),
-        meta: { rawQuery: req.query }
-      };
-      txs.unshift(tx);
-      fs.writeFileSync(txPath, JSON.stringify(txs, null, 2));
-    } catch (e) {
-      console.error('Failed to write cpagrip transaction', e);
-    }
-
-    console.log(`Credited $${amount} to ${subid}`);
-    res.send('OK');
+    console.log(`✅ Credited $${amount} to ${subid}`);
+    res.send('OK'); // CPAGrip needs to see 'OK'
   } catch (err) {
-    console.error(err);
+    console.error('❌ CPAGrip postback error:', err);
     res.status(500).send('Error');
   }
 });

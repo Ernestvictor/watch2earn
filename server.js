@@ -1,4 +1,4 @@
-// server.js
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -8,11 +8,15 @@ const app = express();
 
 app.use(express.json());
 
-// Connect to MongoDB (URI provided in Render environment as MONGODB_URI or MONGO_URI)
-mongoose.set('strictQuery', false);
-mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => { console.log('✅ Connected to MongoDB'); })
-  .catch(err => { console.error('❌ MongoDB connection error:', err); });
+const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+if (mongoUri) {
+  mongoose.set('strictQuery', false);
+  mongoose.connect(mongoUri)
+    .then(() => { console.log('✅ Connected to MongoDB'); })
+    .catch(err => { console.error('❌ MongoDB connection error:', err); });
+} else {
+  console.warn('⚠️ MONGODB_URI / MONGO_URI is not set. MongoDB features will not work until you add it to Render or .env');
+}
 
 // Simple User model used by CPAGrip postback
 const userSchema = new mongoose.Schema({
@@ -269,7 +273,7 @@ app.get('/postback/cpagrip', async (req, res) => {
     const result = await User.findOneAndUpdate(
       { email: subid },
       { $inc: { balance: amount } },
-      { new: true, upsert: true }
+      { new: true, upsert: true, returnDocument: 'updated' }
     );
 
     console.log(`✅ Credited $${amount} to ${subid}`);

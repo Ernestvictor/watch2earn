@@ -399,24 +399,28 @@
                     try {
                         const authToken = await token();
                         const elapsedSeconds = Math.min(requiredSeconds, Math.max(0, Math.round((Date.now() - started) / 1000)));
-                        const creditResponse = await fetch('/api/ads/watch', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': 'Bearer ' + authToken
-                            },
-                            body: JSON.stringify({ adId, adDuration: elapsedSeconds >= requiredSeconds ? requiredSeconds : elapsedSeconds })
-                        });
+                        // Credit via server endpoint - use signed cookie on server to enforce browser limits
+                        try {
+                            const creditResponse = await fetch('/api/credit-ad', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ email: (firebase.auth().currentUser && firebase.auth().currentUser.email) || '' })
+                            });
 
-                        const result = await creditResponse.json();
+                            const result = await creditResponse.json();
 
-                        if (!creditResponse.ok) {
-                            status(result.error || 'The ad could not be credited.', 'error');
-                            return;
+                            if (!creditResponse.ok) {
+                                status(result.error || 'The ad could not be credited.', 'error');
+                                return;
+                            }
+
+                            status(`Ad completed! ₦2.00 saved. ${result.adsLeft || 0}/${MAX_ADS} today.`, 'success');
+                            await loadBalance();
+                        } catch (e) {
+                            status('Unable to credit the ad.', 'error');
                         }
-
-                        status(`Ad completed! ₦2.00 saved. ${result.adsToday}/${MAX_ADS} today.`, 'success');
-                        await loadBalance();
                     } catch (error) {
                         status(error.message || 'Unable to credit the ad.', 'error');
                     }

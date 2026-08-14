@@ -2,11 +2,13 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const cookieParser = require('cookie-parser');
 const db = require('./db'); // PostgreSQL connection
 const mongoose = require('mongoose');
 const app = express();
 
 app.use(express.json());
+app.use(cookieParser(process.env.COOKIE_SECRET));
 
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
 if (mongoUri) {
@@ -92,6 +94,43 @@ app.get('/api/ads', (req, res) => {
     res.json(json);
   } catch (e) {
     res.json([]);
+  }
+});
+
+// GET /api/balance - return or create a user balance by email
+app.get('/api/balance', async (req, res) => {
+  const { email } = req.query;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+
+  try {
+    // Prefer MongoDB if connected
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      const result = await User.findOneAndUpdate(
+        { email: email.toLowerCase() },
+        { $setOnInsert: { balance: 0, email: email.toLowerCase() } },
+        { new: true, upsert: true, setDefaultsOnInsert: true, returnDocument: 'after' }
+      );
+
+      return res.json({ email: result.email, balance: result.balance });
+    }
+
+    // Fallback to JSON file storage
+    const usersPath = path.join(DATA_DIR, 'users.json');
+    let users = [];
+    try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch (e) { users = []; }
+
+    const normalized = String(email).toLowerCase();
+    let user = users.find(u => (u.email || '').toLowerCase() === normalized);
+    if (!user) {
+      user = { id: 'u_' + Date.now(), uid: 'u_' + Date.now(), email: normalized, displayName: '', balance: 0 };
+      users.push(user);
+      fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+    }
+
+    return res.json({ email: user.email, balance: user.balance });
+  } catch (err) {
+    console.error('Error in /api/balance:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -334,6 +373,118 @@ app.post('/cpagrip-postback', express.json(), (req, res) => {
   } catch (err) {
     console.error('cpagrip-postback error', err);
     res.status(500).json({ error: 'server error' });
+  }
+});
+
+// CREDIT USER FOR WATCHING AD - 5 PER DAY LIMIT + COOKIE CHECK
+app.post('/api/credit-ad', async (req, res) => {
+  const { email } = req.body;
+  const userCookie = req.signedCookies && req.signedCookies.adWatch; // signed cookie check
+  const userIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+  if (!email) return res.status(400).json({ error: 'Email required' });
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000);
+
+  try {
+    // 1. COOKIE CHECK: 1 browser = 5 ads per day max
+    if (userCookie) {
+      let cookieData = {};
+      try { cookieData = JSON.parse(userCookie); } catch (e) { cookieData = {}; }
+      if (cookieData.date === today.toISOString().split('T')[0] && cookieData.count >= 5) {
+        return res.status(429).json({ error: 'This browser reached 5 ads today' });
+      }
+    }
+
+    // Find user in Mongo if available
+    let user = null;
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      user = await User.findOne({ email: (email || '').toLowerCase() });
+    } else {
+      // fallback to JSON file users
+      const usersPath = path.join(DATA_DIR, 'users.json');
+      try { const users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); user = users.find(u => (u.email || '').toLowerCase() === (email || '').toLowerCase()); } catch (e) { user = null; }
+    }
+
+    // 2. 1min cooldown (use 30min threshold from original code)
+    if (user && user.lastAd && new Date(user.lastAd) > thirtyMinAgo) {
+      return res.status(429).json({ error: 'Wait 1 minutes between ads' });
+    }
+
+    // 3. DAILY RESET
+    let adsWatchedToday = user?.adsWatchedToday || 0;
+    let lastReset = user?.lastReset ? new Date(user.lastReset) : new Date(0);
+    if (lastReset < today) adsWatchedToday = 0;
+
+    // 4. 5 PER DAY EMAIL LIMIT
+    if (adsWatchedToday >= 5) {
+      return res.status(429).json({ error: 'Daily limit of 5 ads reached' });
+    }
+
+    // 5. CREDIT USER (store balance in cents to avoid float issues)
+    let result = null;
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      result = await User.findOneAndUpdate(
+        { email: (email || '').toLowerCase() },
+        {
+          $inc: { balance: 1, adsWatchedToday: 1 }, // 1 cent
+          $set: { lastAd: now.toISOString(), lastReset: today.toISOString().split('T')[0], lastIP: userIP }
+        },
+        { upsert: true, returnDocument: 'after' }
+      );
+    } else {
+      // update JSON fallback
+      const usersPath = path.join(DATA_DIR, 'users.json');
+      let users = [];
+      try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+      const normalized = (email || '').toLowerCase();
+      let u = users.find(u => (u.email || '').toLowerCase() === normalized);
+      if (!u) {
+        u = { id: 'u_' + Date.now(), uid: 'u_' + Date.now(), email: normalized, displayName: '', balance: 1, adsWatchedToday: 1, lastAd: now.toISOString(), lastReset: today.toISOString().split('T')[0], lastIP: userIP };
+        users.push(u);
+      } else {
+        u.balance = (u.balance || 0) + 1;
+        u.adsWatchedToday = (u.adsWatchedToday || 0) + 1;
+        u.lastAd = now.toISOString();
+        u.lastReset = today.toISOString().split('T')[0];
+        u.lastIP = userIP;
+      }
+      fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+      result = { value: u };
+    }
+
+    // 6. SET COOKIE: 24hr expiry
+    let newCookieCount = 1;
+    if (userCookie) {
+      try {
+        const cookieData = JSON.parse(userCookie);
+        if (cookieData.date === today.toISOString().split('T')[0]) {
+          newCookieCount = (cookieData.count || 0) + 1;
+        }
+      } catch (e) {}
+    }
+    res.cookie('adWatch', JSON.stringify({
+      count: newCookieCount,
+      date: today.toISOString().split('T')[0]
+    }), {
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: true,
+      signed: true
+    });
+
+    res.json({
+      success: true,
+      newBalance: ((result.value && result.value.balance) || 0) / 100,
+      adsLeft: 5 - ((result.value && result.value.adsWatchedToday) || 0),
+      cookieAdsLeft: 5 - newCookieCount
+    });
+  } catch (err) {
+    console.error('Error in /api/credit-ad:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

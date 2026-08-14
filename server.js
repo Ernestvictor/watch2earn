@@ -234,6 +234,59 @@ app.get('/cpx-postback', (req, res) => {
   res.send('OK');
 });
 
+// POST /cpagrip-postback - receive lightweight tracking beacons from client
+app.post('/cpagrip-postback', express.json(), (req, res) => {
+  try {
+    const payload = req.body || {};
+    const userId = payload.userId || payload.user_id || null;
+    const email = payload.email || null;
+    const extUrl = payload.extUrl || null;
+
+    // Save/update user email in data/users.json
+    try {
+      const usersPath = path.join(DATA_DIR, 'users.json');
+      let users = [];
+      try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch (e) { users = []; }
+
+      let user = null;
+      if (userId) user = users.find(u => u.id === userId || u.uid === userId);
+      if (!user && email) user = users.find(u => (u.email || '').toLowerCase() === (email || '').toLowerCase());
+
+      if (user) {
+        if (email && !user.email) {
+          user.email = email;
+          fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+          console.log('Updated user email for', userId || email);
+        }
+      } else if (userId || email) {
+        const newUser = { id: userId || ('u_' + Date.now()), uid: userId || ('u_' + Date.now()), email: email || '', displayName: '' };
+        users.push(newUser);
+        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+        console.log('Created new user record from cpagrip beacon', newUser.id);
+      }
+    } catch (e) {
+      console.error('Failed to update users.json from cpagrip beacon', e);
+    }
+
+    // Optionally, record a lightweight tracking transaction
+    try {
+      const txPath = path.join(DATA_DIR, 'transactions.json');
+      let txs = [];
+      try { txs = JSON.parse(fs.readFileSync(txPath, 'utf8')); } catch (e) { txs = []; }
+      const tx = { id: 'cpagrip_' + Date.now(), userId: userId || null, type: 'cpagrip_click', source: 'cpagrip', meta: { extUrl }, date: new Date().toISOString() };
+      txs.unshift(tx);
+      fs.writeFileSync(txPath, JSON.stringify(txs, null, 2));
+    } catch (e) {
+      console.error('Failed to write cpagrip transaction', e);
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('cpagrip-postback error', err);
+    res.status(500).json({ error: 'server error' });
+  }
+});
+
 // ✅ Middleware
 const authMiddleware = require('./middleware/auth');
 const fraudCheck = require('./middleware/fraudcheck');

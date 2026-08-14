@@ -7,16 +7,45 @@ let aclibAdState = {
   lastCheck: 0,
   CHECK_INTERVAL: 15000, // Check every 15 seconds
   userEmail: null,
-  adShownCount: 0
+  adShownCount: 0,
+  initialized: false,
+  blockedPaths: [
+    '/index.html',
+    '/login.html',
+    '/logout.html',
+    '/admin-panel',
+    '/admin-panel/',
+    '/admin-panel/verify.html',
+    '/admin-panel/carbinate.html'
+  ]
 };
 
+if (!window.__aclibWrapperStarted) {
+  window.__aclibWrapperStarted = true;
+}
+
+function shouldBlockAclib() {
+  const path = (window.location.pathname || '').toLowerCase();
+  return aclibAdState.blockedPaths.some(blocked => path === blocked || path.endsWith(blocked));
+}
+
+function vendorAutoTagAlreadyExists() {
+  return Array.from(document.scripts).some(script => {
+    const text = (script.textContent || '').replace(/\s+/g, ' ');
+    return text.includes("zoneId: 'amqbk88f3h'") || text.includes('zoneId:"amqbk88f3h"') ||
+      (script.src || '').includes('acscdn.com/script/aclib.js');
+  });
+}
+
 async function initAclibAd() {
+  if (aclibAdState.initialized || shouldBlockAclib()) return;
+  aclibAdState.initialized = true;
+
   try {
-    // Get user email from Firebase
     if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
       aclibAdState.userEmail = firebase.auth().currentUser.email;
     }
-    
+
     if (!aclibAdState.userEmail) {
       aclibAdState.userEmail = localStorage.getItem('userEmail');
     }
@@ -32,6 +61,8 @@ async function initAclibAd() {
 }
 
 async function checkAndShowAclibAd() {
+  if (shouldBlockAclib() || document.getElementById('aclib-ad-overlay')) return;
+
   try {
     const now = Date.now();
     if (now - aclibAdState.lastCheck < aclibAdState.CHECK_INTERVAL / 2) {
@@ -40,7 +71,8 @@ async function checkAndShowAclibAd() {
 
     aclibAdState.lastCheck = now;
 
-    // Check server if ad should show (100-second interval per user)
+    if (!aclibAdState.userEmail) return;
+
     const response = await fetch(`/api/ad-check?email=${encodeURIComponent(aclibAdState.userEmail)}`);
     const data = await response.json();
 
@@ -53,9 +85,9 @@ async function checkAndShowAclibAd() {
 }
 
 function showAclibAdWithCountdown() {
-  let countdown = 5;
+  if (document.getElementById('aclib-ad-overlay')) return;
 
-  // Create modal overlay
+  let countdown = 5;
   const overlay = document.createElement('div');
   overlay.id = 'aclib-ad-overlay';
   overlay.style.cssText = `
@@ -71,7 +103,6 @@ function showAclibAdWithCountdown() {
     z-index: 99999;
   `;
 
-  // Create modal content
   const modal = document.createElement('div');
   modal.style.cssText = `
     background: linear-gradient(135deg, #1a1a2e, #16213e);
@@ -139,9 +170,7 @@ function showAclibAdWithCountdown() {
     transition: all 0.3s ease;
   `;
 
-  let countdownInterval;
-  
-  const updateCountdown = () => {
+  let countdownInterval = setInterval(() => {
     countdown--;
     countdownDiv.textContent = countdown;
 
@@ -152,12 +181,11 @@ function showAclibAdWithCountdown() {
       skipBtn.style.cursor = 'pointer';
       countdownLabel.textContent = 'You can now skip';
     }
-  };
-
-  countdownInterval = setInterval(updateCountdown, 1000);
+  }, 1000);
 
   skipBtn.onclick = () => {
     clearInterval(countdownInterval);
+    window.__aclibVendorTriggered = false;
     overlay.remove();
     aclibAdState.adShownCount++;
   };
@@ -170,19 +198,29 @@ function showAclibAdWithCountdown() {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // Trigger aclib ad in background
-  if (typeof aclib !== 'undefined' && aclib.runAutoTag) {
+  const alreadyTriggered = vendorAutoTagAlreadyExists() || window.__aclibVendorTriggered;
+  if (typeof aclib !== 'undefined' && aclib.runAutoTag && !alreadyTriggered) {
+    window.__aclibVendorTriggered = true;
     try {
-      aclib.runAutoTag({
-        zoneId: 'amqbk88f3h',
-      });
+      aclib.runAutoTag({ zoneId: 'amqbk88f3h' });
     } catch (e) {
       console.warn('Error running aclib:', e);
     }
   }
 }
 
-// Start when page loads
+window.addEventListener('beforeunload', () => {
+  const overlay = document.getElementById('aclib-ad-overlay');
+  if (overlay) overlay.remove();
+  window.__aclibVendorTriggered = false;
+});
+
+window.addEventListener('pagehide', () => {
+  const overlay = document.getElementById('aclib-ad-overlay');
+  if (overlay) overlay.remove();
+  window.__aclibVendorTriggered = false;
+});
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initAclibAd);
 } else {

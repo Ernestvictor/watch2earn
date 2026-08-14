@@ -1,55 +1,51 @@
 require('dotenv').config();
-const mongoose = require('mongoose');
-const User = require('./models/User');
-const Withdrawal = require('./models/Withdrawal');
-const Transaction = require('./models/Transaction');
+const fs = require('fs');
+const path = require('path');
+
+const DATA_DIR = path.join(__dirname, 'data');
+const USERS_PATH = path.join(DATA_DIR, 'users.json');
+const TXN_PATH = path.join(DATA_DIR, 'transactions.json');
+const WITHDRAW_PATH = path.join(DATA_DIR, 'withdrawals.json');
+
+function ensureDir() {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+function writeJson(p, data) {
+  fs.writeFileSync(p, JSON.stringify(data, null, 2));
+}
 
 async function seed() {
   try {
-    // ✅ No deprecated options
-    await mongoose.connect(process.env.MONGO_URI);
+    ensureDir();
 
-    console.log('✅ Connected to MongoDB');
-
-    // Clear old data
-    await User.deleteMany({});
-    await Withdrawal.deleteMany({});
-    await Transaction.deleteMany({});
-
-    // Insert test user
-    const user = await User.create({
+    const user = {
+      id: 'test-uid-123',
       uid: 'test-uid-123',
       email: 'testuser@example.com',
-      balanceUsd: 25.50,
-      adsEarn: 10.00,
-      gameEarn: 5.00,
-      surveyEarn: 3.50,
-      refEarn: 7.00,
-      invitedCount: 4,
-      announcement: 'Welcome to Watch2Earn! Withdrawals open every Friday.'
-    });
+      displayName: 'Test User',
+      balance: 0
+    };
 
-    // Insert test withdrawal
-    await Withdrawal.create({
-      userId: user.uid,
-      amount: 5500,
-      method: 'Bank Transfer',
-      accountDetails: '1234567890 - First Bank',
-      status: 'Pending'
-    });
+    const transactions = [
+      { id: 'txn_' + Date.now(), userId: user.uid, type: 'ads', amountUsd: 10, amountNaira: 10 * 1500, date: new Date().toISOString() },
+      { id: 'txn_' + (Date.now()+1), userId: user.uid, type: 'game', amountUsd: 5, amountNaira: 5 * 1500, date: new Date().toISOString() },
+      { id: 'txn_' + (Date.now()+2), userId: user.uid, type: 'survey', amountUsd: 3.5, amountNaira: Math.round(3.5 * 1500), date: new Date().toISOString() },
+      { id: 'txn_' + (Date.now()+3), userId: user.uid, type: 'referral', amountUsd: 7, amountNaira: 7 * 1500, date: new Date().toISOString() }
+    ];
 
-    // Insert test transactions
-    await Transaction.create([
-      { userId: user.uid, type: 'ads', amount: 10 },
-      { userId: user.uid, type: 'game', amount: 5 },
-      { userId: user.uid, type: 'survey', amount: 3.5 },
-      { userId: user.uid, type: 'referral', amount: 7 }
-    ]);
+    const withdrawals = [
+      { id: 'wd_' + Date.now(), userId: user.uid, amount: 5500, method: 'Bank Transfer', accountDetails: '1234567890 - First Bank', status: 'Pending', date: new Date().toISOString() }
+    ];
 
-    console.log('🌱 Seed data inserted successfully');
-    process.exit();
+    writeJson(USERS_PATH, [user]);
+    writeJson(TXN_PATH, transactions);
+    writeJson(WITHDRAW_PATH, withdrawals);
+
+    console.log('🌱 Seed data written to data/ (users, transactions, withdrawals)');
+    process.exit(0);
   } catch (err) {
-    console.error('❌ Error seeding data:', err.message);
+    console.error('❌ Error writing seed data:', err);
     process.exit(1);
   }
 }

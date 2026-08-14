@@ -234,6 +234,75 @@ app.get('/cpx-postback', (req, res) => {
   res.send('OK');
 });
 
+// CPAGrip server-to-server postback handler
+// Expected query params: subid (email), payout, secret
+app.get('/postback/cpagrip', (req, res) => {
+  const { subid, payout, secret } = req.query;
+
+  // Security check
+  if (!process.env.CPAGRIP_SECRET) {
+    console.warn('CPAGRIP_SECRET is not set in environment');
+  }
+  if (secret !== process.env.CPAGRIP_SECRET) {
+    console.warn('Invalid CPAGRIP secret on postback');
+    return res.status(403).send('Invalid Secret');
+  }
+
+  const amount = parseFloat(payout);
+  if (isNaN(amount) || amount <= 0) {
+    return res.status(400).send('Invalid payout amount');
+  }
+
+  try {
+    // Load users from JSON and find by email (subid)
+    const usersPath = path.join(DATA_DIR, 'users.json');
+    let users = [];
+    try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch (e) { users = []; }
+
+    const email = (subid || '').toLowerCase();
+    const user = users.find(u => (u.email || '').toLowerCase() === email);
+
+    if (!user) {
+      console.log(`No user found with email: ${subid}`);
+      return res.status(404).send('User not found');
+    }
+
+    // Ensure user has a balance field (in USD)
+    user.balance = Number(user.balance || 0) + Number(amount);
+
+    // Persist users
+    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+
+    // Record transaction for audit (store payout as USD)
+    try {
+      const txPath = path.join(DATA_DIR, 'transactions.json');
+      let txs = [];
+      try { txs = JSON.parse(fs.readFileSync(txPath, 'utf8')); } catch (e) { txs = []; }
+      const tx = {
+        id: 'cpagrip_' + Date.now(),
+        userId: user.id || user.uid || null,
+        type: 'cpagrip_payout',
+        source: 'cpagrip',
+        title: 'CPAGrip Payout',
+        amountUsd: Number(amount),
+        amountNaira: Math.round(Number(amount) * 1500),
+        date: new Date().toISOString(),
+        meta: { rawQuery: req.query }
+      };
+      txs.unshift(tx);
+      fs.writeFileSync(txPath, JSON.stringify(txs, null, 2));
+    } catch (e) {
+      console.error('Failed to write cpagrip transaction', e);
+    }
+
+    console.log(`Credited $${amount} to ${subid}`);
+    res.send('OK');
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error');
+  }
+});
+
 // POST /cpagrip-postback - receive lightweight tracking beacons from client
 app.post('/cpagrip-postback', express.json(), (req, res) => {
   try {

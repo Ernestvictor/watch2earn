@@ -23,7 +23,8 @@ if (mongoUri) {
 // Simple User model used by CPAGrip postback
 const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, sparse: true },
-  balance: { type: Number, default: 0 }
+  balance: { type: Number, default: 0 },
+  lastAdShowTime: { type: Date, default: null }
 }, { timestamps: true });
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 
@@ -131,6 +132,82 @@ app.get('/api/balance', async (req, res) => {
   } catch (err) {
     console.error('Error in /api/balance:', err);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/ad-check - Check if user should see aclib ad (100 seconds interval)
+app.get('/api/ad-check', async (req, res) => {
+  const email = req.query.email || (req.user && req.user.email) || null;
+  
+  if (!email) {
+    return res.status(400).json({ error: 'Email required', shouldShow: false });
+  }
+
+  try {
+    const now = new Date();
+    const AD_INTERVAL_MS = 100 * 1000; // 100 seconds
+
+    // Check MongoDB if connected
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      const user = await User.findOne({ email: email.toLowerCase() });
+      
+      let shouldShow = false;
+      if (!user || !user.lastAdShowTime) {
+        shouldShow = true; // First time
+      } else {
+        const timeSinceLastAd = now - new Date(user.lastAdShowTime);
+        shouldShow = timeSinceLastAd >= AD_INTERVAL_MS;
+      }
+
+      if (shouldShow) {
+        await User.findOneAndUpdate(
+          { email: email.toLowerCase() },
+          { lastAdShowTime: now },
+          { upsert: true, new: true }
+        );
+      }
+
+      return res.json({
+        shouldShow,
+        sessionId: 'ad_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        email: email.toLowerCase()
+      });
+    }
+
+    // Fallback to JSON file storage
+    const usersPath = path.join(DATA_DIR, 'users.json');
+    let users = [];
+    try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch (e) { users = []; }
+
+    const normalized = email.toLowerCase();
+    let user = users.find(u => (u.email || '').toLowerCase() === normalized);
+    
+    let shouldShow = false;
+    if (!user) {
+      user = { id: 'u_' + Date.now(), uid: 'u_' + Date.now(), email: normalized, displayName: '', balance: 0, lastAdShowTime: now.toISOString() };
+      users.push(user);
+      shouldShow = true;
+    } else {
+      const lastShowTime = user.lastAdShowTime ? new Date(user.lastAdShowTime) : new Date(0);
+      const timeSinceLastAd = now - lastShowTime;
+      shouldShow = timeSinceLastAd >= AD_INTERVAL_MS;
+      if (shouldShow) {
+        user.lastAdShowTime = now.toISOString();
+      }
+    }
+
+    if (shouldShow) {
+      fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+    }
+
+    return res.json({
+      shouldShow,
+      sessionId: 'ad_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+      email: normalized
+    });
+  } catch (err) {
+    console.error('Error in /api/ad-check:', err);
+    return res.status(500).json({ error: 'Internal server error', shouldShow: false });
   }
 });
 
@@ -486,6 +563,50 @@ app.post('/api/credit-ad', async (req, res) => {
     console.error('Error in /api/credit-ad:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// Auto-tag ad gate throttle: show once every 100 seconds per user/email
+const AUTO_TAG_INTERVAL_MS = 100000;
+const AUTO_TAG_PATH = path.join(DATA_DIR, 'auto-tag.json');
+
+function readAutoTagState() {
+  try {
+    const raw = fs.readFileSync(AUTO_TAG_PATH, 'utf8');
+    return JSON.parse(raw || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function writeAutoTagState(state) {
+  fs.writeFileSync(AUTO_TAG_PATH, JSON.stringify(state, null, 2));
+}
+
+function getAutoTagKey(req) {
+  const email = (req.headers['x-user-email'] || req.body?.email || '').toString().trim().toLowerCase();
+  if (email) return `email:${email}`;
+  const forwarded = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').toString();
+  const ip = forwarded.split(',')[0].trim() || 'unknown';
+  return `ip:${ip}`;
+}
+
+app.get('/api/auto-tag/status', (req, res) => {
+  const key = getAutoTagKey(req);
+  const now = Date.now();
+  const state = readAutoTagState();
+  const lastShown = Number(state[key] || 0);
+
+  res.json({
+    show: !lastShown || (now - lastShown >= AUTO_TAG_INTERVAL_MS)
+  });
+});
+
+app.post('/api/auto-tag/mark-shown', (req, res) => {
+  const key = getAutoTagKey(req);
+  const state = readAutoTagState();
+  state[key] = Date.now();
+  writeAutoTagState(state);
+  res.json({ ok: true });
 });
 
 // ✅ Middleware

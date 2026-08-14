@@ -41,6 +41,7 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
   .stats{grid-template-columns:repeat(2, minmax(0, 1fr))}
 }
 </style>
+<script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
 </head>
 
 <body>
@@ -298,5 +299,6 @@ async function loadInboxCount(){
 loadInboxCount();
 setInterval(loadInboxCount, 30000); // Check every 30 seconds
 </script>
+<script src="/js/aclib-ad-wrapper.js"></script>
 </body>
 </html>

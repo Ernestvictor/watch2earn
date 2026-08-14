@@ -15,6 +15,7 @@ body{background:#070709;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 @media(min-width:800px){ .list{grid-template-columns:repeat(2,1fr)} }
 .small{color:#aaa;font-size:13px}
 </style>
+<script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
 </head>
 <body>
 <div class="top"><div><b>Referrals</b><div class="small">People you invited & earnings from them</div></div><div><a href="home.html" style="color:#4CAF50">Home</a></div></div>
@@ -53,5 +54,6 @@ firebase.auth().onAuthStateChanged(async user=>{
   }catch(e){ console.error(e); alert('Could not load referrals'); }
 });
 </script>
+<script src="/js/aclib-ad-wrapper.js"></script>
 </body>
 </html>

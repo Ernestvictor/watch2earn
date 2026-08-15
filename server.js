@@ -20,6 +20,12 @@ if (mongoUri) {
   console.warn('⚠️ MONGODB_URI / MONGO_URI is not set. MongoDB features will not work until you add it to Render or .env');
 }
 
+// Native MongoDB helper (for earnings + transactions)
+const mongoNative = require('./mongodb');
+mongoNative.connectDB().catch(err => { /* already logged in module */ });
+
+const { auth: firebaseAuth } = require('./config/firebaseAdmin');
+
 // Simple User model used by CPAGrip postback
 const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, sparse: true },
@@ -98,42 +104,8 @@ app.get('/api/ads', (req, res) => {
   }
 });
 
-// GET /api/balance - return or create a user balance by email
-app.get('/api/balance', async (req, res) => {
-  const { email } = req.query;
-  if (!email) return res.status(400).json({ error: 'Email required' });
+// /api/balance handled later (supports token-based native Mongo lookup)
 
-  try {
-    // Prefer MongoDB if connected
-    if (mongoose.connection && mongoose.connection.readyState === 1) {
-      const result = await User.findOneAndUpdate(
-        { email: email.toLowerCase() },
-        { $setOnInsert: { balance: 0, email: email.toLowerCase() } },
-        { new: true, upsert: true, setDefaultsOnInsert: true, returnDocument: 'after' }
-      );
-
-      return res.json({ email: result.email, balance: result.balance });
-    }
-
-    // Fallback to JSON file storage
-    const usersPath = path.join(DATA_DIR, 'users.json');
-    let users = [];
-    try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch (e) { users = []; }
-
-    const normalized = String(email).toLowerCase();
-    let user = users.find(u => (u.email || '').toLowerCase() === normalized);
-    if (!user) {
-      user = { id: 'u_' + Date.now(), uid: 'u_' + Date.now(), email: normalized, displayName: '', balance: 0 };
-      users.push(user);
-      fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-    }
-
-    return res.json({ email: user.email, balance: user.balance });
-  } catch (err) {
-    console.error('Error in /api/balance:', err);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // GET /api/ad-check - Check if user should see aclib ad (100 seconds interval)
 app.get('/api/ad-check', async (req, res) => {
@@ -208,6 +180,69 @@ app.get('/api/ad-check', async (req, res) => {
   } catch (err) {
     console.error('Error in /api/ad-check:', err);
     return res.status(500).json({ error: 'Internal server error', shouldShow: false });
+  }
+});
+
+// ============================
+// POST /api/earn - small frontend trigger to credit $0.01 (requires Firebase token)
+// ============================
+app.post('/api/earn', authMiddleware, async (req, res) => {
+  try {
+    const email = (req.user && req.user.email) || (req.body && req.body.email);
+    if (!email) return res.status(400).json({ error: 'Email required' });
+
+    const cleanEmail = String(email).toLowerCase().trim();
+    const amount = 0.01;
+
+    const usersColl = mongoNative.getUsersCollection();
+    const txColl = mongoNative.getTransactionsCollection();
+
+    await usersColl.updateOne(
+      { email: cleanEmail },
+      { $inc: { balance: amount, totalEarned: amount, fromSurveys: amount }, $setOnInsert: { email: cleanEmail, createdAt: new Date() } },
+      { upsert: true }
+    );
+
+    await txColl.insertOne({ email: cleanEmail, type: 'earn', source: 'survey', amount, createdAt: new Date() });
+
+    const user = await usersColl.findOne({ email: cleanEmail });
+    res.json({ success: true, balance: user.balance });
+  } catch (err) {
+    console.error('/api/earn error', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================
+// Update GET /api/balance to support Firebase token in Authorization header
+// (backwards compatible with ?email=... query)
+// ============================
+app.get('/api/balance', async (req, res) => {
+  try {
+    let email = req.query.email;
+
+    // If Authorization header present, verify token and use token email
+    const authHeader = req.headers.authorization;
+    if (!email && authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      try {
+        const decoded = await firebaseAuth.verifyIdToken(token);
+        email = decoded.email;
+      } catch (e) {
+        // ignore - fall back to query param
+      }
+    }
+
+    if (!email) return res.status(400).json({ error: 'Email required' });
+
+    const cleanEmail = String(email).toLowerCase().trim();
+    const usersColl = mongoNative.getUsersCollection();
+    const user = await usersColl.findOne({ email: cleanEmail });
+
+    res.json({ balance: (user && user.balance) || 0, totalEarned: (user && user.totalEarned) || 0 });
+  } catch (err) {
+    console.error('Error in /api/balance (native):', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -370,6 +405,8 @@ app.get('/cpx-postback', (req, res) => {
 
 // CPAGrip server-to-server postback handler (MongoDB with Mongoose)
 // Expected query params: subid (email), payout, secret
+// CPAGrip server-to-server postback handler (native Mongo)
+// Expected query params: subid (email), payout, secret
 app.get('/postback/cpagrip', async (req, res) => {
   const { subid, payout, secret } = req.query;
 
@@ -385,15 +422,21 @@ app.get('/postback/cpagrip', async (req, res) => {
   }
 
   try {
-    // Use Mongoose to find or create user and increment balance
-    const result = await User.findOneAndUpdate(
-      { email: subid },
-      { $inc: { balance: amount } },
-      { new: true, upsert: true, returnDocument: 'updated' }
+    const usersColl = mongoNative.getUsersCollection();
+    const txColl = mongoNative.getTransactionsCollection();
+
+    const cleanEmail = String(subid || '').toLowerCase().trim();
+
+    await usersColl.updateOne(
+      { email: cleanEmail },
+      { $inc: { balance: amount, totalEarned: amount, fromCPA: amount }, $setOnInsert: { email: cleanEmail, createdAt: new Date() } },
+      { upsert: true }
     );
 
-    console.log(`✅ Credited $${amount} to ${subid}`);
-    res.send('OK'); // CPAGrip needs to see 'OK'
+    await txColl.insertOne({ email: cleanEmail, type: 'earn', source: 'CPA', amount: amount, createdAt: new Date() });
+
+    console.log(`✅ Credited $${amount} to ${cleanEmail} (CPAGrip)`);
+    res.send('OK'); // CPAGrip expects OK
   } catch (err) {
     console.error('❌ CPAGrip postback error:', err);
     res.status(500).send('Error');

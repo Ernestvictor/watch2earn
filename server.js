@@ -25,6 +25,7 @@ const mongoNative = require('./mongodb');
 mongoNative.connectDB().catch(err => { /* already logged in module */ });
 
 const { auth: firebaseAuth } = require('./config/firebaseAdmin');
+const authMiddleware = require('./middleware/auth');
 
 // Simple User model used by CPAGrip postback
 const userSchema = new mongoose.Schema({
@@ -653,7 +654,6 @@ app.post('/api/auto-tag/mark-shown', (req, res) => {
 });
 
 // ✅ Middleware
-const authMiddleware = require('./middleware/auth');
 const fraudCheck = require('./middleware/fraudcheck');
 
 // ✅ Admin panel entry routes

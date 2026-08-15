@@ -28,6 +28,20 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 .small{font-size:12px;color:#7d7d7d;margin-top:8px}
 </style>
 <script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
+<script src="/js/aclib-ad-wrapper.js"></script>
+<div>
+    <script type="text/javascript">
+        aclib.runBanner({
+            zoneId: '11971350',
+        });
+    </script>
+</div>
+<script type="text/javascript">
+    aclib.runInPagePush({
+        zoneId: '11971438',
+        maxAds: 2,
+    });
+</script>
 </head>
 <body>
 <div class="top-bar">
@@ -124,3 +138,21 @@ async function saveAccount() {
     if(!user) throw new Error('Please sign in first.');
     const token=await user.getIdToken();
     const res=await
+    fetch('https://watch2earn.com/api/save-account',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    if(res.ok) {
+      status.innerText='Account saved';
+    } else {
+      status.innerText='Error saving account';
+    }
+  } catch (e) {
+    console.error(e);
+    status.innerText='Error saving account';
+  }
+}
+</script>
+</body>
+</html>

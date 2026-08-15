@@ -14,11 +14,15 @@
             margin-bottom: 30px;
         }
         .games-info {
-            background-color: #f8f9fa;
-            border-left: 4px solid #f5576c;
-            padding: 15px;
+            background: rgba(245, 87, 108, 0.08);
+            border: 1px solid rgba(245, 87, 108, 0.2);
+            border-radius: 8px;
+            padding: 20px;
             margin-bottom: 20px;
-            border-radius: 5px;
+        }
+        .games-info h5 {
+            color: #f5576c;
+            margin-bottom: 8px;
         }
         .balance-card {
             background: white;
@@ -84,7 +88,7 @@
             font-size: 16px;
         }
     </style>
-<script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
+    <script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
 </head>
 <body>
     <div class="games-header">
@@ -95,7 +99,6 @@
     </div>
 
     <div class="container mt-4">
-        <!-- Navigation Tabs -->
         <ul class="nav nav-tabs" role="tablist">
             <li class="nav-item">
                 <a class="nav-link" href="ads.html" role="tab">Ads</a>
@@ -111,7 +114,6 @@
             </li>
         </ul>
 
-        <!-- Games Info -->
         <div class="games-info">
             <h5>🎮 Gaming Rewards</h5>
             <p style="margin-bottom: 0;">
@@ -119,7 +121,6 @@
             </p>
         </div>
 
-        <!-- Balance Display -->
         <div class="balance-card">
             <div class="balance-item">
                 <span class="balance-label">💵 Total Balance</span>
@@ -143,7 +144,6 @@
             </div>
         </div>
 
-        <!-- Coming Soon Section -->
         <div class="coming-soon">
             <h2>🚀 Coming Soon</h2>
             <p>Exciting games are being developed to give you more ways to earn!</p>
@@ -151,7 +151,6 @@
         </div>
     </div>
 
-    <!-- Firebase Auth -->
     <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -168,14 +167,12 @@
 
         firebase.initializeApp(firebaseConfig);
 
-        // Check if user is logged in
         firebase.auth().onAuthStateChanged(async (user) => {
             if (!user) {
                 window.location.href = 'index.html';
                 return;
             }
 
-            // Load user balance
             loadBalance();
         });
 
@@ -190,30 +187,31 @@
                 if (!response.ok) throw new Error('Failed to load balance');
 
                 const data = await response.json();
-
-                // Format Naira amounts
                 document.getElementById('totalBalance').textContent = '₦' + (data.totalNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
                 document.getElementById('adsEarned').textContent = '₦' + (data.adsEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
                 document.getElementById('surveysEarned').textContent = '₦' + (data.surveyEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
                 document.getElementById('gamesEarned').textContent = '₦' + (data.gameEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
                 document.getElementById('referralEarned').textContent = '₦' + (data.referralEarnNaira || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 });
 
-                // Refresh balance periodically (every 30 seconds)
                 setInterval(loadBalance, 30000);
             } catch (error) {
                 console.error('Error loading balance:', error);
             }
         }
     </script>
-
-    <head>
-        <script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
+    <script src="/js/aclib-ad-wrapper.js"></script>
+    <div>
         <script type="text/javascript">
-            aclib.runAutoTag({
-                zoneId: 'amqbk88f3h',
+            aclib.runBanner({
+                zoneId: '11971350',
             });
         </script>
-    </head>
-<script src="/js/aclib-ad-wrapper.js"></script>
+    </div>
+    <script type="text/javascript">
+        aclib.runInPagePush({
+            zoneId: '11971438',
+            maxAds: 2,
+        });
+    </script>
 </body>
 </html>

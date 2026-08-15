@@ -61,6 +61,19 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 
 <script>
 let notificationsEnabled = localStorage.getItem('watch2earn_notifications_enabled') !== 'false';
+<div>
+  <script type="text/javascript">
+    aclib.runBanner({
+      zoneId: '11971350',
+    });
+  </script>
+</div>
+<script type="text/javascript">
+  aclib.runInPagePush({
+    zoneId: '11971438',
+    maxAds: 2,
+  });
+</script>
 const toggle = document.getElementById('notificationToggle');
 const badge = document.getElementById('notificationBadge');
 
@@ -118,14 +131,20 @@ async function loadMessages(){
   }
 }
 
+</script>
 loadMessages();
 setInterval(loadMessages, 30000); // Refresh messages every 30 seconds
+<script src="/js/aclib-ad-wrapper.js"></script>
+<script type="text/javascript">
+    aclib.runBanner({
+        zoneId: '11971350',
+    });
 </script>
 <script type="text/javascript">
-  aclib.runAutoTag({
-    zoneId: 'amqbk88f3h',
-  });
+    aclib.runInPagePush({
+        zoneId: '11971438',
+        maxAds: 2,
+    });
 </script>
-<script src="/js/aclib-ad-wrapper.js"></script>
 </body>
 </html>

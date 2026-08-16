@@ -20,8 +20,50 @@
   }
 
   window.w2e = window.w2e || {};
+  window.w2e.config = {
+    apiKey: 'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',
+    authDomain: 'enable-authentication-1b56c.firebaseapp.com',
+    projectId: 'enable-authentication-1b56c',
+    storageBucket: 'enable-authentication-1b56c.firebasestorage.app',
+    messagingSenderId: '946417281410',
+    appId: '1:946417281410:web:7f4e06e3b4b03946d0079b'
+  };
   window.w2e.setTheme = applyTheme;
   window.w2e.setNotificationsEnabled = setNotificationEnabled;
+
+  window.w2e.initFirebase = function(){
+    if(typeof firebase === 'undefined' || !firebase.apps) return null;
+    if(!firebase.apps.length){
+      firebase.initializeApp(window.w2e.config);
+    }
+    return firebase.app();
+  };
+
+  window.w2e.getCurrentUser = function(){
+    if(typeof firebase === 'undefined' || !firebase.auth) return null;
+    return firebase.auth().currentUser || null;
+  };
+
+  window.w2e.requireAuth = function(options = {}){
+    const redirectTo = options.redirectTo || 'login.html';
+    const user = window.w2e.getCurrentUser();
+    if(!user){
+      if(typeof window !== 'undefined' && !window.__w2e_redirecting){
+        window.__w2e_redirecting = true;
+        window.location.href = redirectTo;
+      }
+      return null;
+    }
+    return user;
+  };
+
+  window.w2e.getAuthHeaders = async function(includeJson = false){
+    const token = await window.w2e.getAuthToken();
+    const headers = {};
+    if(token){ headers.Authorization = 'Bearer ' + token; }
+    if(includeJson){ headers['Content-Type'] = 'application/json'; }
+    return headers;
+  };
 
   // Notification sounds using WebAudio (no binary files required)
   const audioCtx = typeof AudioContext !== 'undefined' ? new AudioContext() : null;
@@ -65,6 +107,32 @@
     const res = await fetch('/api/accounts', { headers: { 'Authorization': 'Bearer '+token } });
     if(!res.ok) return [];
     return await res.json();
+  };
+
+  window.w2e.api = async function(url, options = {}){
+    const { requireAuth = true, headers = {}, body, method = 'GET' } = options;
+    const token = await window.w2e.getAuthToken();
+    if(requireAuth && !token){
+      window.w2e.requireAuth({ redirectTo: 'login.html' });
+      throw new Error('Authentication required');
+    }
+
+    const request = { method, headers: { ...headers } };
+    if(token) request.headers.Authorization = 'Bearer ' + token;
+    if(body !== undefined && !(body instanceof FormData)){
+      request.headers['Content-Type'] = request.headers['Content-Type'] || 'application/json';
+      request.body = typeof body === 'string' ? body : JSON.stringify(body);
+    }
+    if(body !== undefined && body instanceof FormData){ request.body = body; }
+
+    const res = await fetch(url, request);
+    const contentType = res.headers.get('content-type') || '';
+    const payload = contentType.includes('application/json') ? await res.json() : await res.text();
+    if(!res.ok){
+      const err = payload && typeof payload === 'object' ? payload.error || 'Request failed' : payload || 'Request failed';
+      throw new Error(err);
+    }
+    return payload;
   };
 
   // Expose small DOM helper

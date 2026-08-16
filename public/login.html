@@ -35,35 +35,36 @@
     </div>
   </div>
 
+  <script src="/js/app.js"></script>
   <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0",
-      authDomain: "enable-authentication-1b56c.firebaseapp.com",
-      projectId: "enable-authentication-1b56c",
-      storageBucket: "enable-authentication-1b56c.firebasestorage.app",
-      messagingSenderId: "946417281410",
-      appId: "1:946417281410:web:7f4e06e3b4b03946d0079b"
-    };
-    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    window.w2e.initFirebase();
 
     const form=document.getElementById('loginForm');
     const btn=document.getElementById('loginBtn');
     const errorMsg=document.getElementById('errorMsg');
 
-    form.addEventListener('submit', (e) => {
+    firebase.auth().onAuthStateChanged((user) => {
+      if (user) {
+        window.location.href = 'home.html';
+      }
+    });
+
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorMsg.innerText='';
       btn.disabled=true;
       btn.innerText='Logging in...';
       const email=document.getElementById('loginEmail').value.trim();
       const password=document.getElementById('loginPassword').value;
-      firebase.auth().signInWithEmailAndPassword(email,password)
-        .then(() => { window.location.href='home.html'; })
-        .catch(error => {
-          errorMsg.innerText=error.message;
-          btn.disabled=false;
-          btn.innerText='Login';
-        });
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+        window.location.href='home.html';
+      } catch (error) {
+        errorMsg.innerText = error.message;
+        btn.disabled=false;
+        btn.innerText='Login';
+      }
     });
   </script>
 </body>

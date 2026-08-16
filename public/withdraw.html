@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="/js/app.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{background:#070709;color:#fff;font-family:Inter,'Segoe UI',sans-serif;padding-bottom:95px}
@@ -136,16 +137,9 @@
     <a href="history.html"><i class="fas fa-clock-rotate-left"></i>History</a>
     <a href="withdraw.html" class="active"><i class="fas fa-wallet"></i>Withdraw</a>
   </div>
-
-    const firebaseConfig = {
-      apiKey: 'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',
-      authDomain: 'enable-authentication-1b56c.firebaseapp.com',
-      projectId: 'enable-authentication-1b56c',
-      storageBucket: 'enable-authentication-1b56c.firebasestorage.app',
-      messagingSenderId: '946417281410',
-      appId: '1:946417281410:web:7f4e06e3b4b03946d0079b'
-    };
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  
+  <script>
+    window.w2e.initFirebase();
 
     let token = null;
     let currentBalance = 0;
@@ -161,7 +155,6 @@
         const balanceResponse = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
         if (!balanceResponse.ok) throw new Error('Unable to load live balance');
         const balanceData = await balanceResponse.json();
-        // Convert USD to Naira (1 USD = 1500 NGN)
         currentBalance = Number(balanceData.balanceUsd || 0) * 1500;
         document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
         document.getElementById('usdBal').innerText = Number(balanceData.balanceUsd || 0).toFixed(2);
@@ -227,18 +220,6 @@
       if (!selectedAccount) return alert('Please save and select an account first.');
       if (method === 'bank' && amount < 5500) return alert('Bank withdrawals start from ₦5,500.');
       if (method === 'crypto' && amount < 10) return alert('Crypto withdrawals start from 10 units.');
-        if (!selectedAccount) {
-          document.getElementById('statusMsg').innerText = '❌ Please save and select an account first.';
-          return;
-        }
-        if (method === 'bank' && amount < 5500) {
-          document.getElementById('statusMsg').innerText = '❌ Bank withdrawals start from ₦5,500.';
-          return;
-        }
-        if (method === 'crypto' && amount < 10) {
-          document.getElementById('statusMsg').innerText = '❌ Crypto withdrawals start from 10 units.';
-          return;
-        }
 
       const charge = amount >= 20000 ? 0 : 500;
       const payload = {

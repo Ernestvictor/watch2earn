@@ -26,14 +26,7 @@ mongoNative.connectDB().catch(err => { /* already logged in module */ });
 
 const { auth: firebaseAuth } = require('./config/firebaseAdmin');
 const authMiddleware = require('./middleware/auth');
-
-// Simple User model used by CPAGrip postback
-const userSchema = new mongoose.Schema({
-  email: { type: String, unique: true, sparse: true },
-  balance: { type: Number, default: 0 },
-  lastAdShowTime: { type: Date, default: null }
-}, { timestamps: true });
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const User = require('./models/User');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');

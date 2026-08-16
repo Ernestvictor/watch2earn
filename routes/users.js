@@ -5,6 +5,12 @@ const verifyToken = require('../middleware/auth');
 const fs = require('fs');
 const path = require('path');
 
+// Mongoose models
+const User = require('../models/User');
+const Earning = require('../models/earning');
+const Message = require('../models/messeges');
+
+// -------------------- PROFILE --------------------
 // GET user profile — compute live balances from data/transactions.json when available
 router.get('/profile', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
@@ -15,15 +21,19 @@ router.get('/profile', verifyToken, async (req, res) => {
     // try to compute from local transactions file first
     let txs = [];
     try {
-      if (fs.existsSync(TXN_PATH)) txs = JSON.parse(fs.readFileSync(TXN_PATH, 'utf8') || '[]');
-    } catch (e) { txs = []; }
+      if (fs.existsSync(TXN_PATH)) {
+        txs = JSON.parse(fs.readFileSync(TXN_PATH, 'utf8') || '[]');
+      }
+    } catch (e) {
+      txs = [];
+    }
 
     const myTx = txs.filter(t => t.userId === userId);
     const totalUsd = myTx.reduce((s, t) => s + Number(t.amountUsd || 0), 0);
-    const adsUsd = myTx.filter(t => (t.type||'').toLowerCase().includes('ad')).reduce((s,t)=>s+Number(t.amountUsd||0),0);
-    const gameUsd = myTx.filter(t => (t.type||'').toLowerCase().includes('game')).reduce((s,t)=>s+Number(t.amountUsd||0),0);
-    const surveyUsd = myTx.filter(t => (t.type||'').toLowerCase().includes('survey')).reduce((s,t)=>s+Number(t.amountUsd||0),0);
-    const refUsd = myTx.filter(t => (t.type||'').toLowerCase().includes('referral') || (t.type||'').toLowerCase().includes('commission')).reduce((s,t)=>s+Number(t.amountUsd||0),0);
+    const adsUsd = myTx.filter(t => (t.type || '').toLowerCase().includes('ad')).reduce((s, t) => s + Number(t.amountUsd || 0), 0);
+    const gameUsd = myTx.filter(t => (t.type || '').toLowerCase().includes('game')).reduce((s, t) => s + Number(t.amountUsd || 0), 0);
+    const surveyUsd = myTx.filter(t => (t.type || '').toLowerCase().includes('survey')).reduce((s, t) => s + Number(t.amountUsd || 0), 0);
+    const refUsd = myTx.filter(t => (t.type || '').toLowerCase().includes('referral') || (t.type || '').toLowerCase().includes('commission')).reduce((s, t) => s + Number(t.amountUsd || 0), 0);
 
     // invited count and announcement — try firestore but it's optional
     let displayName = req.user.name || 'User';
@@ -56,6 +66,34 @@ router.get('/profile', verifyToken, async (req, res) => {
   } catch (err) {
     console.error('Profile error:', err);
     res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// -------------------- EARNINGS --------------------
+// GET user earning history (from MongoDB)
+router.get('/earnings/:firebaseUid', verifyToken, async (req, res) => {
+  try {
+    const earnings = await Earning.find({ firebaseUid: req.params.firebaseUid })
+      .sort({ createdAt: -1 })
+      .limit(50);
+    res.json(earnings);
+  } catch (err) {
+    console.error('Earnings error:', err);
+    res.status(500).json({ error: 'Failed to fetch earnings' });
+  }
+});
+
+// -------------------- MESSAGES --------------------
+// GET user messages (from MongoDB)
+router.get('/messages/:firebaseUid', verifyToken, async (req, res) => {
+  try {
+    const messages = await Message.find({ firebaseUid: req.params.firebaseUid })
+      .sort({ createdAt: -1 })
+      .limit(50);
+    res.json(messages);
+  } catch (err) {
+    console.error('Messages error:', err);
+    res.status(500).json({ error: 'Failed to fetch messages' });
   }
 });
 

@@ -134,86 +134,85 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
 
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+<script src="/js/app.js"></script>
 <script>
-if(!firebase.apps.length){
-  const firebaseConfig={apiKey:'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',authDomain:'enable-authentication-1b56c.firebaseapp.com',projectId:'enable-authentication-1b56c',storageBucket:'enable-authentication-1b56c.firebasestorage.app',messagingSenderId:'946417281410',appId:'1:946417281410:web:7f4e06e3b4b03946d0079b'};
-  firebase.initializeApp(firebaseConfig);
-}
+window.w2e.initFirebase();
 
 firebase.auth().onAuthStateChanged(async user => {
-  if(!user){ location.href='login.html'; return; }
-  const name=user.displayName||user.email.split('@')[0];
-  document.getElementById('userName').innerText=name;
-  document.getElementById('refLink').value=`${location.origin}/index.html?ref=${user.uid}`;
-  load();
-  loadAnnouncement();
-  // Refresh balance every 5 seconds for real-time updates
-  loadBonuses();
+  if(!user){ window.location.href='login.html'; return; }
 
-  // NOTE: signup bonus is handled server-side and is idempotent; do not call it on every page load.
+  const name = user.displayName || user.email.split('@')[0];
+  document.getElementById('userName').innerText = name;
+  document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
+
+  await load();
+  await loadAnnouncement();
+  await loadBonuses();
 
   setInterval(load, 5000);
   setInterval(loadBonuses, 30000);
 });
 
 async function load(){
-  const user = firebase.auth().currentUser;
+  const user = window.w2e.getCurrentUser();
+  if(!user){ return; }
+
   let bal = 0;
-  let adsEarn = 0;
   let adCount = 0;
-  
-  // Try to get live balance from server first
-  if(user){
-    try{
-      const token = await user.getIdToken();
-      const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
-      if(res.ok){
-        const data = await res.json();
-        bal = Number(data.balanceUsd || 0);
-        adsEarn = Number(data.adsEarnUsd || 0);
-        adCount = Number(data.adCount || 0);
-      } else throw new Error('Balance request failed');
-    }catch(e){ console.warn('Failed to fetch live balance', e); }
-  }
-  
-  document.getElementById('usd').innerText=bal.toFixed(2);
-  const naira=Math.round(bal*1500);
-  document.getElementById('naira').innerText=naira.toLocaleString();
-  document.getElementById('nairaTop').innerText=naira.toLocaleString();
-  document.getElementById('adsWatched').innerText=adCount;
-  document.getElementById('streak').innerText='—';
-  
-  // Show referral earnings if available
+
   try{
-    if(user){
-      const token = await user.getIdToken();
-      const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
-      if(res.ok){
-        const data = await res.json();
-        const refUsd = Number(data.referralEarnUsd || 0);
-        const refCount = Math.floor(refUsd / 0.0067); // estimate invite count
-        document.getElementById('referralUsd').innerText = '$' + refUsd.toFixed(2);
-        document.getElementById('referralCount').innerText = refCount;
-      }
+    const headers = await window.w2e.getAuthHeaders();
+    const res = await fetch('/api/transactions/balance', { headers });
+    if(res.ok){
+      const data = await res.json();
+      bal = Number(data.balanceUsd || 0);
+      adCount = Number(data.adCount || 0);
+    }
+  }catch(e){
+    console.warn('Failed to fetch live balance', e);
+  }
+
+  document.getElementById('usd').innerText = bal.toFixed(2);
+  const naira = Math.round(bal * 1500);
+  document.getElementById('naira').innerText = naira.toLocaleString();
+  document.getElementById('nairaTop').innerText = naira.toLocaleString();
+  document.getElementById('adsWatched').innerText = adCount;
+  document.getElementById('streak').innerText = '—';
+
+  try{
+    const headers = await window.w2e.getAuthHeaders();
+    const res = await fetch('/api/transactions/balance', { headers });
+    if(res.ok){
+      const data = await res.json();
+      const refUsd = Number(data.referralEarnUsd || 0);
+      const refCount = Math.floor(refUsd / 0.0067);
+      document.getElementById('referralUsd').innerText = '$' + refUsd.toFixed(2);
+      document.getElementById('referralCount').innerText = refCount;
     }
   }catch(e){ }
-  
-  const btn=document.getElementById('withdrawBtn');
-  if(bal>=5){ btn.disabled=false; btn.innerHTML='<i class="fas fa-wallet"></i> Withdraw $'+bal.toFixed(2); }
+
+  const btn = document.getElementById('withdrawBtn');
+  if(bal >= 5){
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-wallet"></i> Withdraw $' + bal.toFixed(2);
+  } else {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-wallet"></i> Need $5 to withdraw';
+  }
 }
 
 async function loadBonuses(){
-  const user = firebase.auth().currentUser;
+  const user = window.w2e.getCurrentUser();
   if(!user) return;
-  
+
   try{
-    const token = await user.getIdToken();
-    const res = await fetch('/api/transactions/bonuses', { headers: { Authorization: 'Bearer ' + token } });
+    const headers = await window.w2e.getAuthHeaders();
+    const res = await fetch('/api/transactions/bonuses', { headers });
     if(res.ok){
       const data = await res.json();
       const bonuses = data.bonuses || [];
       const unclaimed = bonuses.filter(b => !b.claimed);
-      
+
       if(unclaimed.length > 0){
         const first = unclaimed[0];
         document.getElementById('bonusCard').style.display = 'block';
@@ -226,28 +225,26 @@ async function loadBonuses(){
 }
 
 async function claimBonus(){
-  const user = firebase.auth().currentUser;
+  const user = window.w2e.getCurrentUser();
   if(!user) return alert('Login required');
-  
+
   try{
-    const token = await user.getIdToken();
-    const available = await fetch('/api/transactions/bonuses', { headers: { Authorization: 'Bearer ' + token } });
+    const headers = await window.w2e.getAuthHeaders();
+    const available = await fetch('/api/transactions/bonuses', { headers });
     const availableData = await available.json();
     const bonus = (availableData.bonuses || [])[0];
     if(!bonus) return alert('No bonus available');
+
     const res = await fetch('/api/transactions/claim-bonus', {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + token 
-      },
+      headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ bonusId: bonus.id })
     });
-    
+
     if(res.ok){
       alert(`Bonus claimed! You received $${bonus.amountUsd?.toFixed(2) || '0'}`);
-      load();
-      loadBonuses();
+      await load();
+      await loadBonuses();
     } else {
       alert('Failed to claim bonus');
     }
@@ -260,8 +257,9 @@ async function claimBonus(){
 function goWithdraw(){ location.href='withdraw.html'; }
 
 function copyRef(){
-  const i=document.getElementById('refLink');
-  i.select(); document.execCommand('copy');
+  const i = document.getElementById('refLink');
+  i.select();
+  document.execCommand('copy');
   alert('Referral link copied!');
 }
 
@@ -297,7 +295,7 @@ async function loadInboxCount(){
 }
 
 loadInboxCount();
-setInterval(loadInboxCount, 30000); // Check every 30 seconds
+setInterval(loadInboxCount, 30000);
 </script>
 <script src="/js/aclib-ad-wrapper.js"></script>
 <div>

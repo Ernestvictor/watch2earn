@@ -35,16 +35,9 @@
     <p style="margin-top:15px">Already have an account? <a href="login.html">Login</a></p>
   </div>
 
+  <script src="/js/app.js"></script>
   <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0",
-      authDomain: "enable-authentication-1b56c.firebaseapp.com",
-      projectId: "enable-authentication-1b56c",
-      storageBucket: "enable-authentication-1b56c.firebasestorage.app",
-      messagingSenderId: "946417281410",
-      appId: "1:946417281410:web:7f4e06e3b4b03946d0079b"
-    };
-    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    window.w2e.initFirebase();
     const db=firebase.firestore();
 
     // Capture referral from URL
@@ -60,6 +53,12 @@
     const btn=document.getElementById('signupBtn');
     const errorMsg=document.getElementById('errorMsg');
 
+    firebase.auth().onAuthStateChanged((user) => {
+      if (user) {
+        window.location.href = 'home.html';
+      }
+    });
+
     form.addEventListener('submit', async (e)=>{
       e.preventDefault();
       errorMsg.innerText='';
@@ -74,7 +73,6 @@
       try{
         const cred=await firebase.auth().createUserWithEmailAndPassword(email,password);
         await cred.user.updateProfile({displayName:fullName});
-        // Save user doc
         await db.collection('users').doc(cred.user.uid).set({
           email,
           displayName:fullName,

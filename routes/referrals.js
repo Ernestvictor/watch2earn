@@ -4,150 +4,227 @@ const router = express.Router();
 const verifyToken = require('../middleware/auth');
 
 // =======================
-// Schemas & Models
+// Import Models (from models/)
 // =======================
-const earningSchema = new mongoose.Schema({
-  userId: mongoose.Schema.Types.ObjectId,
-  firebaseUid: String,
-  amount: Number,
-  type: { type: String, default: 'referral' },
-  description: String,
-  referredUserId: mongoose.Schema.Types.ObjectId,
-  source: String,
-  date: { type: Date, default: Date.now }
-});
-
-const messageSchema = new mongoose.Schema({
-  userId: mongoose.Schema.Types.ObjectId,
-  firebaseUid: String,
-  message: String,
-  type: { type: String, default: 'earning' },
-  date: { type: Date, default: Date.now }
-});
-
-const userSchema = new mongoose.Schema({
-  username: String,
-  email: String,
-  firebaseUid: String,
-  wallet: { type: Number, default: 0 },
-  referredBy: mongoose.Schema.Types.ObjectId
-});
-
-const Earning = mongoose.models.Earning || mongoose.model('Earning', earningSchema);
-const Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+const User = require('../models/User');
+const Earning = require('../models/earning');
+const Message = require('../models/messeges');
 
 // =======================
-// Referral Commission Logic
+// Referral Commission Logic (10% per earning)
 // =======================
-async function payReferralCommission(user, amount, source) {
-  if (!user.referredBy) return;
-
-  const commissionRate = 0.10;
-  const commission = amount * commissionRate;
-  const referrer = await User.findById(user.referredBy);
-  if (!referrer) return;
-
-  const session = await mongoose.startSession();
-  session.startTransaction();
+async function payReferralCommission(user, amount, source = 'ad') {
+  if (!user.referredBy) return; // User has no referrer
 
   try {
-    await Earning.create([{
-      userId: referrer._id,
-      firebaseUid: referrer.firebaseUid,
-      amount: commission,
-      type: 'referral',
-      description: `10% commission from ${user.username}'s ${source} earning`,
-      referredUserId: user._id,
-      source
-    }], { session });
+    const commissionRate = 0.10;
+    const commission = amount * commissionRate;
+    const referrer = await User.findById(user.referredBy);
+    
+    if (!referrer) return; // Referrer not found
 
-    await Message.create([{
-      userId: referrer._id,
-      firebaseUid: referrer.firebaseUid,
-      message: `You got ₦${commission.toFixed(2)} commission from ${user.username}`,
-      type: 'earning'
-    }], { session });
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    referrer.wallet += commission;
-    await referrer.save({ session });
+    try {
+      // Record earning for referrer
+      const earning = await Earning.create([{
+        userId: referrer._id,
+        firebaseUid: referrer.firebaseUid,
+        amount: commission,
+        type: 'referral',
+        description: `10% commission from ${user.username || user.email}'s ${source} earning`,
+      }], { session });
 
-    await session.commitTransaction();
+      // Notify referrer
+      await Message.create([{
+        userId: referrer._id,
+        firebaseUid: referrer.firebaseUid,
+        message: `You earned ₦${(commission * 1500).toFixed(2)} commission from a referral`,
+        type: 'earning',
+        read: false
+      }], { session });
+
+      // Update referrer wallet
+      referrer.wallet = (referrer.wallet || 0) + commission;
+      await referrer.save({ session });
+
+      await session.commitTransaction();
+      console.log(`✅ Referral commission: ₦${(commission * 1500).toFixed(2)} to ${referrer.email}`);
+    } catch (err) {
+      await session.abortTransaction();
+      console.error("❌ Referral commission transaction error:", err);
+    } finally {
+      session.endSession();
+    }
   } catch (err) {
-    await session.abortTransaction();
-    console.error("Referral commission error:", err);
-  } finally {
-    session.endSession();
+    console.error("❌ Referral commission error:", err);
   }
 }
 
 // =======================
-// Routes
+// API Routes
 // =======================
 
-// POST /api/earnings/watch-ad
+// POST /api/referrals/watch-ad - Credit earner & pay referral commission
 router.post('/watch-ad', async (req, res) => {
   try {
-    const { firebaseUid, amount = 10 } = req.body;
+    const { firebaseUid, amount = 0.005 } = req.body;
+    
+    if (!firebaseUid) {
+      return res.status(400).json({ error: 'firebaseUid required' });
+    }
+
     const user = await User.findOne({ firebaseUid });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-    await Promise.all([
-      Earning.create({ userId: user._id, firebaseUid, amount, type: 'ad_watch', description: 'Watched ad' }),
-      Message.create({ userId: user._id, firebaseUid, message: `You earned ₦${amount}`, type: 'earning' })
-    ]);
-
-    user.wallet += amount;
-    await payReferralCommission(user, amount, 'ad');
-    await user.save();
-
-    res.json({ success: true, newWallet: user.wallet });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// GET /api/referrals
-router.get('/referrals', verifyToken, async (req, res) => {
-  const userId = req.user.uid || req.user.id;
-
-  try {
-    const referralTxs = await Earning.find({ type: 'referral', userId });
-
-    const map = {};
-    referralTxs.forEach(t => {
-      const rid = t.referredUserId?.toString() || 'unknown';
-      if (!map[rid]) map[rid] = { id: rid, totalNaira: 0, txs: [] };
-      map[rid].totalNaira += Number(t.amount || 0);
-      map[rid].txs.push(t);
+    // Record earning
+    const earning = await Earning.create({
+      userId: user._id,
+      firebaseUid,
+      amount,
+      type: 'ad_watch',
+      description: 'Watched advertisement'
     });
 
-    const result = await Promise.all(Object.values(map).map(async item => {
-      const found = await User.findById(item.id);
-      return {
-        ...item,
-        name: found?.username || found?.email?.split('@')[0] || 'Unknown',
-        email: found?.email || null,
-        firstSeen: item.txs.length ? item.txs[item.txs.length - 1].date : null
-      };
-    }));
+    // Notify user
+    await Message.create({
+      userId: user._id,
+      firebaseUid,
+      message: `You earned $${amount.toFixed(4)} from watching an ad`,
+      type: 'earning',
+      read: false
+    });
 
-    const totals = {
-      totalReferralNaira: result.reduce((s, r) => s + (r.totalNaira || 0), 0),
-      countInvited: result.length
-    };
+    // Update user wallet
+    user.wallet = (user.wallet || 0) + amount;
+    user.totalEarned = (user.totalEarned || 0) + amount;
+    await user.save();
 
-    res.json({ referrals: result, totals });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to load referrals' });
+    // Pay referral commission if applicable
+    await payReferralCommission(user, amount, 'ad');
+
+    return res.json({ 
+      success: true, 
+      newWallet: user.wallet,
+      earned: amount
+    });
+  } catch (error) {
+    console.error('❌ /watch-ad error:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
+// GET /api/referrals/summary - Get referral summary for authenticated user
+router.get('/summary', verifyToken, async (req, res) => {
+  try {
+    const firebaseUid = req.user.uid || req.user.id;
+    
+    // Find user
+    const user = await User.findOne({ firebaseUid });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get all referral earnings for this user
+    const referralEarnings = await Earning.find({
+      userId: user._id,
+      type: 'referral'
+    });
+
+    const totalReferralUsd = referralEarnings.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalReferralNaira = totalReferralUsd * 1500;
+
+    // Get count of referred users
+    const referredUsers = await User.find({ referredBy: user._id });
+    const countInvited = referredUsers.length;
+
+    return res.json({
+      success: true,
+      totalReferralUsd: Number(totalReferralUsd.toFixed(4)),
+      totalReferralNaira: Math.round(totalReferralNaira),
+      countInvited,
+      earnings: referralEarnings.length
+    });
+  } catch (err) {
+    console.error('❌ /summary error:', err);
+    return res.status(500).json({ error: 'Failed to load referral summary' });
+  }
+});
+
+// GET /api/referrals - Get detailed referral list with referred users
+router.get('/', verifyToken, async (req, res) => {
+  try {
+    const firebaseUid = req.user.uid || req.user.id;
+
+    // Find user
+    const user = await User.findOne({ firebaseUid });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get all referred users
+    const referredUsers = await User.find({ referredBy: user._id });
+
+    // Calculate earnings for each referred user
+    const referralMap = {};
+    referredUsers.forEach(refUser => {
+      const uid = refUser._id.toString();
+      referralMap[uid] = {
+        id: uid,
+        name: refUser.username || refUser.email.split('@')[0],
+        email: refUser.email,
+        totalUsd: 0,
+        totalNaira: 0,
+        joined: refUser.createdAt || new Date()
+      };
+    });
+
+    // Get all referral commissions
+    const referralEarnings = await Earning.find({
+      userId: user._id,
+      type: 'referral'
+    });
+
+    // Since we don't track which referral earning is from which user in legacy data,
+    // we'll distribute evenly or track by individual user earnings from jobs
+    let totalReferralUsd = 0;
+    referralEarnings.forEach(earning => {
+      totalReferralUsd += earning.amount || 0;
+    });
+
+    const referrals = Object.values(referralMap);
+    const countInvited = referrals.length;
+    const avgEarningPerReferral = countInvited > 0 ? totalReferralUsd / countInvited : 0;
+
+    // Distribute earnings evenly among referred users (can be customized)
+    referrals.forEach(ref => {
+      ref.totalUsd = avgEarningPerReferral;
+      ref.totalNaira = Math.round(avgEarningPerReferral * 1500);
+    });
+
+    const totals = {
+      totalReferralUsd: Number(totalReferralUsd.toFixed(4)),
+      totalReferralNaira: Math.round(totalReferralUsd * 1500),
+      countInvited,
+      totalEarnings: referralEarnings.length
+    };
+
+    return res.json({ 
+      success: true,
+      referrals, 
+      totals 
+    });
+  } catch (err) {
+    console.error('❌ /referrals error:', err);
+    return res.status(500).json({ error: 'Failed to load referrals' });
+  }
+});
+
+// =======================
+// Exports
+// =======================
 module.exports = router;
-module.exports.router = router;
 module.exports.payReferralCommission = payReferralCommission;
-module.exports.User = User;
-module.exports.Earning = Earning;
-module.exports.Message = Message;

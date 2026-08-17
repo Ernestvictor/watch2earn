@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const User = require('../models/User');
+const Earning = require('../models/Earning');
+const Message = require('../models/Message');
 const fs = require('fs');
 const path = require('path');
 
@@ -24,42 +27,47 @@ function writeJson(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
+function isMongooseReady() {
+  try {
+    return mongoose && mongoose.connection && mongoose.connection.readyState === 1;
+  } catch (e) { return false; }
+}
+
 router.post('/watch-ad', async (req, res) => {
   try {
     const { firebaseUid, amount = 10 } = req.body;
+    // Prefer Mongoose user update when available
+    if (isMongooseReady()) {
+      const user = await User.findOne({ firebaseUid });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      if (user.isBanned) return res.status(403).json({ error: 'User is banned' });
+      user.wallet += amount;
+      await user.save();
 
-    // 1. Get user
-    const user = await User.findOne({ firebaseUid });
+      await Earning.create({ userId: user._id, firebaseUid, amount, type: 'ad_watch', description: 'Watched ad' });
+      await Message.create({ userId: user._id, firebaseUid, message: `You earned ₦${amount} for watching an ad`, type: 'earning' });
+
+      return res.json({ success: true, newWallet: user.wallet });
+    }
+
+    // fallback to file-based flow
+    const userRecordPath = path.join(DATA_DIR, 'users.json');
+    let users = [];
+    try { users = JSON.parse(fs.readFileSync(userRecordPath, 'utf8') || '[]'); } catch (e) { users = []; }
+    let user = users.find(u => (u.firebaseUid || u.uid || '').toString() === (firebaseUid || '').toString());
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (user.isBanned) return res.status(403).json({ error: 'User is banned' });
+    user.wallet = (user.wallet || 0) + amount;
+    // write user
+    fs.writeFileSync(userRecordPath, JSON.stringify(users, null, 2));
 
-    // 2. Update wallet
-    user.wallet += amount;
-    await user.save();
+    // transactions/messages file
+    const transactions = readJson('transactions.json');
+    transactions.push({ id: Date.now().toString(), userId: user.id || user.uid, firebaseUid, amount, type: 'ad', date: new Date().toISOString() });
+    writeJson('transactions.json', transactions);
 
-    // 3. Record transaction in JSON
-    const transactions = readJson(TRANSACTIONS_PATH);
-    transactions.push({
-      id: Date.now().toString(),
-      userId: user._id.toString(),
-      firebaseUid,
-      amount,
-      type: 'ad',
-      date: new Date().toISOString()
-    });
-    writeJson(TRANSACTIONS_PATH, transactions);
-
-    // 4. Record message in JSON
-    const messages = readJson(MESSAGES_PATH);
-    messages.push({
-      id: Date.now().toString(),
-      userId: user._id.toString(),
-      firebaseUid,
-      message: `You earned ₦${amount} for watching an ad`,
-      type: 'earning',
-      createdAt: new Date().toISOString()
-    });
-    writeJson(MESSAGES_PATH, messages);
+    const messages = readJson('messages.json');
+    messages.push({ id: Date.now().toString(), userId: user.id || user.uid, firebaseUid, message: `You earned ₦${amount} for watching an ad`, type: 'earning', createdAt: new Date().toISOString() });
+    writeJson('messages.json', messages);
 
     res.json({ success: true, newWallet: user.wallet });
   } catch (error) {
@@ -85,41 +93,62 @@ function writeDataFile(filename, data) {
   fs.writeFileSync(p, JSON.stringify(data, null, 2));
 }
 
-// Admin login (simple local check - frontend expects some response)
+// Admin login (accept frontend {email,password})
 router.post('/login', (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password) return res.status(400).json({ error: 'Missing credentials' });
-  // NOTE: replace with real auth in production
-  if (username === process.env.ADMIN_USER && password === process.env.ADMIN_PASS) {
+  const body = req.body || {};
+  const email = (body.email || body.username || '').toString().trim();
+  const password = (body.password || body.pass || '').toString();
+  if (!email || !password) return res.status(400).json({ error: 'Missing credentials' });
+
+  const allowedEmails = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '').toString().split(',').map(s=>s.trim()).filter(Boolean);
+  const allowedPass = process.env.ADMIN_PASSWORD || process.env.ADMIN_PASS || process.env.ADMIN_PASSWD || '';
+  const matched = allowedEmails.includes(email) || (allowedEmails.length === 1 && allowedEmails[0] === email);
+  if (matched && allowedPass && password === allowedPass) return res.json({ ok: true, token: 'admin-local-token' });
+
+  if ((process.env.ADMIN_USER === email || process.env.ADMIN_USER === undefined) && (process.env.ADMIN_PASS && password === process.env.ADMIN_PASS)) {
     return res.json({ ok: true, token: 'admin-local-token' });
   }
+
   return res.status(403).json({ error: 'Invalid credentials' });
 });
 
-// List users (file fallback)
-router.get('/users', (req, res) => {
+// List users (prefer DB)
+router.get('/users', async (req, res) => {
   try {
+    if (isMongooseReady()) {
+      const users = await User.find({}).limit(100).lean();
+      return res.json(users);
+    }
     const users = readDataFile('users.json', []);
     res.json(users);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to read users' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Failed to read users' }); }
 });
 
 // Messages
-router.get('/messages', (req, res) => {
+router.get('/messages', async (req, res) => {
   try {
+    if (isMongooseReady()) {
+      const messages = await Message.find({}).sort({ createdAt: -1 }).limit(200).lean();
+      return res.json(messages);
+    }
     const messages = readDataFile('messages.json', []);
     res.json(messages);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to read messages' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Failed to read messages' }); }
 });
 
-router.post('/reply-message/:id', (req, res) => {
+router.post('/reply-message/:id', async (req, res) => {
   try {
     const id = req.params.id;
     const body = req.body || {};
+    if (isMongooseReady()) {
+      const msg = await Message.findById(id);
+      if (!msg) return res.status(404).json({ error: 'Message not found' });
+      msg.replies = msg.replies || [];
+      msg.replies.push({ reply: body.reply || '', by: body.by || 'admin', date: new Date() });
+      await msg.save();
+      return res.json({ ok: true, message: msg });
+    }
+
     const messages = readDataFile('messages.json', []);
     const msg = messages.find(m => String(m.id) === String(id));
     if (!msg) return res.status(404).json({ error: 'Message not found' });
@@ -127,43 +156,47 @@ router.post('/reply-message/:id', (req, res) => {
     msg.replies.push({ reply: body.reply || '', by: body.by || 'admin', date: new Date().toISOString() });
     writeDataFile('messages.json', messages);
     res.json({ ok: true, message: msg });
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to reply' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Failed to reply' }); }
 });
 
 // Withdrawals (admin list)
-router.get('/withdrawals', (req, res) => {
+router.get('/withdrawals', async (req, res) => {
   try {
+    // If using native mongo or mongoose, you may have withdrawals in a collection; fallback to file
     const data = readDataFile('withdrawals.json', []);
     res.json(data);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to read withdrawals' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Failed to read withdrawals' }); }
 });
 
 // History / transactions
-router.get('/history', (req, res) => {
+router.get('/history', async (req, res) => {
   try {
+    if (isMongooseReady()) {
+      const tx = await Earning.find({}).sort({ createdAt: -1 }).limit(1000).lean();
+      return res.json(tx);
+    }
     const tx = readDataFile('transactions.json', []);
     res.json(tx);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to read history' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Failed to read history' }); }
 });
 
 // Dashboard summary
-router.get('/dashboard', (req, res) => {
+router.get('/dashboard', async (req, res) => {
   try {
+    if (isMongooseReady()) {
+      const totalUsers = await User.countDocuments();
+      const totalTransactions = await Earning.countDocuments();
+      const agg = await Earning.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }]);
+      const totalEarnedUsd = (agg[0] && agg[0].total) || 0;
+      return res.json({ totalUsers, totalTransactions, totalEarnedUsd });
+    }
     const users = readDataFile('users.json', []);
     const tx = readDataFile('transactions.json', []);
     const totalUsers = users.length;
     const totalTransactions = tx.length;
     const totalEarnedUsd = tx.reduce((s,t)=>s + Number(t.amountUsd || 0), 0);
     res.json({ totalUsers, totalTransactions, totalEarnedUsd });
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to compute dashboard' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Failed to compute dashboard' }); }
 });
 
 // Bonuses list and send
@@ -186,8 +219,12 @@ router.post('/send-bonus', (req, res) => {
 });
 
 // Leaderboard (top by wallet or totalEarned)
-router.get('/leaderboard', (req, res) => {
+router.get('/leaderboard', async (req, res) => {
   try {
+    if (isMongooseReady()) {
+      const top = await User.find({}).sort({ wallet: -1 }).limit(50).lean();
+      return res.json(top);
+    }
     const users = readDataFile('users.json', []);
     const top = users.sort((a,b)=> (b.wallet || 0) - (a.wallet || 0)).slice(0,50);
     res.json(top);
@@ -195,31 +232,36 @@ router.get('/leaderboard', (req, res) => {
 });
 
 // Simple chart data endpoints (mocked from transactions)
-router.get('/chart/earnings', (req, res) => {
+router.get('/chart/earnings', async (req, res) => {
   try {
-    const tx = readDataFile('transactions.json', []);
-    // aggregate by day (last 7 days)
+    let tx = [];
+    if (isMongooseReady()) tx = await Earning.find({}).lean(); else tx = readDataFile('transactions.json', []);
     const now = Date.now();
     const days = Array.from({length:7}).map((_,i)=>{
       const date = new Date(now - (6-i)*24*60*60*1000);
       const key = date.toISOString().slice(0,10);
-      const total = tx.filter(t=> (t.date||'').slice(0,10)===key).reduce((s,t)=>s+Number(t.amountUsd||0),0);
+      const total = tx.filter(t=> (t.date||t.createdAt||'').toString().slice(0,10)===key).reduce((s,t)=>s+Number(t.amountUsd||t.amount||0),0);
       return { date: key, total };
     });
     res.json(days);
   } catch (e) { res.status(500).json({ error: 'Failed to build chart' }); }
 });
 
-router.get('/chart/ads-watched', (req, res) => {
+router.get('/chart/ads-watched', async (req, res) => {
   try {
-    const tx = readDataFile('transactions.json', []);
-    const count = tx.filter(t=> (t.type||'').toLowerCase().includes('ad')).length;
+    let tx = [];
+    if (isMongooseReady()) tx = await Earning.find({ type: /ad/i }).lean(); else tx = readDataFile('transactions.json', []);
+    const count = Array.isArray(tx) ? tx.length : 0;
     res.json({ adsWatched: count });
   } catch (e) { res.status(500).json({ error: 'Failed to build ads chart' }); }
 });
 
-router.get('/chart/earnings-summary', (req, res) => {
+router.get('/chart/earnings-summary', async (req, res) => {
   try {
+    if (isMongooseReady()) {
+      const agg = await Earning.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }]);
+      return res.json({ totalUsd: (agg[0] && agg[0].total) || 0 });
+    }
     const tx = readDataFile('transactions.json', []);
     const summary = tx.reduce((acc,t)=>{ acc.totalUsd += Number(t.amountUsd||0); return acc; }, { totalUsd:0 });
     res.json(summary);

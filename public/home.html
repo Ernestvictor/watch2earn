@@ -181,15 +181,19 @@ async function load(){
 
   try{
     const headers = await window.w2e.getAuthHeaders();
-    const res = await fetch('/api/transactions/balance', { headers });
+    const res = await fetch('/api/referrals/summary', { headers });
     if(res.ok){
       const data = await res.json();
-      const refUsd = Number(data.referralEarnUsd || 0);
-      const refCount = Math.floor(refUsd / 0.0067);
-      document.getElementById('referralUsd').innerText = '$' + refUsd.toFixed(2);
+      const refUsd = Number(data.totalReferralUsd || 0);
+      const refCount = Number(data.countInvited || 0);
+      document.getElementById('referralUsd').innerText = '$' + refUsd.toFixed(4);
       document.getElementById('referralCount').innerText = refCount;
     }
-  }catch(e){ }
+  }catch(e){ 
+    console.warn('Failed to fetch referral summary:', e);
+    document.getElementById('referralUsd').innerText = '$0.00';
+    document.getElementById('referralCount').innerText = '0';
+  }
 
   const btn = document.getElementById('withdrawBtn');
   if(bal >= 5){

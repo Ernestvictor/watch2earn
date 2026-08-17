@@ -46,12 +46,19 @@ firebase.auth().onAuthStateChanged(async user=>{
     document.getElementById('countInvited').innerText = data.totals.countInvited||0;
     const list = document.getElementById('list');
     list.innerHTML = '';
-    (data.referrals||[]).forEach(r=>{
-      const el = document.createElement('div'); el.className='item';
-      el.innerHTML = `<div><b>${r.name}</b><div class="small">${r.email||''}</div></div><div style="text-align:right"><div>$${(r.totalUsd||0).toFixed(4)}</div><div class="small">₦${(r.totalNaira||0).toLocaleString()}</div></div>`;
-      list.appendChild(el);
-    });
-  }catch(e){ console.error(e); alert('Could not load referrals'); }
+    if(!data.referrals || data.referrals.length === 0){
+      list.innerHTML = '<div style="text-align:center;color:#aaa;padding:20px">No referrals yet. Invite friends to earn! 🎁</div>';
+    } else {
+      (data.referrals||[]).forEach(r=>{
+        const el = document.createElement('div'); el.className='item';
+        el.innerHTML = `<div><b>${r.name}</b><div class="small">${r.email||'No email'}</div><div class="small" style="font-size:10px;color:#666;margin-top:4px">Joined: ${new Date(r.joined).toLocaleDateString()}</div></div><div style="text-align:right"><div>$${(r.totalUsd||0).toFixed(4)}</div><div class="small">₦${(r.totalNaira||0).toLocaleString()}</div></div>`;
+        list.appendChild(el);
+      });
+    }
+  }catch(e){ 
+    console.error(e); 
+    alert('Could not load referrals: ' + e.message); 
+  }
 });
 </script>
 <script src="/js/aclib-ad-wrapper.js"></script>

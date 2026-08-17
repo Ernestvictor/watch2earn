@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/User');
-const Earning = require('../models/Earning');
-const Message = require('../models/Message');
+const Earning = require('../models/earning');
+const Message = require('../models/messeges');
 const fs = require('fs');
 const path = require('path');
 

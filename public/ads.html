@@ -245,7 +245,8 @@
             <script async="async" data-cfasync="false" src="https://pl30708907.effectivecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js"></script>
             <div id="container-4b1cf630fa653f9661f13acbf3b9bcf9"></div>
             <p style="margin: 12px 0 0;">
-                <a href="https://www.effectivecpmnetwork.com/ke7tsjm03d?key=a96268fc04237d289e7e7bd64904e2f6" target="_blank" rel="noopener noreferrer" style="color:#8b5cf6; font-weight:600;">Open network offer</a>
+                <button id="offerClickBtn" onclick="handleOfferClick()" style="background:#8b5cf6; color:white; border:none; padding:10px 20px; border-radius:4px; font-weight:600; cursor:pointer; font-size:14px;">Open network offer</button>
+                <span id="offerCountdown" style="margin-left:15px; font-weight:600; color:#f44336; display:none;"></span>
             </p>
         </div>
 
@@ -456,6 +457,88 @@
             el.className = `status-message status-${type}`;
             el.style.display = 'block';
             setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        async function handleOfferClick() {
+            const btn = document.getElementById('offerClickBtn');
+            const countdown = document.getElementById('offerCountdown');
+
+            if (btn.disabled) return;
+
+            try {
+                const token = localStorage.getItem('authToken');
+                const firebaseUid = localStorage.getItem('firebaseUid');
+
+                if (!token || !firebaseUid) {
+                    status('Please sign in first', 'error');
+                    return;
+                }
+
+                // Disable button immediately and open the external offer
+                btn.disabled = true;
+                btn.textContent = 'Offer opened — waiting...';
+
+                // Open external offer in new window (the ad network link)
+                window.open('https://www.effectivecpmnetwork.com/ke7tsjm03d?key=a96268fc04237d289e7e7bd64904e2f6', '_blank', 'noopener,noreferrer');
+
+                // Start 15-second countdown
+                let seconds = 15;
+                countdown.style.display = 'inline';
+                countdown.textContent = `Wait ${seconds}s...`;
+                btn.textContent = `Wait ${seconds}s...`;
+
+                const interval = setInterval(() => {
+                    seconds--;
+                    if (seconds > 0) {
+                        countdown.textContent = `Wait ${seconds}s...`;
+                        btn.textContent = `Wait ${seconds}s...`;
+                    } else {
+                        clearInterval(interval);
+                        countdown.style.display = 'none';
+
+                        // AFTER 15 seconds, credit the user
+                        creditOfferCompletion(firebaseUid, token, btn);
+                    }
+                }, 1000);
+
+            } catch (error) {
+                status(error.message || 'Unable to process offer', 'error');
+                btn.disabled = false;
+                btn.textContent = 'Open network offer';
+            }
+        }
+
+        async function creditOfferCompletion(firebaseUid, token, btn) {
+            try {
+                // Call backend to credit the user AFTER 15 seconds
+                const response = await fetch('/api/earning/offer-click', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ firebaseUid })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to credit offer');
+                }
+
+                const result = await response.json();
+                status(`✅ Offer completed! Earned ₦2.00! New wallet: ₦${(result.newWallet).toFixed(2)}`, 'success');
+
+                // Re-enable button for next offer
+                btn.disabled = false;
+                btn.textContent = 'Open network offer';
+
+                // Reload balance to reflect any referral earnings
+                loadBalance();
+            } catch (error) {
+                status(error.message || 'Unable to credit offer', 'error');
+                btn.disabled = false;
+                btn.textContent = 'Open network offer';
+            }
         }
     </script>
 

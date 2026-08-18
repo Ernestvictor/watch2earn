@@ -19,6 +19,7 @@ const historySchema = new mongoose.Schema({
       'bonus',
       'referral',
       'ad_watch',
+      'offer_click',
       'signup_bonus',
       'consecutive_bonus',
       'system',

@@ -18,7 +18,7 @@ const earningSchema = new mongoose.Schema({
   },
   type: { 
     type: String, 
-    enum: ['ad_watch', 'referral', 'bonus', 'withdrawal'],
+    enum: ['ad_watch', 'referral', 'bonus', 'withdrawal', 'offer_click'],
     required: true
   },
   description: { 

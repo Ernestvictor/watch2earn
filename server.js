@@ -51,6 +51,18 @@ function readSettings() {
 // ✅ Serve static frontend files (HTML, CSS, JS)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ✅ Serve ads.txt from project root for ad verification sources
+app.get('/ads.txt', (req, res) => {
+  const adsPath = path.join(__dirname, 'ads.txt');
+
+  if (!fs.existsSync(adsPath)) {
+    return res.status(404).type('text/plain').send('ads.txt not found');
+  }
+
+  res.type('text/plain');
+  res.sendFile(adsPath);
+});
+
 // ✅ Root route → signin page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

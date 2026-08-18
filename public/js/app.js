@@ -135,6 +135,37 @@
     return payload;
   };
 
+  window.w2e.syncMongoUser = async function(extra = {}){
+    const user = window.w2e.getCurrentUser();
+    if (!user) return null;
+
+    const payload = {
+      firebaseUid: user.uid,
+      email: user.email || extra.email || '',
+      username: extra.username || user.displayName || '',
+      displayName: extra.displayName || user.displayName || '',
+      referredBy: localStorage.getItem('w2e_ref') || extra.referredBy || null
+    };
+
+    try {
+      const token = await window.w2e.getAuthToken();
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: 'Bearer ' + token } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to sync MongoDB user');
+      return data.user || data;
+    } catch (e) {
+      console.warn('MongoDB user sync failed:', e.message || e);
+      return null;
+    }
+  };
+
   // Expose small DOM helper
   document.addEventListener('DOMContentLoaded', ()=>{
     document.querySelectorAll('.switch[data-action="theme"]').forEach(s=>{

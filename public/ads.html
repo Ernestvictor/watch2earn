@@ -334,17 +334,22 @@
                     return;
                 }
 
-                container.innerHTML = ads.map((ad, idx) => `
+                container.innerHTML = ads.map((ad, idx) => {
+                    const hasUrl = ad.url || ad.redirectUrl;
+                    const secs = ad.seconds || 15;
+                    return `
                     <div class="ad-card">
                         <div class="ad-title">📺 ${ad.title}</div>
-                        <div class="ad-info">${ad.seconds || 15} seconds • Network Ad</div>
+                        <div class="ad-info">${secs} seconds • Network Ad</div>
                         <div class="ad-reward">Earn ₦2.00</div>
-                        <button class="watch-btn" id="btn-${idx}" onclick="watch('${ad.id}', ${idx}, this)">
-                            Start ${ad.seconds || 15}-second Ad
-                        </button>
+                        ${hasUrl ? `
+                            <a href="${hasUrl}" target="_blank" rel="noopener noreferrer" class="watch-btn" id="btn-${idx}" onclick="watch('${ad.id}', ${idx}, this); return false;">Open ${secs}-second Ad</a>
+                        ` : `
+                            <button class="watch-btn" id="btn-${idx}" onclick="watch('${ad.id}', ${idx}, this)">Start ${secs}-second Ad</button>
+                        `}
                         <div class="timer" id="timer-${idx}"></div>
                     </div>
-                `).join('');
+                `}).join('');
             } catch (error) {
                 console.error('Error rendering ads:', error);
             }
@@ -401,14 +406,16 @@
                     try {
                         const authToken = await token();
                         const elapsedSeconds = Math.min(requiredSeconds, Math.max(0, Math.round((Date.now() - started) / 1000)));
-                        // Credit via server endpoint - use signed cookie on server to enforce browser limits
+
+                        // Prefer authenticated ad-watch endpoint that accepts adDuration and adId
                         try {
-                            const creditResponse = await fetch('/api/credit-ad', {
+                            const creditResponse = await fetch('/api/ads/watch', {
                                 method: 'POST',
                                 headers: {
-                                    'Content-Type': 'application/json'
+                                    'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer ' + authToken
                                 },
-                                body: JSON.stringify({ email: (firebase.auth().currentUser && firebase.auth().currentUser.email) || '' })
+                                body: JSON.stringify({ adDuration: elapsedSeconds, adId })
                             });
 
                             const result = await creditResponse.json();
@@ -418,7 +425,7 @@
                                 return;
                             }
 
-                            status(`Ad completed! ₦2.00 saved. ${result.adsLeft || 0}/${MAX_ADS} today.`, 'success');
+                            status(`Ad completed! ₦2.00 saved. ${result.adsToday || 0}/${MAX_ADS} today.`, 'success');
                             await loadBalance();
                         } catch (e) {
                             status('Unable to credit the ad.', 'error');

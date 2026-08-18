@@ -58,7 +58,14 @@
       const password=document.getElementById('loginPassword').value;
 
       try {
-        await firebase.auth().signInWithEmailAndPassword(email, password);
+        const userCred = await firebase.auth().signInWithEmailAndPassword(email, password);
+        if (window.w2e && typeof window.w2e.syncMongoUser === 'function') {
+          await window.w2e.syncMongoUser({
+            username: userCred.user.displayName || email.split('@')[0],
+            displayName: userCred.user.displayName || email.split('@')[0],
+            email: userCred.user.email || email
+          });
+        }
         window.location.href='home.html';
       } catch (error) {
         errorMsg.innerText = error.message;

@@ -115,12 +115,31 @@ router.post('/login', (req, res) => {
 // List users (prefer DB)
 router.get('/users', async (req, res) => {
   try {
+    let users = [];
     if (isMongooseReady()) {
-      const users = await User.find({}).limit(100).lean();
-      return res.json(users);
+      users = await User.find({}).limit(1000).lean();
+    } else {
+      users = readDataFile('users.json', []);
     }
-    const users = readDataFile('users.json', []);
-    res.json(users);
+
+    const total = (users || []).length;
+    const banned = (users || []).filter(u => u.isBanned || u.status === 'banned').length;
+    const bots = 0; // heuristic not implemented; leave 0
+    const real = total - banned - bots;
+
+    // counts for today/week/month
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const parseCreated = (u) => new Date(u.createdAt || u.createdAtAt || u.created || u.created_at || u._id?.getTimestamp?.() || u.createdAt);
+
+    const today = (users || []).filter(u => { const d = parseCreated(u); return d && d >= startOfDay; }).length;
+    const week = (users || []).filter(u => { const d = parseCreated(u); return d && d >= startOfWeek; }).length;
+    const month = (users || []).filter(u => { const d = parseCreated(u); return d && d >= startOfMonth; }).length;
+
+    return res.json({ users, total, banned, bots, real, healthScore: total ? Math.round(((real) / total) * 100) : 0, today, week, month });
   } catch (e) { res.status(500).json({ error: 'Failed to read users' }); }
 });
 

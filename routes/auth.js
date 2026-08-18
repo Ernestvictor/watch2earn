@@ -5,23 +5,43 @@ const User = require('../models/User');
 // REGISTER route
 router.post('/register', async (req, res) => {
   try {
-    const { firebaseUid, email, username } = req.body;
+    const { firebaseUid, email, username, displayName, referredBy } = req.body || {};
 
-    let user = await User.findOne({ firebaseUid });
-
-    if (!user) {
-      // AUTO CREATE if not exist
-      user = await User.create({
-        firebaseUid,
-        email,
-        username,
-        wallet: 0
-      });
+    if (!firebaseUid || !email) {
+      return res.status(400).json({ error: 'firebaseUid and email are required' });
     }
 
-    res.json({ success: true, user });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const safeName = (username || displayName || normalizedEmail.split('@')[0] || 'User').trim();
+
+    let user = await User.findOne({ firebaseUid });
+    if (!user) {
+      user = await User.findOne({ email: normalizedEmail });
+    }
+
+    if (!user) {
+      user = await User.create({
+        firebaseUid,
+        email: normalizedEmail,
+        username: safeName,
+        displayName: safeName,
+        wallet: 0,
+        balance: 0,
+        totalEarned: 0,
+        referredBy: referredBy || null
+      });
+    } else {
+      user.email = normalizedEmail;
+      user.username = safeName;
+      user.displayName = safeName;
+      if (referredBy && !user.referredBy) user.referredBy = referredBy;
+      await user.save();
+    }
+
+    return res.json({ success: true, user });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Auth register error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create MongoDB user record' });
   }
 });
 

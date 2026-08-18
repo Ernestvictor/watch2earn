@@ -79,6 +79,9 @@
           createdAt:new Date(),
           referredBy:localStorage.getItem('w2e_ref')||null
         });
+        if (window.w2e && typeof window.w2e.syncMongoUser === 'function') {
+          await window.w2e.syncMongoUser({ username: fullName, displayName: fullName, referredBy: localStorage.getItem('w2e_ref') || null });
+        }
         window.location.href='home.html';
       }catch(error){
         if(error.code==='auth/email-already-in-use'){

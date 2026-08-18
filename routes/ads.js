@@ -1,6 +1,11 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const mongoose = require('mongoose');
+const User = require('../models/User');
+const Earning = require('../models/earning');
+const History = require('../models/history');
+const Message = require('../models/messeges');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const verifyToken = require('../middleware/auth');
@@ -45,6 +50,10 @@ function isToday(value) {
   const date = new Date(value);
   const today = new Date();
   return date.toDateString() === today.toDateString();
+}
+
+function isMongooseReady() {
+  try { return mongoose && mongoose.connection && mongoose.connection.readyState === 1; } catch (e) { return false; }
 }
 
 // public: list ads
@@ -148,6 +157,45 @@ router.post('/watch', verifyToken, (req, res) => {
 
   transactions.unshift(adTx);
   saveTransactions(transactions);
+
+  // If we have a connected MongoDB, also record earnings and update user wallet
+  (async () => {
+    try {
+      if (isMongooseReady()) {
+        const user = await User.findOne({ firebaseUid: userId });
+        if (user) {
+          user.wallet = (user.wallet || 0) + payment;
+          user.totalEarned = (user.totalEarned || 0) + payment;
+          user.lastAdShowTime = new Date();
+          await user.save();
+
+          await Earning.create({ userId: user._id, firebaseUid: userId, amount: payment, type: 'ad_watch', description: `Watched ad ${adId}` });
+          await History.create({ userId: user._id, firebaseUid: userId, type: 'ad_watch', amount: payment, description: `Watched ad ${adId}`, referenceId: adTx.id, metadata: { adId } });
+
+          // If user has a referrer in DB, pay commission
+          if (user.referredBy) {
+            const referrer = await User.findById(user.referredBy);
+            if (referrer) {
+              const commission = +(payment * 0.1).toFixed(2);
+              referrer.wallet = (referrer.wallet || 0) + commission;
+              referrer.totalEarned = (referrer.totalEarned || 0) + commission;
+              await referrer.save();
+              const refTx = { id: Date.now().toString() + '_ref', userId: referrer._id, type: 'referral_commission', source: 'ad_referral', title: `Referral commission from user ad watch`, amountUsd: +(paymentUsd * 0.1).toFixed(6), amountNaira: Math.round(payment * 0.1), date: new Date().toISOString(), referredUserId: userId };
+              // also persist to file-backed transactions for compatibility
+              transactions.unshift(refTx);
+              saveTransactions(transactions);
+
+              await Earning.create({ userId: referrer._id, firebaseUid: referrer.firebaseUid || null, amount: commission, type: 'referral_commission', description: `Commission from ${userId}` });
+              await History.create({ userId: referrer._id, firebaseUid: referrer.firebaseUid || null, type: 'referral_commission', amount: commission, description: `Referral commission from ${userId}`, referenceId: refTx.id });
+              await Message.create({ userId: referrer._id, firebaseUid: referrer.firebaseUid || null, message: `You earned ₦${commission} referral commission`, type: 'earning' });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error while syncing ad watch to MongoDB:', err);
+    }
+  })();
 
   // If user was referred, give referrer 10% commission
   const users = loadUsers();

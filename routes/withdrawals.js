@@ -3,9 +3,38 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const verifyToken = require('../middleware/auth');
+const User = require('../models/User');
+const History = require('../models/history');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const WITHDRAWALS_PATH = path.join(DATA_DIR, 'withdrawals.json');
+
+async function createWithdrawalHistory({ firebaseUid, userId, amount, description, status = 'pending', metadata = {} }) {
+  try {
+    let user = null;
+    if (firebaseUid) user = await User.findOne({ firebaseUid });
+    if (!user && userId) user = await User.findById(userId);
+
+    if (!user) return null;
+
+    return await History.create({
+      userId: user._id,
+      firebaseUid: user.firebaseUid || firebaseUid || null,
+      type: 'withdrawal',
+      amount: Number(amount || 0),
+      description: description || 'Withdrawal activity',
+      referenceId: metadata.referenceId || null,
+      status,
+      metadata: {
+        ...metadata,
+        source: 'withdrawal'
+      }
+    });
+  } catch (error) {
+    console.warn('Withdrawal history log skipped:', error.message);
+    return null;
+  }
+}
 
 function ensureFiles() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -38,7 +67,7 @@ function chargeFor(amount) {
   return charge;
 }
 
-router.post('/request', verifyToken, (req, res) => {
+router.post('/request', verifyToken, async (req, res) => {
   try {
     const { amount, method, accountId, walletType, accountType, accountName, accountNumber, bankName, cryptoType, walletAddress } = req.body;
     const userId = req.user.uid;
@@ -93,6 +122,19 @@ router.post('/request', verifyToken, (req, res) => {
     withdrawals.unshift(item);
     writeWithdrawals(withdrawals);
 
+    await createWithdrawalHistory({
+      firebaseUid: userId,
+      amount: amountNum,
+      description: `Withdrawal requested: ₦${amountNum}`,
+      status: 'pending',
+      metadata: {
+        referenceId: item.id,
+        method,
+        netAmount,
+        charge
+      }
+    });
+
     // Create an admin alert/inbox item for this withdrawal
     try {
       const alerts = readAlerts();
@@ -136,6 +178,18 @@ router.post('/request', verifyToken, (req, res) => {
         saveTransactions(txs);
         item.applied = true;
         writeWithdrawals(withdrawals);
+
+        await createWithdrawalHistory({
+          firebaseUid: userId,
+          amount: amountNum,
+          description: `Withdrawal approved: ₦${amountNum}`,
+          status: 'success',
+          metadata: {
+            referenceId: item.id,
+            method,
+            approvedAt: item.approvedAt
+          }
+        });
       }
     } catch (e) { console.warn('Auto-approve check failed', e); }
 
@@ -156,17 +210,30 @@ router.get('/', (req, res) => {
   res.json(withdrawals);
 });
 
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { status } = req.body || {};
   const withdrawals = readWithdrawals();
   const target = withdrawals.find(w => w.id === req.params.id);
   if (!target) return res.status(404).json({ error: 'Withdrawal not found' });
   target.status = status || 'Approved';
   writeWithdrawals(withdrawals);
+
+  await createWithdrawalHistory({
+    firebaseUid: target.userId,
+    amount: Number(target.amount || 0),
+    description: `Withdrawal status updated to ${target.status}`,
+    status: target.status === 'Approved' ? 'success' : 'pending',
+    metadata: {
+      referenceId: target.id,
+      method: target.method,
+      status: target.status
+    }
+  });
+
   res.json({ success: true, id: req.params.id, status: target.status });
 });
 
-router.post('/:id/approve', (req, res) => {
+router.post('/:id/approve', async (req, res) => {
   const withdrawals = readWithdrawals();
   const target = withdrawals.find(w => w.id === req.params.id);
   if (!target) return res.status(404).json({ error: 'Withdrawal not found' });
@@ -174,6 +241,18 @@ router.post('/:id/approve', (req, res) => {
   target.status = 'Approved';
   target.approvedAt = new Date().toISOString();
   writeWithdrawals(withdrawals);
+
+  await createWithdrawalHistory({
+    firebaseUid: target.userId,
+    amount: Number(target.amount || 0),
+    description: `Withdrawal approved: ₦${target.amount || 0}`,
+    status: 'success',
+    metadata: {
+      referenceId: target.id,
+      method: target.method,
+      approvedAt: target.approvedAt
+    }
+  });
 
   // ensure we record deduction transaction once
   try {
@@ -199,12 +278,25 @@ router.post('/:id/approve', (req, res) => {
   res.json({ success: true, id: req.params.id, status: 'Approved' });
 });
 
-router.post('/:id/reject', (req, res) => {
+router.post('/:id/reject', async (req, res) => {
   const withdrawals = readWithdrawals();
   const target = withdrawals.find(w => w.id === req.params.id);
   if (!target) return res.status(404).json({ error: 'Withdrawal not found' });
   target.status = 'Rejected';
   writeWithdrawals(withdrawals);
+
+  await createWithdrawalHistory({
+    firebaseUid: target.userId,
+    amount: Number(target.amount || 0),
+    description: `Withdrawal rejected: ₦${target.amount || 0}`,
+    status: 'failed',
+    metadata: {
+      referenceId: target.id,
+      method: target.method,
+      rejectedAt: new Date().toISOString()
+    }
+  });
+
   res.json({ success: true, id: req.params.id, status: 'Rejected' });
 });
 

@@ -101,16 +101,24 @@
         } else {
           tbody.innerHTML = data.withdrawals.map(w=>`
             <tr>
-              <td>${w.name}</td>
-              <td>$${w.amount}</td>
-              <td>${w.method}</td>
-              <td>${w.status}</td>
-              <td>${w.risk}</td>
-              <td>
-                <button class="approve" onclick="updateStatus('${w.id}','Approved')">Approve</button>
-                <button class="reject" onclick="updateStatus('${w.id}','Rejected')">Reject</button>
-              </td>
-            </tr>`).join('');
+                  <td>${w.name}<br><small style="color:#9ca3af">${w.email || ''}</small></td>
+                  <td>$${w.amount}</td>
+                  <td>${w.method}</td>
+                  <td>${w.status}</td>
+                  <td>${w.risk}</td>
+                  <td>
+                    <select style="margin-bottom:6px;padding:6px;border-radius:6px;border:1px solid #232326;background:#121214;color:#fff;display:block">
+                      <option>Account: ${w.accountName || w.accountNumber || 'N/A'}</option>
+                      <option>Account No: ${w.accountNumber || 'N/A'}</option>
+                      <option>Email: ${w.email || 'N/A'}</option>
+                    </select>
+                    <div style="display:flex;gap:6px">
+                      <button class="approve" onclick="updateStatus('${w.id}','Approved')">Approve</button>
+                      <button class="reject" onclick="updateStatus('${w.id}','Rejected')">Reject</button>
+                      <button style="background:#4CAF50;color:#fff;border-radius:6px;padding:6px 8px;font-weight:700" onclick="openEarning('${w.userId || w.firebaseUid || w.id}')">Earning</button>
+                    </div>
+                  </td>
+                </tr>`).join('');
         }
       } catch(err) {
         console.error('Withdrawals load error:', err);
@@ -133,6 +141,11 @@
 
     if (checkAuth()) {
       loadWithdrawals();
+    }
+
+    function openEarning(id){
+      // open admin user profile (earning history)
+      location.href = '/admin-panel/user-profile.html?id=' + encodeURIComponent(id);
     }
   </script>
 </body>

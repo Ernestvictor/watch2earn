@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>User Profile - Redirect</title>
+</head>
+<body>
+  <script>
+    // Redirect to admin-panel user profile, preserving query string and hash
+    (function(){
+      var qs = window.location.search || '';
+      var hash = window.location.hash || '';
+      window.location.replace('/admin-panel/user-profile.html' + qs + hash);
+    })();
+  </script>
+</body>
+</html>

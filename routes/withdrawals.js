@@ -7,6 +7,7 @@ const Withdrawal = require('../models/withdrawal');
 const verifyToken = require('../middleware/auth');
 const User = require('../models/User');
 const History = require('../models/history');
+const mongoNative = require('../mongodb');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const WITHDRAWALS_PATH = path.join(DATA_DIR, 'withdrawals.json');
@@ -120,13 +121,43 @@ router.post('/request', verifyToken, async (req, res) => {
     }
 
     let walletBalance = 0;
-    if (mongoose.connection && mongoose.connection.readyState === 1) {
-      const user = await User.findOne({ firebaseUid: userId }).lean();
-      walletBalance = Number(user?.wallet || user?.balance || 0);
-    } else {
-      const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
-      const user = users.find(u => (u.firebaseUid || u.uid || '').toString() === userId.toString());
-      walletBalance = Number(user?.wallet || user?.balance || 0);
+    try {
+      // Prefer native Mongo transactions + withdrawals aggregates when available
+      if (typeof mongoNative.getTransactionsCollection === 'function') {
+        const txCol = mongoNative.getTransactionsCollection();
+        const txs = await txCol.find({ userId }).toArray();
+        const totalEarnNaira = txs.reduce((s, t) => s + (Number(t.amountNaira || Math.round((t.amountUsd || 0) * 1500)) ), 0);
+
+        // sum withdrawals (use mongoose Withdrawal collection when available, else file)
+        let withdrawalsSum = 0;
+        if (mongoose.connection && mongoose.connection.readyState === 1) {
+          const wdocs = await Withdrawal.find({ userId }).lean();
+          withdrawalsSum = wdocs.reduce((s, w) => s + Number(w.amount || 0), 0);
+        } else {
+          const allWithdrawals = readWithdrawals();
+          withdrawalsSum = allWithdrawals.filter(w => w.userId === userId).reduce((s, w) => s + Number(w.amount || 0), 0);
+        }
+
+        walletBalance = Math.max(0, Math.round(totalEarnNaira - withdrawalsSum));
+      } else if (mongoose.connection && mongoose.connection.readyState === 1) {
+        const user = await User.findOne({ firebaseUid: userId }).lean();
+        walletBalance = Number(user?.wallet || user?.balance || 0);
+      } else {
+        const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
+        const user = users.find(u => (u.firebaseUid || u.uid || '').toString() === userId.toString());
+        walletBalance = Number(user?.wallet || user?.balance || 0);
+      }
+    } catch (err) {
+      console.error('Compute wallet balance failed:', err && err.message);
+      // fallback to stored wallet field
+      if (mongoose.connection && mongoose.connection.readyState === 1) {
+        const user = await User.findOne({ firebaseUid: userId }).lean();
+        walletBalance = Number(user?.wallet || user?.balance || 0);
+      } else {
+        const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
+        const user = users.find(u => (u.firebaseUid || u.uid || '').toString() === userId.toString());
+        walletBalance = Number(user?.wallet || user?.balance || 0);
+      }
     }
 
     if (walletBalance < amountNum) {
@@ -285,6 +316,26 @@ router.post('/:id/approve', async (req, res) => {
       target.status = 'Approved';
       target.approvedAt = new Date().toISOString();
       await target.save();
+      // Insert a withdraw transaction and decrement user's balance
+      try {
+        const txCol = mongoNative.getTransactionsCollection();
+        const usersCol = mongoNative.getUsersCollection();
+        const amountNum = Number(target.amount || 0);
+        const tx = {
+          id: 'withdraw_' + Date.now(),
+          userId: target.userId,
+          type: 'withdraw',
+          source: 'withdrawal',
+          title: 'Withdrawal - approved',
+          amountUsd: -(amountNum / 1500),
+          amountNaira: -Math.round(amountNum),
+          date: new Date(),
+          withdrawalId: target._id
+        };
+        await txCol.insertOne(tx);
+        // decrement user balance in users collection if exists
+        try { await usersCol.updateOne({ $or: [{ uid: target.userId }, { firebaseUid: target.userId }, { id: target.userId }] }, { $inc: { balance: -amountNum, totalWithdrawn: amountNum } }); } catch (e) {}
+      } catch (e) { console.error('Failed to record withdraw tx in mongo:', e && e.message); }
       await createWithdrawalHistory({
         firebaseUid: target.firebaseUid || target.userId,
         amount: Number(target.amount || 0),
@@ -303,6 +354,20 @@ router.post('/:id/approve', async (req, res) => {
     target.status = 'Approved';
     target.approvedAt = new Date().toISOString();
     writeWithdrawals(withdrawals);
+
+    // record transaction in transactions.json and decrement file-based user balance
+    try {
+      const txs = readTransactions();
+      const amountNum = Number(target.amount || 0);
+      txs.unshift({ id: 'withdraw_' + Date.now(), userId: target.userId, type: 'withdraw', source: 'withdrawal', title: 'Withdrawal - approved', amountUsd: -(amountNum/1500), amountNaira: -Math.round(amountNum), date: new Date().toISOString(), withdrawalId: target.id });
+      saveTransactions(txs);
+    } catch (e) { console.error('Failed to write withdraw tx to file:', e && e.message); }
+
+    try {
+      const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
+      const u = users.find(x => (x.uid === target.userId) || (x.id === target.userId) || ((x.email||'').toLowerCase() === (target.email||'').toLowerCase()));
+      if (u) { u.balance = Math.max(0, (Number(u.balance || 0) - Number(target.amount || 0))); fs.writeFileSync(path.join(DATA_DIR, 'users.json'), JSON.stringify(users, null, 2)); }
+    } catch (e) { console.error('Failed to decrement file user balance:', e && e.message); }
 
     await createWithdrawalHistory({
       firebaseUid: target.userId,

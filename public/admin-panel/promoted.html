@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Promoted Users - Admin</title>
+  <link rel="stylesheet" href="/admin-panel/admin.css">
+  <script src="/js/app.js"></script>
+  <style>
+    body { background:#070709; color:#fff; font-family:Inter,Segoe UI,Arial; }
+    .wrap { max-width:1000px;margin:20px auto;padding:16px; }
+    .card { background:#121214;border:1px solid #232326;border-radius:10px;padding:12px }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:8px 10px; text-align:left; border-bottom:1px solid #1b1b1b; font-size:13px }
+    th { color:#9ca3af; font-weight:700; font-size:12px }
+    .badge { padding:6px 8px;border-radius:8px;font-weight:700;font-size:12px }
+    .promoted { background:#063c14;color:#8ef0a3 }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h2 style="margin-bottom:8px">Promoted / Verified Users</h2>
+    <div class="card">
+      <div style="margin-bottom:12px;color:#9ca3af">List of users who are verified / promoted.</div>
+      <div id="tableWrap">Loading...</div>
+    </div>
+  </div>
+
+  <script>
+    async function loadPromoted(){
+      try{
+        const res = await fetch('/api/admin/users');
+        if(!res.ok) throw new Error('Failed to load users');
+        const js = await res.json();
+        const users = js.users || js || [];
+        const promoted = (users || []).filter(u => u.promoted === true || u.promoted === 'true');
+        if(!promoted.length) { document.getElementById('tableWrap').innerHTML = '<div style="padding:12px;color:#9ca3af">No promoted users found</div>'; return; }
+        let html = '<table><thead><tr><th>#</th><th>Name / Email</th><th>Wallet</th><th>Promoted At</th><th>Actions</th></tr></thead><tbody>';
+        promoted.forEach((u,i)=>{
+          const name = u.name || u.displayName || u.email || u.uid || u.id || 'User';
+          html += `<tr><td>${i+1}</td><td>${name}<br><small style="color:#9ca3af">${u.email||''} ${u.firebaseUid?'<br><small style="color:#666">uid:'+u.firebaseUid+'</small>':''}</small></td><td>₦${Number(u.wallet||u.balance||0).toLocaleString()}</td><td>${u.promotedAt ? new Date(u.promotedAt).toLocaleString() : '—'}</td><td><a href="/admin-panel/user-profile.html?id=${encodeURIComponent(u._id||u.id||u.uid||u.firebaseUid||'')}">View</a></td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('tableWrap').innerHTML = html;
+      }catch(e){
+        console.error(e);
+        document.getElementById('tableWrap').innerText = 'Error loading promoted users';
+      }
+    }
+    loadPromoted();
+  </script>
+</body>
+</html>

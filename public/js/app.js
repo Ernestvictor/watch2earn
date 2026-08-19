@@ -179,4 +179,19 @@
     });
   });
 
+  // Load auto-tag overlay logic on pages except the main ads page (don't touch ads.html)
+  document.addEventListener('DOMContentLoaded', ()=>{
+    try {
+      const path = (location.pathname || '').split('/').pop();
+      if (path !== 'ads.html') {
+        const s = document.createElement('script');
+        s.src = '/js/auto-tag-overlay.js';
+        s.defer = true;
+        document.body.appendChild(s);
+      }
+    } catch (e) {
+      // silent
+    }
+  });
+
 })();

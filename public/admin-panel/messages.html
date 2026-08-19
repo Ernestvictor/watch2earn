@@ -5,57 +5,21 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Message Management</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="/leading.css">
   <style>
-    body{background:#0b0c0f;color:#e0e0e0;font-family:'Segoe UI',Inter,Arial,sans-serif;padding-bottom:90px;margin:0}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0b0c0f;color:#e0e0e0;font-family:'Segoe UI',Inter,Arial,sans-serif;padding-bottom:90px}
     .top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#121214;border-bottom:1px solid #232326;position:sticky;top:0;z-index:10}
     .logo{font-weight:900;font-size:20px;color:#4CAF50}
-    .container{max-width:1100px;margin:0 auto;padding:16px}
-    .card{background:#1a1a1d;border:1px solid #232326;border-radius:20px;padding:20px;margin-bottom:14px}
-    textarea,select,input,button{margin:6px;padding:8px;border-radius:6px;border:none;font-family:inherit}
-    textarea,input,select{width:100%;box-sizing:border-box;background:#0f0f10;color:#fff;border:1px solid #333}
-    button{cursor:pointer;background:#4CAF50;color:#fff;font-weight:600}
-    button:hover{background:#45a049}
-    button.delete{background:#f44336}
-    button.delete:hover{background:#da190b}
-    .message-list{display:grid;gap:10px}
-    .message-row{background:#131316;border:1px solid #232326;border-radius:12px;padding:12px}
-    .message-row small{color:#888;font-size:11px}
-    .tabs{display:flex;gap:8px;border-bottom:2px solid #232326;margin-bottom:16px}
-    .tab{padding:12px 16px;cursor:pointer;border:none;background:none;color:#888;font-weight:500;border-bottom:3px solid transparent}
-    .tab.active{color:#4CAF50;border-bottom-color:#4CAF50}
-    .tab-content{display:none}
-    .tab-content.active{display:block}
-    .template-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-    .template-card{background:#131316;border:1px solid #232326;border-radius:12px;padding:12px;cursor:pointer;transition:all 0.2s}
-    .template-card:hover{border-color:#4CAF50}
-    .template-card h4{margin:0 0 6px 0;color:#4CAF50}
-    .template-card p{margin:0;font-size:12px;color:#888;line-height:1.4}
-    .template-preview{background:#131316;border:1px solid #232326;border-radius:12px;padding:12px;margin:8px 0;max-height:120px;overflow-y:auto}
-    .form-group{margin:10px 0}
-    .form-group label{display:block;margin-bottom:6px;font-weight:500;color:#aaa}
-    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .toggle-group{display:flex;gap:8px}
-    .toggle-group label{flex:1;display:flex;align-items:center;gap:6px;font-weight:500;cursor:pointer}
-    .toggle-group input[type="radio"]{margin:0;width:auto}
-    .user-targeting{background:#131316;border:1px solid #232326;border-radius:12px;padding:12px;margin:8px 0}
-    .user-search{display:flex;gap:8px}
-    .user-search input{flex:1}
-    .user-list{max-height:200px;overflow-y:auto;margin:8px 0}
-    .user-item{background:#0f0f10;border:1px solid #333;border-radius:6px;padding:8px;margin:4px 0;cursor:pointer;display:flex;align-items:center;gap:8px}
-    .user-item input[type="checkbox"]{width:auto;margin:0}
-    .user-item.selected{border-color:#4CAF50;background:#0f2f1a}
-    .selected-users{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
-    .tag{background:#4CAF50;color:#000;padding:6px 12px;border-radius:20px;font-size:12px;display:inline-flex;align-items:center;gap:6px}
-    .tag button{background:none;border:none;color:#000;cursor:pointer;padding:0;margin:0;font-size:14px}
-    .message-status{display:inline-block;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600}
-    .status-scheduled{background:#2196F3;color:#fff}
-    .status-sent{background:#4CAF50;color:#fff}
-    .status-pending{background:#FF9800;color:#fff}
+    .container{max-width:960px;margin:0 auto;padding:16px}
+    .card{background:#1a1a1d;border:1px solid #232326;border-radius:16px;padding:16px;margin-bottom:16px}
+    .message{background:#131316;border:1px solid #232326;border-radius:10px;padding:10px;margin-bottom:12px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    button{padding:8px 12px;border:none;border-radius:8px;cursor:pointer}
+    .success{background:#4CAF50;color:#fff}
+    .danger{background:#f44336;color:#fff}
     .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
     .bottom-nav a{color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
     .bottom-nav a.active{color:#4CAF50;font-weight:700}
-    @media(min-width:700px){.two-col{grid-template-columns:1fr 1fr}.template-grid{grid-template-columns:repeat(4,1fr)}}
   </style>
 </head>
 <body>

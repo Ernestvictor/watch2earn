@@ -130,6 +130,9 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
         <p style="color:#aaa;font-size:13px;line-height:1.6">our partner are offering exciting games to play and earn rewards.</p>
         <a href="game.html" class="btn-watch" style="text-align:center;display:block">Open Games</a>
       </div>
+      <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:18px">
+        <button id="watchAdBtn" class="btn-watch" style="display:block;border:none;cursor:pointer">Watch Ad - Earn 10 Coins</button>
+      </div>
     </div>
   </div>
 
@@ -174,6 +177,25 @@ async function loadBalance() {
     console.error('Unable to load balance', error);
   }
 }
+</script>
+<script>
+  window.addEventListener("load", () => {
+    if (!window.gamemonetizeSDK) return;
+
+    window.gamemonetizeSDK.gameStart();
+
+    window.gamemonetizeSDK.onAdFinished = () => {
+      alert("Ad finished! +10 Coins");
+      window.gamemonetizeSDK.gameEnd();
+    };
+
+    const watchAdBtn = document.getElementById('watchAdBtn');
+    if (watchAdBtn) {
+      watchAdBtn.onclick = () => {
+        window.gamemonetizeSDK.showAd();
+      };
+    }
+  });
 </script>
 <script src="/js/aclib-ad-wrapper.js"></script>
 <div>

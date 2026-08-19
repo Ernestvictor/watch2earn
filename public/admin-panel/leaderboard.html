@@ -12,17 +12,16 @@
     .top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#121214;border-bottom:1px solid #232326;position:sticky;top:0;z-index:10}
     .logo{font-weight:900;font-size:20px;color:#4CAF50}
     .container{max-width:960px;margin:0 auto;padding:16px}
-    .card{background:#1a1a1d;border:1px solid #232326;border-radius:20px;padding:20px;margin-bottom:14px}
+    .card{background:#1a1a1d;border:1px solid #232326;border-radius:16px;padding:16px;margin-bottom:16px}
     .tab-container{display:flex;gap:8px;border-bottom:1px solid #232326;margin-bottom:16px;flex-wrap:wrap;overflow-x:auto}
     .tab-btn{padding:10px 16px;background:#222326;border:none;color:#aaa;cursor:pointer;border-radius:8px 8px 0 0;font-weight:600;white-space:nowrap}
     .tab-btn.active{background:#4CAF50;color:#fff}
     .tab-content{display:none}
     .tab-content.active{display:block}
     .leaderboard-item{background:#1a1a1d;border:1px solid #232326;border-radius:12px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
-    .rank{width:40px;height:40px;background:#222326;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;color:#4CAF50}
-    .rank.top{background:#4CAF50;color:#fff}
-    .rank.top2{background:#64b5f6;color:#fff}
-    .rank.top3{background:#81c784;color:#fff}
+    .rank{display:flex;justify-content:space-between;align-items:center;padding:12px;border-bottom:1px solid #232326}
+    .rank:last-child{border-bottom:none}
+    .badge{background:#4CAF50;color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:700}
     .info{flex:1}
     .info-name{font-weight:700;color:#fff}
     .info-detail{font-size:12px;color:#777}

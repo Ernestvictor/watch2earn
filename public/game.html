@@ -122,6 +122,10 @@
             </p>
         </div>
 
+        <div class="games-info" style="margin-top: 10px;">
+            <button id="watchAdBtn" class="btn btn-primary w-100" style="font-weight:700;">Watch Ad - Earn 10 Coins</button>
+        </div>
+
         <div class="balance-card">
             <div class="balance-item">
                 <span class="balance-label">💵 Total Balance</span>
@@ -218,6 +222,25 @@
                 console.error('Error loading balance:', error);
             }
         }
+    </script>
+    <script>
+      window.addEventListener("load", () => {
+        if (!window.gamemonetizeSDK) return;
+
+        window.gamemonetizeSDK.gameStart();
+
+        window.gamemonetizeSDK.onAdFinished = () => {
+          alert("Ad finished! +10 Coins");
+          window.gamemonetizeSDK.gameEnd();
+        };
+
+        const watchAdBtn = document.getElementById('watchAdBtn');
+        if (watchAdBtn) {
+          watchAdBtn.onclick = () => {
+            window.gamemonetizeSDK.showAd();
+          };
+        }
+      });
     </script>
     <script src="/js/aclib-ad-wrapper.js"></script>
     <div>

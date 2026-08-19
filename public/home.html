@@ -60,6 +60,12 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
     <a href="earn.html" style="color:#4CAF50;text-decoration:underline;margin-left:8px">Go Earn</a>
   </div>
 
+  <div class="card" style="margin-top:12px">
+    <button id="watchAdBtn" class="btn btn-primary" style="width:100%;padding:12px;font-size:13px">
+      <i class="fas fa-video"></i> Watch Ad - Earn 10 Coins
+    </button>
+  </div>
+
   <div style="padding:8px 4px">
     <h2 style="font-size:18px">Hi, <span id="userName" style="color:#4CAF50">...</span> 👋</h2>
     <p class="muted">Keep watching, keep earning</p>
@@ -301,6 +307,25 @@ async function loadInboxCount(){
 
 loadInboxCount();
 setInterval(loadInboxCount, 30000);
+</script>
+<script>
+  window.addEventListener("load", () => {
+    if (!window.gamemonetizeSDK) return;
+
+    window.gamemonetizeSDK.gameStart();
+
+    window.gamemonetizeSDK.onAdFinished = () => {
+      alert("Ad finished! +10 Coins");
+      window.gamemonetizeSDK.gameEnd();
+    };
+
+    const watchAdBtn = document.getElementById('watchAdBtn');
+    if (watchAdBtn) {
+      watchAdBtn.onclick = () => {
+        window.gamemonetizeSDK.showAd();
+      };
+    }
+  });
 </script>
 <script src="/js/aclib-ad-wrapper.js"></script>
 <div>

@@ -16,6 +16,13 @@ const nodemailer = (() => {
   try { return require('nodemailer'); } catch (e) { return null; }
 })();
 
+function safeObjectId(value) {
+  if (!value || value === 'undefined' || value === 'null') return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  return mongoose.Types.ObjectId.isValid(str) ? new mongoose.Types.ObjectId(str) : null;
+}
+
 function ensureDataFiles() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(TRANSACTIONS_PATH)) fs.writeFileSync(TRANSACTIONS_PATH, '[]');
@@ -74,10 +81,88 @@ function isMongooseReady() {
   } catch (e) { return false; }
 }
 
+function resolveUserFindQuery(id, email) {
+  const cleanId = typeof id === 'string' ? id.trim() : id;
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : null;
+  const conditions = [];
+
+  const objectId = safeObjectId(cleanId);
+  if (objectId) conditions.push({ _id: objectId });
+
+  if (cleanId && cleanId !== 'undefined' && cleanId !== 'null') {
+    conditions.push({ id: cleanId }, { uid: cleanId }, { firebaseUid: cleanId });
+  }
+  if (normalizedEmail) {
+    conditions.push({ email: normalizedEmail });
+  }
+  return conditions.length ? { $or: conditions } : {};
+}
+
+async function findUserByAdminIdentifier(id, email) {
+  const query = resolveUserFindQuery(id, email);
+  if (!query || Object.keys(query).length === 0) return null;
+
+  if (isMongooseReady()) {
+    const user = await User.findOne(query);
+    if (user) return user;
+  }
+
+  const usersPath = path.join(DATA_DIR, 'users.json');
+  let users = [];
+  try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+  const idValue = String(id || '').trim();
+  const emailValue = String(email || '').trim().toLowerCase();
+  return users.find(u => (
+    (idValue && (String(u.id) === idValue || String(u.uid) === idValue || String(u.firebaseUid) === idValue)) ||
+    (emailValue && (String(u.email || '').toLowerCase() === emailValue))
+  )) || null;
+}
+
+router.get('/inbox', async (req, res) => {
+  try {
+    const inboxMessages = readJson(MESSAGES_PATH).filter(Boolean);
+    const users = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]'); } catch { return []; } })();
+    const withdrawals = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'withdrawals.json'), 'utf8') || '[]'); } catch { return []; } })();
+
+    const help = inboxMessages.filter(m => m.type === 'help' || m.type === 'system' || m.type === 'user_message' || !m.type);
+    const alerts = inboxMessages.filter(m => m.type === 'alert' || m.type === 'warning');
+    const response = {
+      help,
+      alerts,
+      withdrawals,
+      recentSignups: users.slice(0, 8).map(u => ({ id: u.id || u.uid || u.firebaseUid, name: u.displayName || u.username || (u.email || '').split('@')[0], email: u.email }))
+    };
+    return res.json(response);
+  } catch (error) {
+    console.error('Inbox error:', error);
+    return res.status(500).json({ error: 'Failed to load inbox' });
+  }
+});
+
+router.post('/reply-message/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const body = req.body || {}; 
+    const items = readJson(MESSAGES_PATH);
+    const match = items.find(m => String(m.id) === String(id));
+    if (!match) return res.status(404).json({ error: 'Message not found' });
+    match.replies = match.replies || [];
+    match.replies.push({
+      reply: body.reply || '',
+      by: 'admin',
+      date: new Date().toISOString()
+    });
+    fs.writeFileSync(MESSAGES_PATH, JSON.stringify(items, null, 2));
+    return res.json({ ok: true, message: match });
+  } catch (error) {
+    console.error('Reply-message error:', error);
+    return res.status(500).json({ error: 'Failed to reply' });
+  }
+});
+
 router.post('/watch-ad', async (req, res) => {
   try {
     const { firebaseUid, amount = 10 } = req.body;
-    // Prefer Mongoose user update when available
     if (isMongooseReady()) {
       const user = await User.findOne({ firebaseUid });
       if (!user) return res.status(404).json({ error: 'User not found' });
@@ -91,51 +176,28 @@ router.post('/watch-ad', async (req, res) => {
       return res.json({ success: true, newWallet: user.wallet });
     }
 
-    // fallback to file-based flow
     const userRecordPath = path.join(DATA_DIR, 'users.json');
     let users = [];
     try { users = JSON.parse(fs.readFileSync(userRecordPath, 'utf8') || '[]'); } catch (e) { users = []; }
     let user = users.find(u => (u.firebaseUid || u.uid || '').toString() === (firebaseUid || '').toString());
     if (!user) return res.status(404).json({ error: 'User not found' });
     user.wallet = (user.wallet || 0) + amount;
-    // write user
     fs.writeFileSync(userRecordPath, JSON.stringify(users, null, 2));
 
-    // transactions/messages file
-    const transactions = readJson('transactions.json');
+    const transactions = readJson(TRANSACTIONS_PATH);
     transactions.push({ id: Date.now().toString(), userId: user.id || user.uid, firebaseUid, amount, type: 'ad', date: new Date().toISOString() });
-    writeJson('transactions.json', transactions);
+    writeJson(TRANSACTIONS_PATH, transactions);
 
-    const messages = readJson('messages.json');
+    const messages = readJson(MESSAGES_PATH);
     messages.push({ id: Date.now().toString(), userId: user.id || user.uid, firebaseUid, message: `You earned ₦${amount} for watching an ad`, type: 'earning', createdAt: new Date().toISOString() });
-    writeJson('messages.json', messages);
-
+    writeJson(MESSAGES_PATH, messages);
     res.json({ success: true, newWallet: user.wallet });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// --- Lightweight admin helpers (file-backed) ---
-function readDataFile(filename, fallback = []) {
-  ensureDataFiles();
-  const p = path.join(DATA_DIR, filename);
-  try {
-    if (!fs.existsSync(p)) fs.writeFileSync(p, JSON.stringify(fallback, null, 2));
-    return JSON.parse(fs.readFileSync(p, 'utf8') || '[]');
-  } catch (e) {
-    return fallback;
-  }
-}
-
-function writeDataFile(filename, data) {
-  ensureDataFiles();
-  const p = path.join(DATA_DIR, filename);
-  fs.writeFileSync(p, JSON.stringify(data, null, 2));
-}
-
-// Admin login (accept frontend {email,password})
-router.post('/login', (req, res) => {
+router.get('/login', (req, res) => {
   const body = req.body || {};
   const email = (body.email || body.username || '').toString().trim();
   const password = (body.password || body.pass || '').toString();
@@ -153,94 +215,62 @@ router.post('/login', (req, res) => {
   return res.status(403).json({ error: 'Invalid credentials' });
 });
 
-// List users (prefer DB)
 router.get('/users', async (req, res) => {
   try {
     let users = [];
     if (isMongooseReady()) {
       users = await User.find({}).limit(1000).lean();
     } else {
-      users = readDataFile('users.json', []);
+      users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
     }
 
     const total = (users || []).length;
     const banned = (users || []).filter(u => u.isBanned || u.status === 'banned').length;
-    const bots = 0; // heuristic not implemented; leave 0
-    const real = total - banned - bots;
+    const real = total - banned;
 
-    // counts for today/week/month
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const parseCreated = (u) => new Date(u.createdAt || u.createdAtAt || u.created || u.created_at || u._id?.getTimestamp?.() || u.createdAt);
-
+    const parseCreated = (u) => new Date(u.createdAt || u.createdAtAt || u.created || u.created_at || u._id?.getTimestamp?.() || Date.now());
     const today = (users || []).filter(u => { const d = parseCreated(u); return d && d >= startOfDay; }).length;
     const week = (users || []).filter(u => { const d = parseCreated(u); return d && d >= startOfWeek; }).length;
     const month = (users || []).filter(u => { const d = parseCreated(u); return d && d >= startOfMonth; }).length;
 
-    return res.json({ users, total, banned, bots, real, healthScore: total ? Math.round(((real) / total) * 100) : 0, today, week, month });
+    return res.json({ users, total, banned, bots: 0, real, healthScore: total ? Math.round((real / total) * 100) : 0, today, week, month });
   } catch (e) { res.status(500).json({ error: 'Failed to read users' }); }
 });
 
-// Messages
 router.get('/messages', async (req, res) => {
   try {
     if (isMongooseReady()) {
       const messages = await Message.find({}).sort({ createdAt: -1 }).limit(200).lean();
       return res.json(messages);
     }
-    const messages = readDataFile('messages.json', []);
+    const messages = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'messages.json'), 'utf8') || '[]');
     res.json(messages);
   } catch (e) { res.status(500).json({ error: 'Failed to read messages' }); }
 });
 
-router.post('/reply-message/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-    const body = req.body || {};
-    if (isMongooseReady()) {
-      const msg = await Message.findById(id);
-      if (!msg) return res.status(404).json({ error: 'Message not found' });
-      msg.replies = msg.replies || [];
-      msg.replies.push({ reply: body.reply || '', by: body.by || 'admin', date: new Date() });
-      await msg.save();
-      return res.json({ ok: true, message: msg });
-    }
-
-    const messages = readDataFile('messages.json', []);
-    const msg = messages.find(m => String(m.id) === String(id));
-    if (!msg) return res.status(404).json({ error: 'Message not found' });
-    msg.replies = msg.replies || [];
-    msg.replies.push({ reply: body.reply || '', by: body.by || 'admin', date: new Date().toISOString() });
-    writeDataFile('messages.json', messages);
-    res.json({ ok: true, message: msg });
-  } catch (e) { res.status(500).json({ error: 'Failed to reply' }); }
-});
-
-// Withdrawals (admin list)
 router.get('/withdrawals', async (req, res) => {
   try {
-    // If using native mongo or mongoose, you may have withdrawals in a collection; fallback to file
-    const data = readDataFile('withdrawals.json', []);
+    const data = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'withdrawals.json'), 'utf8') || '[]');
     res.json(data);
   } catch (e) { res.status(500).json({ error: 'Failed to read withdrawals' }); }
 });
 
-// History / transactions
 router.get('/history', async (req, res) => {
   try {
     if (isMongooseReady()) {
       const tx = await Earning.find({}).sort({ createdAt: -1 }).limit(1000).lean();
       return res.json(tx);
     }
-    const tx = readDataFile('transactions.json', []);
+    const tx = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transactions.json'), 'utf8') || '[]');
     res.json(tx);
   } catch (e) { res.status(500).json({ error: 'Failed to read history' }); }
 });
 
-// Dashboard summary
 router.get('/dashboard', async (req, res) => {
   try {
     if (isMongooseReady()) {
@@ -250,8 +280,8 @@ router.get('/dashboard', async (req, res) => {
       const totalEarnedUsd = (agg[0] && agg[0].total) || 0;
       return res.json({ totalUsers, totalTransactions, totalEarnedUsd });
     }
-    const users = readDataFile('users.json', []);
-    const tx = readDataFile('transactions.json', []);
+    const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
+    const tx = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transactions.json'), 'utf8') || '[]');
     const totalUsers = users.length;
     const totalTransactions = tx.length;
     const totalEarnedUsd = tx.reduce((s,t)=>s + Number(t.amountUsd || 0), 0);
@@ -259,10 +289,9 @@ router.get('/dashboard', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to compute dashboard' }); }
 });
 
-// Bonuses list and send
 router.get('/bonuses', (req, res) => {
   try {
-    const bonuses = readDataFile('bonuses.json', []);
+    const bonuses = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'bonuses.json'), 'utf8') || '[]');
     res.json(bonuses);
   } catch (e) { res.status(500).json({ error: 'Failed to read bonuses' }); }
 });
@@ -270,143 +299,95 @@ router.get('/bonuses', (req, res) => {
 router.post('/send-bonus', (req, res) => {
   try {
     const b = req.body || {};
-    const bonuses = readDataFile('bonuses.json', []);
+    const bonuses = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'bonuses.json'), 'utf8') || '[]');
     const entry = { id: Date.now().toString(), ...b, createdAt: new Date().toISOString(), claimed: false };
     bonuses.unshift(entry);
-    writeDataFile('bonuses.json', bonuses);
-    res.json({ ok: true, bonus: entry });
+    fs.writeFileSync(path.join(DATA_DIR, 'bonuses.json'), JSON.stringify(bonuses, null, 2));
+    res.json({ ok: true, bonus: entry, count: 1 });
   } catch (e) { res.status(500).json({ error: 'Failed to send bonus' }); }
 });
 
-// Leaderboard (top by wallet or totalEarned)
-router.get('/leaderboard', async (req, res) => {
-  try {
-    if (isMongooseReady()) {
-      const top = await User.find({}).sort({ wallet: -1 }).limit(50).lean();
-      return res.json(top);
-    }
-    const users = readDataFile('users.json', []);
-    const top = users.sort((a,b)=> (b.wallet || 0) - (a.wallet || 0)).slice(0,50);
-    res.json(top);
-  } catch (e) { res.status(500).json({ error: 'Failed to read leaderboard' }); }
-});
-
-// Simple chart data endpoints (mocked from transactions)
-router.get('/chart/earnings', async (req, res) => {
-  try {
-    let tx = [];
-    if (isMongooseReady()) tx = await Earning.find({}).lean(); else tx = readDataFile('transactions.json', []);
-    const now = Date.now();
-    const days = Array.from({length:7}).map((_,i)=>{
-      const date = new Date(now - (6-i)*24*60*60*1000);
-      const key = date.toISOString().slice(0,10);
-      const total = tx.filter(t=> (t.date||t.createdAt||'').toString().slice(0,10)===key).reduce((s,t)=>s+Number(t.amountUsd||t.amount||0),0);
-      return { date: key, total };
-    });
-    res.json(days);
-  } catch (e) { res.status(500).json({ error: 'Failed to build chart' }); }
-});
-
-router.get('/chart/ads-watched', async (req, res) => {
-  try {
-    let tx = [];
-    if (isMongooseReady()) tx = await Earning.find({ type: /ad/i }).lean(); else tx = readDataFile('transactions.json', []);
-    const count = Array.isArray(tx) ? tx.length : 0;
-    res.json({ adsWatched: count });
-  } catch (e) { res.status(500).json({ error: 'Failed to build ads chart' }); }
-});
-
-router.get('/chart/earnings-summary', async (req, res) => {
-  try {
-    if (isMongooseReady()) {
-      const agg = await Earning.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }]);
-      return res.json({ totalUsd: (agg[0] && agg[0].total) || 0 });
-    }
-    const tx = readDataFile('transactions.json', []);
-    const summary = tx.reduce((acc,t)=>{ acc.totalUsd += Number(t.amountUsd||0); return acc; }, { totalUsd:0 });
-    res.json(summary);
-  } catch (e) { res.status(500).json({ error: 'Failed to build earnings summary' }); }
-});
-
-// Update user actions: ban/promote/admin
 router.put('/users/:id', async (req, res) => {
   try {
-    const id = req.params.id;
+    const id = req.params && req.params.id;
     const body = req.body || {};
     const action = (body.action || body.actionType || '').toString();
+    const userEmail = body.email || null;
 
-    // Prefer mongoose when available
-    if (isMongooseReady()) {
-      // support _id, id, uid
-      let user = await User.findOne({ $or: [{ _id: id }, { id: id }, { uid: id }, { firebaseUid: id }] });
-      if (!user) return res.status(404).json({ error: 'User not found' });
+    const user = await findUserByAdminIdentifier(id, userEmail);
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-      if (action === 'banned' || action === 'ban') {
+    if (action === 'banned' || action === 'ban') {
+      if (isMongooseReady()) {
         user.isBanned = true;
         await user.save();
-        return res.json({ ok: true });
+      } else {
+        user.isBanned = true;
+        const usersPath = path.join(DATA_DIR, 'users.json');
+        let users = []; try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+        const idx = users.findIndex(u => String(u.id) === String(user.id || user.uid || user.firebaseUid) || String(u.uid) === String(user.uid || user.id || user.firebaseUid) || (u.email || '').toLowerCase() === String(user.email || '').toLowerCase());
+        if (idx >= 0) { users[idx] = { ...users[idx], isBanned: true }; fs.writeFileSync(usersPath, JSON.stringify(users, null, 2)); }
       }
+      return res.json({ ok: true });
+    }
 
-      if (action === 'promote' || action === 'verified' || action === 'promoted') {
-        // generate 4-digit code and store it on user, send email when SMTP configured
-        const code = Math.floor(1000 + Math.random() * 9000).toString();
+    if (action === 'promote' || action === 'verified' || action === 'promoted') {
+      const code = Math.floor(1000 + Math.random() * 9000).toString();
+      if (isMongooseReady()) {
         user.promoted = false;
         user.promoteCode = code;
         user.promoteRequestedAt = new Date();
         user.promoteExpires = new Date(Date.now() + 24 * 3600 * 1000);
         await user.save();
+      } else {
+        const usersPath = path.join(DATA_DIR, 'users.json');
+        let users = []; try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+        const idx = users.findIndex(u => String(u.id) === String(user.id || user.uid || user.firebaseUid) || String(u.uid) === String(user.uid || user.id || user.firebaseUid) || (u.email || '').toLowerCase() === String(user.email || '').toLowerCase());
+        if (idx >= 0) {
+          users[idx].promoted = false; users[idx].promoteCode = code; users[idx].promoteRequestedAt = new Date().toISOString(); users[idx].promoteExpires = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+        } else {
+          user.promoteCode = code; user.promoted = false; user.promoteExpires = new Date(Date.now() + 24 * 3600 * 1000).toISOString(); users.push(user);
+        }
+        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+      }
 
-        await recordPromotionLog({
-          userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
-          email: user.email || null,
-          code,
-          status: 'pending',
-          method: 'email',
-          adminEmail: req.user && req.user.email ? req.user.email : null
-        });
+      await recordPromotionLog({
+        userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
+        email: user.email || null,
+        code,
+        status: 'pending',
+        method: 'email',
+        adminEmail: req.user && req.user.email ? req.user.email : null
+      });
 
-        // send email if SMTP configured
-        const SMTP_HOST = process.env.SMTP_HOST;
-        const SMTP_USER = process.env.SMTP_USER;
-        const SMTP_PASS = process.env.SMTP_PASS;
-        const FROM_EMAIL = process.env.FROM_EMAIL || 'watch2earn36@gmail.com';
-        if (nodemailer && SMTP_HOST && SMTP_USER && SMTP_PASS) {
-          try {
-            const transporter = nodemailer.createTransport({ host: SMTP_HOST, port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587, secure: !!process.env.SMTP_SECURE, auth: { user: SMTP_USER, pass: SMTP_PASS } });
-            await transporter.sendMail({ from: FROM_EMAIL, to: user.email, subject: 'Your Watch2Earn verification code', text: `Your verification code is: ${code}` });
-            await recordPromotionLog({
-              userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
-              email: user.email || null,
-              code,
-              status: 'email_sent',
-              method: 'email',
-              adminEmail: req.user && req.user.email ? req.user.email : null
-            });
-            return res.json({ ok: true, message: 'Code generated and emailed' });
-          } catch (e) {
-            console.error('Failed to send promo email:', e && e.message);
-            await recordPromotionLog({
-              userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
-              email: user.email || null,
-              code,
-              status: 'email_failed',
-              method: 'email',
-              adminEmail: req.user && req.user.email ? req.user.email : null
-            });
+      const SMTP_HOST = process.env.SMTP_HOST || process.env.SMPT_HOST;
+      const SMTP_USER = process.env.SMTP_USER || process.env.SMPT_USER;
+      const SMTP_PASS = process.env.SMTP_PASS || process.env.SMPT_PASS;
+      const SMTP_PORT = process.env.SMTP_PORT || process.env.SMPT_PORT || '587';
+      const SMTP_SECURE = (process.env.SMTP_SECURE || process.env.SMPT_SECURE || 'false').toString().toLowerCase() === 'true';
+      const FROM_EMAIL = process.env.FROM_EMAIL || process.env.SMTP_FROM || 'watch2earn@gmail.com';
+      if (nodemailer && SMTP_HOST && SMTP_USER && SMTP_PASS) {
+        try {
+          const transporter = nodemailer.createTransport({ host: SMTP_HOST, port: Number(SMTP_PORT) || 587, secure: SMTP_SECURE, auth: { user: SMTP_USER, pass: SMTP_PASS } });
+          await transporter.sendMail({ from: FROM_EMAIL, to: user.email, subject: 'Your Watch2Earn verification code', text: `Your verification code is: ${code}` });
+          await recordPromotionLog({
+            userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
+            email: user.email || null,
+            code,
+            status: 'email_sent',
+            method: 'email',
+            adminEmail: req.user && req.user.email ? req.user.email : null
+          });
+          return res.json({ ok: true, message: 'Code generated and emailed' });
+        } catch (e) {
+          console.error('Failed to send promo email:', e && e.message);
+          if (isMongooseReady()) {
             user.promoted = true;
             user.promotedAt = new Date();
             user.promoteCode = null;
             user.promoteExpires = null;
             await user.save();
-            return res.json({ ok: true, message: 'No SMTP configured — user auto-promoted' });
           }
-        } else {
-          // SMTP not configured — auto-promote as fallback
-          user.promoted = true;
-          user.promotedAt = new Date();
-          user.promoteCode = null;
-          user.promoteExpires = null;
-          await user.save();
           await recordPromotionLog({
             userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
             email: user.email || null,
@@ -415,33 +396,42 @@ router.put('/users/:id', async (req, res) => {
             method: 'fallback',
             adminEmail: req.user && req.user.email ? req.user.email : null
           });
-          return res.json({ ok: true, message: 'No SMTP configured — user auto-promoted' });
+          return res.json({ ok: true, message: 'SMTP failed — user auto-promoted' });
         }
       }
 
-      if (action === 'admin' || action === 'promote-admin') {
-        user.role = 'admin';
+      if (isMongooseReady()) {
+        user.promoted = true;
+        user.promotedAt = new Date();
+        user.promoteCode = null;
+        user.promoteExpires = null;
         await user.save();
-        return res.json({ ok: true });
       }
-
-      return res.status(400).json({ error: 'Unknown action' });
+      await recordPromotionLog({
+        userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
+        email: user.email || null,
+        code,
+        status: 'auto_promoted',
+        method: 'fallback',
+        adminEmail: req.user && req.user.email ? req.user.email : null
+      });
+      return res.json({ ok: true, message: 'No SMTP configured — user auto-promoted' });
     }
 
-    // Fallback to file storage
-    const usersPath = path.join(DATA_DIR, 'users.json');
-    let users = [];
-    try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
-    const u = users.find(x => String(x.id) === String(id) || String(x.uid) === String(id) || (x.email||'') === (id||''));
-    if (!u) return res.status(404).json({ error: 'User not found' });
+    if (action === 'admin' || action === 'promote-admin') {
+      if (isMongooseReady()) {
+        user.role = 'admin';
+        await user.save();
+      } else {
+        const usersPath = path.join(DATA_DIR, 'users.json');
+        let users = []; try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+        const idx = users.findIndex(u => String(u.id) === String(user.id || user.uid || user.firebaseUid) || String(u.uid) === String(user.uid || user.id || user.firebaseUid) || (u.email || '').toLowerCase() === String(user.email || '').toLowerCase());
+        if (idx >= 0) { users[idx].role = 'admin'; fs.writeFileSync(usersPath, JSON.stringify(users, null, 2)); }
+      }
+      return res.json({ ok: true });
+    }
 
-    if (action === 'banned' || action === 'ban') { u.isBanned = true; }
-    else if (action === 'promote' || action === 'verified' || action === 'promoted') { u.promoted = true; u.promotedAt = new Date().toISOString(); }
-    else if (action === 'admin' || action === 'promote-admin') { u.role = 'admin'; }
-    else return res.status(400).json({ error: 'Unknown action' });
-
-    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-    return res.json({ ok: true });
+    return res.status(400).json({ error: 'Unknown action' });
   } catch (e) { console.error('admin update user error', e); res.status(500).json({ error: 'Failed to update user' }); }
 });
 

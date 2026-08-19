@@ -39,6 +39,85 @@
     return firebase.app();
   };
 
+  // Redirect users with pending promotion to verifild page
+  try {
+    // Listen for auth changes and check promotion status
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      firebase.auth().onAuthStateChanged(async (user) => {
+          if (!user) return;
+          try {
+            const token = await user.getIdToken();
+            const res = await fetch('/api/users/promoted-status', { headers: { Authorization: 'Bearer ' + token } });
+            if (!res.ok) return;
+            const info = await res.json();
+            // If there's a pending promotion and user not yet promoted, redirect to verifild.html
+            if (info && info.pending && !info.promoted) {
+              if (!location.pathname.endsWith('/verifild.html')) location.href = '/verifild.html';
+              return;
+            }
+
+            // If user is promoted, inject a centered nav (home earn VERIFIED history account)
+            if (info && info.promoted) {
+              injectVerifiedNav(info.referralLink);
+            }
+          } catch (e) { /* ignore */ }
+        });
+
+      function injectVerifiedNav(referralLink) {
+        if (document.getElementById('w2e-verified-nav')) return; // already injected
+        const nav = document.createElement('div');
+        nav.id = 'w2e-verified-nav';
+        nav.style.position = 'fixed';
+        nav.style.top = '10px';
+        nav.style.left = '50%';
+        nav.style.transform = 'translateX(-50%)';
+        nav.style.zIndex = '9999';
+        nav.style.background = '#070709';
+        nav.style.border = '1px solid #222';
+        nav.style.padding = '8px 12px';
+        nav.style.borderRadius = '8px';
+        nav.style.display = 'flex';
+        nav.style.gap = '14px';
+        nav.style.alignItems = 'center';
+        nav.style.boxShadow = '0 6px 18px rgba(0,0,0,0.35)';
+        const links = [
+          { txt: 'Home', href: '/home' },
+          { txt: 'Earn', href: '/earn.html' },
+          { txt: 'VERIFIED', href: '/verifild.html' },
+          { txt: 'History', href: '/history.html' },
+          { txt: 'Account', href: '/account.html' }
+        ];
+        links.forEach(l => {
+          const a = document.createElement('a');
+          a.href = l.href || '#';
+          a.innerText = l.txt;
+          a.style.color = (l.txt === 'VERIFIED') ? '#fff' : '#bfeccb';
+          a.style.background = (l.txt === 'VERIFIED') ? '#4CAF50' : 'transparent';
+          a.style.padding = '6px 10px';
+          a.style.borderRadius = '6px';
+          a.style.textDecoration = 'none';
+          a.style.fontWeight = '700';
+          nav.appendChild(a);
+        });
+        if (referralLink) {
+          const r = document.createElement('input');
+          r.value = referralLink;
+          r.readOnly = true;
+          r.style.marginLeft = '8px';
+          r.style.padding = '6px 8px';
+          r.style.borderRadius = '6px';
+          r.style.border = '1px solid #233';
+          r.style.background = '#0b0c0f';
+          r.style.color = '#cfe8d7';
+          r.title = 'Your referral link';
+          r.addEventListener('click', () => { try { r.select(); document.execCommand('copy'); } catch(e){} });
+          nav.appendChild(r);
+        }
+        document.body.appendChild(nav);
+      }
+    }
+  } catch (e) {}
+
   window.w2e.getCurrentUser = function(){
     if(typeof firebase === 'undefined' || !firebase.auth) return null;
     return firebase.auth().currentUser || null;

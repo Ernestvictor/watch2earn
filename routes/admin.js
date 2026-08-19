@@ -6,15 +6,56 @@ const Earning = require('../models/earning');
 const Message = require('../models/messeges');
 const fs = require('fs');
 const path = require('path');
+const mongoNative = require('../mongodb');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const TRANSACTIONS_PATH = path.join(DATA_DIR, 'transactions.json');
 const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
+const PROMOTIONS_PATH = path.join(DATA_DIR, 'promotions.json');
+const nodemailer = (() => {
+  try { return require('nodemailer'); } catch (e) { return null; }
+})();
 
 function ensureDataFiles() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(TRANSACTIONS_PATH)) fs.writeFileSync(TRANSACTIONS_PATH, '[]');
   if (!fs.existsSync(MESSAGES_PATH)) fs.writeFileSync(MESSAGES_PATH, '[]');
+  if (!fs.existsSync(PROMOTIONS_PATH)) fs.writeFileSync(PROMOTIONS_PATH, '[]');
+}
+
+function readPromotions() {
+  ensureDataFiles();
+  try { return JSON.parse(fs.readFileSync(PROMOTIONS_PATH, 'utf8') || '[]'); } catch (e) { return []; }
+}
+
+function writePromotions(items) {
+  ensureDataFiles();
+  fs.writeFileSync(PROMOTIONS_PATH, JSON.stringify(items, null, 2));
+}
+
+async function recordPromotionLog({ userId, email, code, status, method, adminEmail }) {
+  const entry = {
+    id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8),
+    userId: userId || null,
+    email: email || null,
+    code: code || null,
+    status: status || 'pending',
+    method: method || 'email',
+    adminEmail: adminEmail || null,
+    createdAt: new Date().toISOString()
+  };
+
+  try {
+    if (mongoNative && typeof mongoNative.getCollection === 'function') {
+      const promoCol = mongoNative.getCollection('promotion_logs');
+      await promoCol.insertOne(entry);
+    }
+  } catch (e) { /* silent fallback */ }
+
+  const items = readPromotions();
+  items.unshift(entry);
+  writePromotions(items.slice(0, 200));
+  return entry;
 }
 
 function readJson(file) {
@@ -285,6 +326,123 @@ router.get('/chart/earnings-summary', async (req, res) => {
     const summary = tx.reduce((acc,t)=>{ acc.totalUsd += Number(t.amountUsd||0); return acc; }, { totalUsd:0 });
     res.json(summary);
   } catch (e) { res.status(500).json({ error: 'Failed to build earnings summary' }); }
+});
+
+// Update user actions: ban/promote/admin
+router.put('/users/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const body = req.body || {};
+    const action = (body.action || body.actionType || '').toString();
+
+    // Prefer mongoose when available
+    if (isMongooseReady()) {
+      // support _id, id, uid
+      let user = await User.findOne({ $or: [{ _id: id }, { id: id }, { uid: id }, { firebaseUid: id }] });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      if (action === 'banned' || action === 'ban') {
+        user.isBanned = true;
+        await user.save();
+        return res.json({ ok: true });
+      }
+
+      if (action === 'promote' || action === 'verified' || action === 'promoted') {
+        // generate 4-digit code and store it on user, send email when SMTP configured
+        const code = Math.floor(1000 + Math.random() * 9000).toString();
+        user.promoted = false;
+        user.promoteCode = code;
+        user.promoteRequestedAt = new Date();
+        user.promoteExpires = new Date(Date.now() + 24 * 3600 * 1000);
+        await user.save();
+
+        await recordPromotionLog({
+          userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
+          email: user.email || null,
+          code,
+          status: 'pending',
+          method: 'email',
+          adminEmail: req.user && req.user.email ? req.user.email : null
+        });
+
+        // send email if SMTP configured
+        const SMTP_HOST = process.env.SMTP_HOST;
+        const SMTP_USER = process.env.SMTP_USER;
+        const SMTP_PASS = process.env.SMTP_PASS;
+        const FROM_EMAIL = process.env.FROM_EMAIL || 'watch2earn36@gmail.com';
+        if (nodemailer && SMTP_HOST && SMTP_USER && SMTP_PASS) {
+          try {
+            const transporter = nodemailer.createTransport({ host: SMTP_HOST, port: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587, secure: !!process.env.SMTP_SECURE, auth: { user: SMTP_USER, pass: SMTP_PASS } });
+            await transporter.sendMail({ from: FROM_EMAIL, to: user.email, subject: 'Your Watch2Earn verification code', text: `Your verification code is: ${code}` });
+            await recordPromotionLog({
+              userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
+              email: user.email || null,
+              code,
+              status: 'email_sent',
+              method: 'email',
+              adminEmail: req.user && req.user.email ? req.user.email : null
+            });
+            return res.json({ ok: true, message: 'Code generated and emailed' });
+          } catch (e) {
+            console.error('Failed to send promo email:', e && e.message);
+            await recordPromotionLog({
+              userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
+              email: user.email || null,
+              code,
+              status: 'email_failed',
+              method: 'email',
+              adminEmail: req.user && req.user.email ? req.user.email : null
+            });
+            user.promoted = true;
+            user.promotedAt = new Date();
+            user.promoteCode = null;
+            user.promoteExpires = null;
+            await user.save();
+            return res.json({ ok: true, message: 'No SMTP configured — user auto-promoted' });
+          }
+        } else {
+          // SMTP not configured — auto-promote as fallback
+          user.promoted = true;
+          user.promotedAt = new Date();
+          user.promoteCode = null;
+          user.promoteExpires = null;
+          await user.save();
+          await recordPromotionLog({
+            userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
+            email: user.email || null,
+            code,
+            status: 'auto_promoted',
+            method: 'fallback',
+            adminEmail: req.user && req.user.email ? req.user.email : null
+          });
+          return res.json({ ok: true, message: 'No SMTP configured — user auto-promoted' });
+        }
+      }
+
+      if (action === 'admin' || action === 'promote-admin') {
+        user.role = 'admin';
+        await user.save();
+        return res.json({ ok: true });
+      }
+
+      return res.status(400).json({ error: 'Unknown action' });
+    }
+
+    // Fallback to file storage
+    const usersPath = path.join(DATA_DIR, 'users.json');
+    let users = [];
+    try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+    const u = users.find(x => String(x.id) === String(id) || String(x.uid) === String(id) || (x.email||'') === (id||''));
+    if (!u) return res.status(404).json({ error: 'User not found' });
+
+    if (action === 'banned' || action === 'ban') { u.isBanned = true; }
+    else if (action === 'promote' || action === 'verified' || action === 'promoted') { u.promoted = true; u.promotedAt = new Date().toISOString(); }
+    else if (action === 'admin' || action === 'promote-admin') { u.role = 'admin'; }
+    else return res.status(400).json({ error: 'Unknown action' });
+
+    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+    return res.json({ ok: true });
+  } catch (e) { console.error('admin update user error', e); res.status(500).json({ error: 'Failed to update user' }); }
 });
 
 module.exports = router;

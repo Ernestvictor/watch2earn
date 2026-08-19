@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Verified</title>
+  <style>
+    body{background:#070709;color:#fff;font-family:Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}
+    .card{background:#111;border-radius:12px;padding:28px;text-align:center;max-width:560px;width:90%;border:1px solid #222}
+    h1{color:#4CAF50;margin-bottom:8px}
+    p{color:#ccc}
+    .btn{display:inline-block;padding:10px 16px;background:#4CAF50;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;margin-top:12px}
+  </style>
+</head>
+<body>
+  <div class="card" id="content">
+    <h1>Verifying account...</h1>
+    <p>Please wait while we confirm your account status.</p>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script>
+    // This page is shown to users who have been promoted by an admin.
+    // It checks the user's Firebase auth token and asks the backend if the user is promoted.
+    (async function(){
+      try{
+        if(!window.w2e) {
+          document.getElementById('content').innerHTML = '<h1>Not ready</h1><p>App not initialized.</p>';
+          return;
+        }
+        // ensure firebase initialized
+        window.w2e.initFirebase?.();
+        const user = firebase.auth().currentUser;
+        if (!user) {
+          // try to wait for auth state
+          firebase.auth().onAuthStateChanged(async (u)=>{ if(u) checkPromoted(u); else showLogin(); });
+        } else {
+          checkPromoted(user);
+        }
+      }catch(e){ console.error(e); document.getElementById('content').innerHTML = '<h1>Error</h1><p>Failed to initialize.</p>'; }
+
+      async function showLogin(){
+        document.getElementById('content').innerHTML = '<h1>Sign in required</h1><p>Please sign in to view this page.</p><a class="btn" href="/login.html">Sign In</a>';
+      }
+
+      async function checkPromoted(user){
+        try{
+          const token = await user.getIdToken();
+          const res = await fetch('/api/users/promoted-status',{ headers: { 'Authorization': 'Bearer '+token } });
+          if(!res.ok) { document.getElementById('content').innerHTML = '<h1>Error</h1><p>Unable to verify status.</p>'; return; }
+          const data = await res.json();
+          if (data.promoted) {
+            document.getElementById('content').innerHTML = '<h1>Congratulations!</h1><p>Your account has been promoted by an administrator.</p><a class="btn" href="/home">Go to Dashboard</a>';
+          } else {
+            // show code entry form
+            document.getElementById('content').innerHTML = `
+              <h1>Enter Verification Code</h1>
+              <p>We emailed a 4-digit code to your address. Enter it below to verify.</p>
+              <input id="promoCode" placeholder="1234" style="padding:10px;border-radius:8px;border:1px solid #222;width:140px;text-align:center;font-size:18px;margin-top:12px">
+              <div style="margin-top:12px"><a id="submitBtn" class="btn">Verify</a></div>
+              <p style="color:#aaa;margin-top:8px;font-size:13px">If you didn't receive the email, contact support.</p>
+            `;
+            document.getElementById('submitBtn').addEventListener('click', async ()=>{
+              const val = document.getElementById('promoCode').value.trim();
+              if(!val) return;
+              try{
+                const token = await firebase.auth().currentUser.getIdToken();
+                const r = await fetch('/api/users/verify-promo', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': 'Bearer '+token }, body: JSON.stringify({ code: val }) });
+                if (!r.ok) {
+                  const err = await r.json().catch(()=>({}));
+                  document.getElementById('content').innerHTML = `<h1>Failed</h1><p>${err.error||err.message||'Invalid code'}</p>`;
+                } else {
+                  document.getElementById('content').innerHTML = '<h1>Verified!</h1><p>Your account is now promoted.</p><a class="btn" href="/home">Go to Dashboard</a>';
+                }
+              }catch(e){ console.error(e); document.getElementById('content').innerHTML = '<h1>Error</h1><p>Verification failed.</p>'; }
+            });
+          }
+        }catch(e){ console.error(e); document.getElementById('content').innerHTML = '<h1>Error</h1><p>Failed to check status.</p>'; }
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -8,6 +8,9 @@ function ensureServiceAccountFile() {
   if (fs.existsSync(keyPath)) return keyPath;
 
   const raw = process.env.SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || '';
+  if (process.env.SERVICE_ACCOUNT_JSON) {
+    console.log('⚠️ SERVICE_ACCOUNT_JSON found in environment — writing temporary serviceAccountKey.json');
+  }
   if (raw) {
     fs.mkdirSync(path.dirname(keyPath), { recursive: true });
     fs.writeFileSync(keyPath, raw);
@@ -49,6 +52,12 @@ if (!resolvedKeyPath) {
     auth = getAuth(app);
     const admin = { apps: getApps(), auth: () => auth, firestore: { FieldValue } };
     console.log('✅ Firebase Admin SDK fully initialized and ready!\n');
+    // If the service account was provided via env var, remove the on-disk copy for safety
+    try {
+      if (process.env.SERVICE_ACCOUNT_JSON && fs.existsSync(keyPath)) {
+        try { fs.unlinkSync(keyPath); console.log('ℹ️ Removed temporary serviceAccountKey.json from disk for safety'); } catch (e) { console.warn('⚠️ Could not remove temporary serviceAccountKey.json:', e && e.message); }
+      }
+    } catch (e) {}
     module.exports = { admin, db, auth, FieldValue };
   } catch (e) {
     console.error('❌ Firebase initialization failed:', e.message);

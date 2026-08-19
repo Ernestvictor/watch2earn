@@ -21,7 +21,7 @@ async function connectDB() {
       await client.connect();
     }
     db = client.db('watch2earn');
-    users = db.collection('earning');
+    users = db.collection('users');
     transactions = db.collection('transactions');
     try {
       await users.createIndex({ email: 1 }, { unique: true });
@@ -43,4 +43,9 @@ function getTransactionsCollection() {
   return transactions;
 }
 
-module.exports = { connectDB, getUsersCollection, getTransactionsCollection };
+function getCollection(name) {
+  if (!db) throw new Error('MongoDB not connected — call connectDB() first');
+  return db.collection(name);
+}
+
+module.exports = { connectDB, getUsersCollection, getTransactionsCollection, getCollection };

@@ -3,6 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const verifyToken = require('../middleware/auth');
+const mongoNative = require('../mongodb');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const TXN_PATH = path.join(DATA_DIR, 'transactions.json');
@@ -24,6 +25,19 @@ function loadTransactions() {
 function saveTransactions(items) {
   ensureFiles();
   fs.writeFileSync(TXN_PATH, JSON.stringify(items, null, 2));
+}
+
+// Try to insert a transaction into MongoDB native collection when available
+async function insertTxMongo(tx) {
+  try {
+    const col = mongoNative.getTransactionsCollection();
+    // ensure a createdAt field for consistency with other inserts
+    const doc = Object.assign({}, tx, { createdAt: tx.date ? new Date(tx.date) : new Date() });
+    await col.insertOne(doc);
+  } catch (e) {
+    // Mongo not connected or insert failed — keep using file storage as primary
+    // console.debug('Mongo insertTxMongo skipped:', e && e.message);
+  }
 }
 
 function loadSettings() {
@@ -79,6 +93,7 @@ router.post('/earn', verifyToken, (req, res) => {
 
   transactions.unshift(newTx);
   saveTransactions(transactions);
+  insertTxMongo(newTx).catch(() => {});
 
   // If there's a referrer, add 10% referral bonus to referrer
   if (referrerId) {
@@ -96,6 +111,7 @@ router.post('/earn', verifyToken, (req, res) => {
     };
     transactions.unshift(referralTx);
     saveTransactions(transactions);
+    insertTxMongo(referralTx).catch(() => {});
   }
 
   res.json({ message: 'Ad watched successfully', amount: usdAmount, remaining: Math.max(dailyLimit - adCount - 1, 0) });
@@ -125,13 +141,26 @@ router.post('/claim-strike', verifyToken, (req, res) => {
 
   transactions.unshift(strikeTx);
   saveTransactions(transactions);
+  insertTxMongo(strikeTx).catch(() => {});
 
   res.json({ message: 'Daily strike claimed', amount: 0.01 });
 });
 
 // GET /api/transactions/referral-earnings - Get total referral earnings
-router.get('/referral-earnings', verifyToken, (req, res) => {
+router.get('/referral-earnings', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
+  try {
+    if (typeof mongoNative.getTransactionsCollection === 'function') {
+      const col = mongoNative.getTransactionsCollection();
+      const docs = await col.find({ userId }).toArray();
+      const referralEarnings = docs.filter(t => t.type === 'referral').reduce((s, t) => s + (Number(t.amountUsd || 0)), 0);
+      return res.json({ referralEarningsUsd: referralEarnings, referralEarningsNaira: Math.round(referralEarnings * 1500) });
+    }
+  } catch (e) {
+    console.error('Mongo referral-earnings read failed:', e && e.message);
+  }
+
+  // Fallback to file storage
   const transactions = loadTransactions();
   const referralEarnings = transactions
     .filter(t => t.userId === userId && t.type === 'referral')
@@ -140,8 +169,44 @@ router.get('/referral-earnings', verifyToken, (req, res) => {
   res.json({ referralEarningsUsd: referralEarnings, referralEarningsNaira: Math.round(referralEarnings * 1500) });
 });
 
-router.get('/balance', verifyToken, (req, res) => {
+router.get('/balance', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
+  try {
+    if (typeof mongoNative.getTransactionsCollection === 'function') {
+      const col = mongoNative.getTransactionsCollection();
+      const docs = await col.find({ userId }).toArray();
+      const breakdown = docs.reduce((acc, t) => {
+        const type = (t.type || 'other').toLowerCase();
+        acc.totalUsd += Number(t.amountUsd || 0);
+        acc.totalNaira += Number(t.amountNaira || Math.round((t.amountUsd||0) * 1500));
+        if (type.includes('ad')) acc.adsUsd += Number(t.amountUsd || 0);
+        if (type.includes('referral') || type.includes('commission')) acc.referralUsd += Number(t.amountUsd || 0);
+        if (type.includes('bonus') || type === 'signup_bonus' || type === 'consecutive_bonus') acc.bonusUsd += Number(t.amountUsd || 0);
+        if (type.includes('game')) acc.gameUsd += Number(t.amountUsd || 0);
+        if (type.includes('survey')) acc.surveyUsd += Number(t.amountUsd || 0);
+        if (type.includes('withdraw')) acc.withdrawalsUsd += Number(t.amountUsd || 0);
+        return acc;
+      }, { totalUsd:0, totalNaira:0, adsUsd:0, referralUsd:0, bonusUsd:0, gameUsd:0, surveyUsd:0, withdrawalsUsd:0 });
+
+      const adCount = docs.filter(t => (t.type && t.type.toLowerCase().includes('ad')) && isToday(t.date)).length;
+
+      return res.json({
+        balanceUsd: +breakdown.totalUsd.toFixed(6),
+        balanceNaira: Math.round(breakdown.totalUsd * 1500),
+        adsEarnUsd: +breakdown.adsUsd.toFixed(6),
+        referralEarnUsd: +breakdown.referralUsd.toFixed(6),
+        bonusEarnUsd: +breakdown.bonusUsd.toFixed(6),
+        gameEarnUsd: +breakdown.gameUsd.toFixed(6),
+        surveyEarnUsd: +breakdown.surveyUsd.toFixed(6),
+        withdrawalsUsd: +breakdown.withdrawalsUsd.toFixed(6),
+        adCount
+      });
+    }
+  } catch (e) {
+    console.error('Mongo balance read failed:', e && e.message);
+  }
+
+  // Fallback to file storage
   const transactions = loadTransactions().filter(t => t.userId === userId);
   // compute breakdown by type
   const breakdown = transactions.reduce((acc, t) => {
@@ -172,8 +237,18 @@ router.get('/balance', verifyToken, (req, res) => {
   });
 });
 
-router.get('/history', verifyToken, (req, res) => {
+router.get('/history', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
+  try {
+    if (typeof mongoNative.getTransactionsCollection === 'function') {
+      const col = mongoNative.getTransactionsCollection();
+      const docs = await col.find({ userId }).sort({ date: -1 }).toArray();
+      return res.json(docs);
+    }
+  } catch (e) {
+    console.error('Mongo history read failed:', e && e.message);
+  }
+
   const transactions = loadTransactions().filter(t => t.userId === userId);
   res.json(transactions);
 });
@@ -214,6 +289,7 @@ router.post('/signup-bonus', verifyToken, (req, res) => {
   };
   txs.unshift(bonusTx);
   saveTransactions(txs);
+  insertTxMongo(bonusTx).catch(() => {});
 
   // Mark user as given
   user.signupBonusGiven = true;
@@ -236,6 +312,7 @@ router.post('/signup-bonus', verifyToken, (req, res) => {
     };
     txs.unshift(refTx);
     saveTransactions(txs);
+    insertTxMongo(refTx).catch(() => {});
   }
 
   res.json({ message: 'Signup bonus granted', amountUsd: usd });
@@ -289,6 +366,7 @@ router.post('/claim-consecutive', verifyToken, (req, res) => {
   };
   txs.unshift(tx);
   saveTransactions(txs);
+  insertTxMongo(tx).catch(() => {});
 
   // Update user record
   u.consecutiveBonus = { streak, lastClaim: now.toISOString() };
@@ -301,16 +379,26 @@ router.post('/claim-consecutive', verifyToken, (req, res) => {
 router.get('/bonuses', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
   try {
+    // If Mongo is connected, read bonuses from Mongo collection
+    if (typeof mongoNative.getCollection === 'function') {
+      try {
+        const bcol = mongoNative.getCollection('bonuses');
+        const docs = await bcol.find({ $or: [ { targetType: 'all' }, { targetUserId: userId }, { targetUsers: userId } ] , claimed: { $ne: true } }).toArray();
+        return res.json({ bonuses: docs });
+      } catch (e) {
+        console.error('Mongo bonuses read failed:', e && e.message);
+      }
+    }
+
+    // Fallback to file-based bonuses
     const bonusPath = path.join(DATA_DIR, 'bonuses.json');
     fs.mkdirSync(DATA_DIR, { recursive: true });
     if (!fs.existsSync(bonusPath)) fs.writeFileSync(bonusPath, '[]');
-    
     const allBonuses = JSON.parse(fs.readFileSync(bonusPath, 'utf8'));
     const userBonuses = allBonuses.filter(b => 
       (b.targetType === 'all' || b.targetUserId === userId || (b.targetUsers && b.targetUsers.includes(userId))) &&
       !b.claimed
     );
-    
     res.json({ bonuses: userBonuses });
   } catch (e) {
     console.error('Error loading bonuses:', e);
@@ -326,6 +414,41 @@ router.post('/claim-bonus', verifyToken, async (req, res) => {
   if (!bonusId) return res.status(400).json({ error: 'Bonus ID required' });
 
   try {
+    // Prefer Mongo for claiming bonuses
+    if (typeof mongoNative.getCollection === 'function' && typeof mongoNative.getTransactionsCollection === 'function') {
+      const bcol = mongoNative.getCollection('bonuses');
+      const txCol = mongoNative.getTransactionsCollection();
+      // Find and update atomically
+      const result = await bcol.findOneAndUpdate(
+        { id: bonusId, claimed: { $ne: true } },
+        { $set: { claimed: true }, $push: { claimedBy: { userId, claimedAt: new Date() } } },
+        { returnDocument: 'after' }
+      );
+      const bonus = result.value;
+      if (!bonus) return res.status(404).json({ error: 'Bonus not found or already claimed' });
+
+      // Eligibility checks
+      if (bonus.targetType === 'specific' && bonus.targetUserId !== userId) {
+        return res.status(403).json({ error: 'Not eligible for this bonus' });
+      }
+
+      // Insert transaction
+      const bonusTx = {
+        id: Date.now().toString(),
+        userId,
+        type: 'bonus',
+        source: 'admin_bonus',
+        title: bonus.title || 'Admin Bonus',
+        amountUsd: bonus.amountUsd,
+        amountNaira: Math.round((bonus.amountUsd || 0) * 1500),
+        date: new Date(),
+        bonusId: bonusId
+      };
+      await txCol.insertOne(bonusTx);
+      return res.json({ message: 'Bonus claimed successfully', amount: bonus.amountUsd });
+    }
+
+    // Fallback to file-based flow
     const bonusPath = path.join(DATA_DIR, 'bonuses.json');
     fs.mkdirSync(DATA_DIR, { recursive: true });
     if (!fs.existsSync(bonusPath)) fs.writeFileSync(bonusPath, '[]');
@@ -351,7 +474,7 @@ router.post('/claim-bonus', verifyToken, async (req, res) => {
     
     fs.writeFileSync(bonusPath, JSON.stringify(allBonuses, null, 2));
 
-    // Add bonus to user's transactions
+    // Add bonus to user's transactions (file)
     const bonusTx = {
       id: Date.now().toString(),
       userId,

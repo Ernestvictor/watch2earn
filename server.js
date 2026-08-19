@@ -22,7 +22,19 @@ if (mongoUri) {
 
 // Native MongoDB helper (for earnings + transactions)
 const mongoNative = require('./mongodb');
-mongoNative.connectDB().catch(err => { /* already logged in module */ });
+// connect to mongo and optionally run migration if requested
+mongoNative.connectDB().then(() => {
+  console.log('ℹ️ mongoNative connected from server.js');
+  if (process.env.MIGRATE_ON_STARTUP && process.env.MIGRATE_ON_STARTUP.toLowerCase() === 'true') {
+    console.log('ℹ️ MIGRATE_ON_STARTUP=true — running migration script now');
+    try {
+      const migrator = require('./scripts/migrate_to_mongo');
+      migrator.migrate().catch(e => console.error('Migration error:', e && e.message));
+    } catch (e) {
+      console.error('Failed to run migration script:', e && e.message);
+    }
+  }
+}).catch(err => { /* already logged in module */ });
 
 const { auth: firebaseAuth } = require('./config/firebaseAdmin');
 const authMiddleware = require('./middleware/auth');
@@ -435,7 +447,7 @@ app.get('/postback/cpagrip', async (req, res) => {
 
     await usersColl.updateOne(
       { email: cleanEmail },
-      { $inc: { balance: amount, totalEarned: amount, fromCPA: amount }, $setOnInsert: { email: cleanEmail, createdAt: new Date() } },
+      { $inc: { balance: amount, totalEarned: amount, fromCPA: amount }, $setOnInsert: { email: cleanEmail, createdAt: new Date(), uid: 'u_' + Date.now() } },
       { upsert: true }
     );
 

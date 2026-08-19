@@ -109,7 +109,7 @@
               <td>
                 <button class="view" onclick="viewUser('${u.id}')">View</button>
                 <button class="ban" onclick="updateUser('${u.id}','banned')">Ban</button>
-                <button class="promote" onclick="updateUser('${u.id}','admin')">Promote</button>
+                <button class="promote" onclick="updateUser('${u.id}','promote')">Promote</button>
               </td>
             </tr>`).join('');
         }
@@ -120,19 +120,43 @@
     }
 
     function viewUser(id){
-      window.location.href = `/user-profile.html?id=${id}`;
+      // open admin user profile page in admin panel
+      window.location.href = `/admin-panel/user-profile.html?id=${id}`;
     }
 
     function updateUser(id, action){
       const token = localStorage.getItem('adminToken');
-      fetch(`/api/admin/users/${id}`,{
+      showToast('Processing...', 'info');
+      fetch(`/api/admin/users/${encodeURIComponent(id)}`,{
         method:'PUT',
         headers:{
           'Content-Type':'application/json',
           'Authorization': `Bearer ${token}`
         },
         body:JSON.stringify({action})
-      }).then(()=>location.reload());
+      }).then(async (res)=>{
+        const json = await res.json().catch(()=>({}));
+        if(res.ok) {
+          showToast(json.message || 'Action completed', 'success');
+          setTimeout(()=>location.reload(), 900);
+        } else {
+          showToast(json.error || 'Action failed', 'error');
+        }
+      }).catch((e)=>{ showToast('Request failed', 'error'); console.error(e); });
+    }
+
+    // Simple toast helper
+    function showToast(msg, type='info'){
+      let el = document.getElementById('admin-toast');
+      if(!el){
+        el = document.createElement('div'); el.id = 'admin-toast';
+        el.style.position = 'fixed'; el.style.bottom = '20px'; el.style.right = '20px'; el.style.padding='10px 14px'; el.style.borderRadius='8px'; el.style.zIndex='9999'; el.style.color='#fff'; el.style.fontWeight='700';
+        document.body.appendChild(el);
+      }
+      el.style.background = (type==='success')? '#4CAF50' : (type==='error')? '#f44336' : '#333';
+      el.innerText = msg;
+      el.style.display = 'block';
+      setTimeout(()=>{ if(el) el.style.display='none'; }, 3000);
     }
 
     if (checkAuth()) {

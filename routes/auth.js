@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 
+const mongoose = require('mongoose');
+const crypto = require('crypto');
+
 // REGISTER route
 router.post('/register', async (req, res) => {
   try {
@@ -42,6 +45,46 @@ router.post('/register', async (req, res) => {
   } catch (error) {
     console.error('Auth register error:', error);
     return res.status(500).json({ error: error.message || 'Failed to create MongoDB user record' });
+  }
+});
+
+// REGISTER-GUEST: create or update a Mongo user record when Firebase account exists
+router.post('/register-guest', async (req, res) => {
+  try {
+    const { email, username, displayName, referredBy } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'email required' });
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const safeName = (username || displayName || normalizedEmail.split('@')[0] || 'User').trim();
+
+    // Create a deterministic placeholder firebaseUid so later real uid can replace it
+    const placeholder = 'guest:' + crypto.createHash('md5').update(normalizedEmail).digest('hex');
+
+    let user = await User.findOne({ email: normalizedEmail }).catch(() => null);
+    if (!user) {
+      user = await User.create({
+        firebaseUid: placeholder,
+        email: normalizedEmail,
+        username: safeName,
+        displayName: safeName,
+        wallet: 0,
+        balance: 0,
+        totalEarned: 0,
+        referredBy: referredBy || null
+      });
+      return res.json({ success: true, user, created: true });
+    }
+
+    // update referredBy only if not set
+    if (referredBy && !user.referredBy) {
+      user.referredBy = referredBy;
+      await user.save();
+    }
+
+    return res.json({ success: true, user, created: false });
+  } catch (error) {
+    console.error('register-guest error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to register guest' });
   }
 });
 

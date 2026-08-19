@@ -186,3 +186,39 @@ router.post('/verify-promo', verifyToken, async (req, res) => {
     return res.json({ ok: true });
   } catch (e) { console.error('verify-promo error', e); res.status(500).json({ error: 'Failed to verify code' }); }
 });
+
+// POST /api/users/suspend-appeal - suspended users submit a request to be reviewed
+router.post('/suspend-appeal', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.uid || req.user.id;
+    const message = String((req.body && req.body.message) || '').trim();
+    if (!message || message.length < 100) {
+      return res.status(400).json({ error: 'Your appeal must be at least 100 words.' });
+    }
+
+    const appealsPath = path.join(__dirname, '..', 'data', 'appeals.json');
+    const fileExists = fs.existsSync(appealsPath);
+    let appeals = [];
+    if (fileExists) {
+      try { appeals = JSON.parse(fs.readFileSync(appealsPath, 'utf8') || '[]'); } catch (e) { appeals = []; }
+    }
+
+    const entry = {
+      id: Date.now().toString(),
+      userId,
+      email: req.user.email || '',
+      message,
+      status: 'under_review',
+      createdAt: new Date().toISOString(),
+      reviewedBy: null,
+      reviewedAt: null
+    };
+
+    appeals.unshift(entry);
+    fs.writeFileSync(appealsPath, JSON.stringify(appeals, null, 2));
+    return res.json({ success: true, message: 'Your appeal has been submitted and is under review.' });
+  } catch (error) {
+    console.error('suspend-appeal error', error);
+    return res.status(500).json({ error: 'Failed to submit appeal' });
+  }
+});

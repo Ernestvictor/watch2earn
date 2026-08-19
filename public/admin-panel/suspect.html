@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suspect Review Panel</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    *{box-sizing:border-box} body{margin:0;background:#0b0c0f;color:#fff;font-family:'Segoe UI',Arial,sans-serif;padding-bottom:90px}
+    .top{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:#121214;border-bottom:1px solid #232326;position:sticky;top:0;z-index:10}
+    .logo{font-weight:900;font-size:20px;color:#4CAF50}
+    .top-actions{display:flex;align-items:center;gap:12px}
+    .inbox-link{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#18181b;border:1px solid #2f2f32;color:#fff;text-decoration:none}
+    .container{max-width:1100px;margin:0 auto;padding:18px}
+    .section{background:#1a1a1d;border:1px solid #2c2c30;border-radius:16px;padding:16px;margin-bottom:16px}
+    .section h3{margin-top:0;color:#4CAF50}
+    .list{display:grid;gap:12px}
+    .item{background:#141417;border:1px solid #24242a;border-radius:12px;padding:14px}
+    .meta{color:#9aa3ad;font-size:12px;margin-bottom:8px}
+    textarea, select{width:100%;padding:10px;border-radius:10px;border:1px solid #36363a;background:#121214;color:#fff;resize:vertical}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .btn{padding:10px 14px;border:none;border-radius:8px;cursor:pointer;font-weight:700;color:#fff}
+    .approve{background:#4CAF50}.danger{background:#f44336}.neutral{background:#3f51b5}
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
+    .bottom-nav a{color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+    .bottom-nav a.active{color:#4CAF50;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="logo">Suspect Review</div>
+    <div class="top-actions">
+      <a href="inbox.html" class="inbox-link" title="Inbox"><i class="fas fa-inbox"></i></a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="section">
+      <h3><i class="fas fa-user-slash"></i> Banned Users</h3>
+      <div id="bannedList" class="list">Loading...</div>
+    </div>
+
+    <div class="section">
+      <h3><i class="fas fa-clock"></i> Suspended Users & Appeals</h3>
+      <div id="suspendedList" class="list">Loading...</div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <a href="carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="suspect.html" class="active"><i class="fas fa-shield-alt"></i>Suspect</a>
+  </div>
+
+  <script>
+    function renderList(type, list) {
+      const node = document.getElementById(type === 'banned' ? 'bannedList' : 'suspendedList');
+      if (!list.length) {
+        node.innerHTML = '<div class="item">No records found.</div>';
+        return;
+      }
+
+      node.innerHTML = list.map(u => `
+        <div class="item">
+          <div style="font-weight:700">${u.displayName || u.username || u.email || 'User'}</div>
+          <div class="meta">${u.email || 'No email'} • ${u.status || 'active'}</div>
+          ${u.appeal ? `<textarea readonly rows="4">${u.appeal}</textarea>` : ''}
+          <div class="actions">
+            <button class="btn approve" onclick="restoreStatus('${u.id || u.uid || u.firebaseUid}', '${type === 'banned' ? 'unban' : 'unsuspend'}')">Remove from ${type === 'banned' ? 'Ban' : 'Suspend'}</button>
+            ${type === 'banned' ? '<button class="btn neutral" onclick="restoreStatus(\'' + (u.id || u.uid || u.firebaseUid) + '\', \'unsuspend\')">Clear status</button>' : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function loadSuspects() {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch('/api/admin/suspects', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed load suspects');
+
+      const banned = (data.banned || []).map(u => ({ ...u, status: 'banned' }));
+      const suspended = (data.suspended || []).map(u => ({ ...u, status: 'suspended' }));
+      const appeals = (data.appeals || []).map(a => ({
+        id: a.userId || a.id,
+        displayName: a.email ? a.email.split('@')[0] : 'User',
+        email: a.email,
+        status: 'suspended',
+        appeal: a.message
+      }));
+      renderList('banned', banned);
+      renderList('suspended', [...suspended, ...appeals]);
+    }
+
+    async function restoreStatus(id, action) {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ action, reason: 'Admin cleared suspension/ban status' })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Failed to update status');
+        return;
+      }
+      alert('Status updated successfully');
+      loadSuspects();
+    }
+
+    loadSuspects();
+  </script>
+</body>
+</html>

@@ -7,6 +7,7 @@ const Message = require('../models/messeges');
 const fs = require('fs');
 const path = require('path');
 const mongoNative = require('../mongodb');
+const { auth: firebaseAdminAuth } = require('../config/firebaseAdmin');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const TRANSACTIONS_PATH = path.join(DATA_DIR, 'transactions.json');
@@ -116,6 +117,54 @@ async function findUserByAdminIdentifier(id, email) {
     (idValue && (String(u.id) === idValue || String(u.uid) === idValue || String(u.firebaseUid) === idValue)) ||
     (emailValue && (String(u.email || '').toLowerCase() === emailValue))
   )) || null;
+}
+
+function buildAdminEmailTransport() {
+  if (!nodemailer) return null;
+
+  const SMTP_HOST = process.env.SMTP_HOST || process.env.SMPT_HOST || 'smtp.gmail.com';
+  const SMTP_USER = process.env.SMTP_USER || process.env.SMPT_USER || 'watch2earn36@gmail.com';
+  const SMTP_PASS = process.env.SMTP_PASS || process.env.SMPT_PASS || process.env.GMAIL_APP_PASSWORD || '';
+  const SMTP_PORT = Number(process.env.SMTP_PORT || process.env.SMPT_PORT || 587);
+  const SMTP_SECURE = String(process.env.SMTP_SECURE || process.env.SMPT_SECURE || 'false').toLowerCase() === 'true';
+
+  if (!SMTP_PASS) return null;
+
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_SECURE,
+    auth: { user: SMTP_USER, pass: SMTP_PASS }
+  });
+}
+
+async function forwardInboxEmail({ from, subject, text, html }) {
+  const transporter = buildAdminEmailTransport();
+  if (!transporter) return null;
+
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.FROM_EMAIL || process.env.SMTP_FROM || 'watch2earn36@gmail.com';
+  try {
+    return await transporter.sendMail({
+      from: adminEmail,
+      to: adminEmail,
+      replyTo: from || adminEmail,
+      subject: subject || 'Watch2Earn inbox message',
+      text: text || (typeof html === 'string' ? html.replace(/<[^>]+>/g, ' ') : ''),
+      html: html || `<p>${(text || '').replace(/\n/g, '<br>')}</p>`
+    });
+  } catch (e) {
+    console.warn('Inbox email forward failed:', e && e.message);
+    return null;
+  }
+}
+
+async function readUserRecords() {
+  if (isMongooseReady()) {
+    return await User.find({}).lean();
+  }
+
+  const usersPath = path.join(DATA_DIR, 'users.json');
+  try { return JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { return []; }
 }
 
 router.get('/inbox', async (req, res) => {
@@ -253,6 +302,116 @@ router.get('/messages', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to read messages' }); }
 });
 
+// Create a new admin message (save and optionally send immediately)
+router.post('/messages', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const items = readJson(MESSAGES_PATH);
+    const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2,8);
+    const entry = {
+      id,
+      title: body.title || body.template || (body.templateType ? (body.templateType + ' message') : 'Admin message'),
+      message: body.message || body.template || '',
+      templateType: body.templateType || 'template',
+      targetType: body.targetType || 'all',
+      targetUsers: body.targetUsers || [],
+      sendType: body.sendType || 'manual',
+      scheduleDateTime: body.scheduleDateTime || null,
+      frequency: body.frequency || 'once',
+      priority: body.priority || 'normal',
+      status: body.status || (body.sendType === 'automatic' ? 'scheduled' : 'sent'),
+      createdAt: new Date().toISOString(),
+      from: process.env.FROM_EMAIL || process.env.SMTP_USER || 'watch2earn36@gmail.com'
+    };
+
+    items.unshift(entry);
+    writeJson(MESSAGES_PATH, items.slice(0, 500));
+
+    // If sendType is manual/pending, try to send email now to all users (or targeted users)
+    if (entry.sendType === 'manual' || entry.status === 'sent') {
+      try {
+        const transporter = buildAdminEmailTransport();
+        if (transporter) {
+          // For safety, send only to FROM (admin) or to specific user list if provided
+          const recipients = Array.isArray(entry.targetUsers) && entry.targetUsers.length ? entry.targetUsers.map(u=>u.email||u) : (entry.targetType === 'all' ? (process.env.FROM_EMAIL || process.env.SMTP_USER) : []);
+          await transporter.sendMail({
+            from: entry.from,
+            to: recipients.length ? recipients.join(',') : (process.env.FROM_EMAIL || process.env.SMTP_USER),
+            subject: entry.title,
+            text: entry.message,
+            html: `<pre>${(entry.message || '').replace(/</g,'&lt;')}</pre>`
+          });
+        }
+      } catch (e) { console.warn('Admin message email send failed:', e && e.message); }
+    }
+
+    return res.json({ ok: true, message: entry });
+  } catch (e) {
+    console.error('Create message error:', e);
+    return res.status(500).json({ error: 'Failed to create message' });
+  }
+});
+
+// Delete admin message
+router.delete('/messages/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const items = readJson(MESSAGES_PATH).filter(Boolean).filter(m => String(m.id) !== String(id));
+    writeJson(MESSAGES_PATH, items);
+    return res.json({ ok: true });
+  } catch (e) { console.error('Delete message error:', e); return res.status(500).json({ error: 'Failed to delete message' }); }
+});
+
+// Incoming email webhook - save incoming email to messages.json
+router.post('/incoming-email', express.json(), async (req, res) => {
+  try {
+    const { from, subject, text, html } = req.body || {};
+    const items = readJson(MESSAGES_PATH);
+    const entry = { id: Date.now().toString(), from: from || 'unknown', title: subject || 'Email', message: text || (html || ''), type: 'email', createdAt: new Date().toISOString() };
+    items.unshift(entry);
+    writeJson(MESSAGES_PATH, items.slice(0, 500));
+    // Optionally forward into SMTP inbox
+    await forwardInboxEmail({ from, subject, text, html });
+    return res.json({ ok: true, entry });
+  } catch (e) { console.error('Incoming email error:', e); return res.status(500).json({ error: 'Failed to process incoming email' }); }
+});
+
+// Appeals: users submit appeals when suspended
+const APPEALS_PATH = path.join(DATA_DIR, 'appeals.json');
+function readAppeals() { try { if (!fs.existsSync(APPEALS_PATH)) fs.writeFileSync(APPEALS_PATH, '[]'); return JSON.parse(fs.readFileSync(APPEALS_PATH,'utf8')||'[]'); } catch(e){ return []; } }
+function writeAppeals(arr){ fs.writeFileSync(APPEALS_PATH, JSON.stringify(arr, null, 2)); }
+
+router.post('/appeals', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const appeals = readAppeals();
+    const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2,6);
+    const entry = { id, userId: body.userId || null, email: body.email || null, description: body.description || '', status: 'under_review', createdAt: new Date().toISOString() };
+    appeals.unshift(entry);
+    writeAppeals(appeals);
+    // Also add to messages.json so admin sees it in inbox
+    const messages = readJson(MESSAGES_PATH);
+    messages.unshift({ id: 'appeal-' + id, userId: entry.userId, message: entry.description, type: 'appeal', createdAt: entry.createdAt });
+    writeJson(MESSAGES_PATH, messages);
+    return res.json({ ok: true, appeal: entry });
+  } catch (e) { console.error('Appeal error:', e); return res.status(500).json({ error: 'Failed to submit appeal' }); }
+});
+
+router.get('/appeals', async (req, res) => { try { return res.json(readAppeals()); } catch (e) { return res.status(500).json({ error: 'Failed to read appeals' }); } });
+
+router.put('/appeals/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const body = req.body || {};
+    const appeals = readAppeals();
+    const idx = appeals.findIndex(a => String(a.id) === String(id));
+    if (idx === -1) return res.status(404).json({ error: 'Appeal not found' });
+    appeals[idx] = { ...appeals[idx], ...body, updatedAt: new Date().toISOString() };
+    writeAppeals(appeals);
+    return res.json({ ok: true, appeal: appeals[idx] });
+  } catch (e) { console.error('Update appeal error:', e); return res.status(500).json({ error: 'Failed to update appeal' }); }
+});
+
 router.get('/withdrawals', async (req, res) => {
   try {
     const data = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'withdrawals.json'), 'utf8') || '[]');
@@ -320,15 +479,85 @@ router.put('/users/:id', async (req, res) => {
     if (action === 'banned' || action === 'ban') {
       if (isMongooseReady()) {
         user.isBanned = true;
+        user.isSuspended = false;
+        user.status = 'banned';
+        user.banReason = body.reason || 'Violation of platform rules';
         await user.save();
+        // Disable Firebase auth account for a hard ban (if possible)
+        try {
+          if (firebaseAdminAuth && user.firebaseUid && !String(user.firebaseUid).startsWith('guest:')) {
+            await firebaseAdminAuth.updateUser(user.firebaseUid, { disabled: true });
+          }
+        } catch (e) { console.warn('Firebase disable failed:', e && e.message); }
       } else {
         user.isBanned = true;
+        user.isSuspended = false;
+        user.status = 'banned';
         const usersPath = path.join(DATA_DIR, 'users.json');
         let users = []; try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
         const idx = users.findIndex(u => String(u.id) === String(user.id || user.uid || user.firebaseUid) || String(u.uid) === String(user.uid || user.id || user.firebaseUid) || (u.email || '').toLowerCase() === String(user.email || '').toLowerCase());
-        if (idx >= 0) { users[idx] = { ...users[idx], isBanned: true }; fs.writeFileSync(usersPath, JSON.stringify(users, null, 2)); }
+        if (idx >= 0) { users[idx] = { ...users[idx], isBanned: true, isSuspended: false, status: 'banned', banReason: body.reason || 'Violation of platform rules' }; fs.writeFileSync(usersPath, JSON.stringify(users, null, 2)); }
       }
-      return res.json({ ok: true });
+      return res.json({ ok: true, status: 'banned' });
+    }
+
+    if (action === 'suspend' || action === 'suspended') {
+      if (isMongooseReady()) {
+        user.isSuspended = true;
+        user.isBanned = false;
+        user.status = 'suspended';
+        user.suspendReason = body.reason || 'Suspended pending review';
+        await user.save();
+      } else {
+        user.isSuspended = true;
+        user.isBanned = false;
+        user.status = 'suspended';
+        const usersPath = path.join(DATA_DIR, 'users.json');
+        let users = []; try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+        const idx = users.findIndex(u => String(u.id) === String(user.id || user.uid || user.firebaseUid) || String(u.uid) === String(user.uid || user.id || user.firebaseUid) || (u.email || '').toLowerCase() === String(user.email || '').toLowerCase());
+        if (idx >= 0) { users[idx] = { ...users[idx], isSuspended: true, isBanned: false, status: 'suspended', suspendReason: body.reason || 'Suspended pending review' }; fs.writeFileSync(usersPath, JSON.stringify(users, null, 2)); }
+      }
+      return res.json({ ok: true, status: 'suspended' });
+    }
+
+    if (action === 'unban' || action === 'remove-ban' || action === 'allow') {
+      if (isMongooseReady()) {
+        user.isBanned = false;
+        user.status = 'active';
+        user.banReason = null;
+        await user.save();
+        // Re-enable Firebase auth account when unbanning
+        try {
+          if (firebaseAdminAuth && user.firebaseUid && !String(user.firebaseUid).startsWith('guest:')) {
+            await firebaseAdminAuth.updateUser(user.firebaseUid, { disabled: false });
+          }
+        } catch (e) { console.warn('Firebase re-enable failed:', e && e.message); }
+      } else {
+        user.isBanned = false;
+        user.status = 'active';
+        const usersPath = path.join(DATA_DIR, 'users.json');
+        let users = []; try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+        const idx = users.findIndex(u => String(u.id) === String(user.id || user.uid || user.firebaseUid) || String(u.uid) === String(user.uid || user.id || user.firebaseUid) || (u.email || '').toLowerCase() === String(user.email || '').toLowerCase());
+        if (idx >= 0) { users[idx] = { ...users[idx], isBanned: false, status: 'active', banReason: null }; fs.writeFileSync(usersPath, JSON.stringify(users, null, 2)); }
+      }
+      return res.json({ ok: true, status: 'active' });
+    }
+
+    if (action === 'unsuspend' || action === 'remove-suspend') {
+      if (isMongooseReady()) {
+        user.isSuspended = false;
+        user.status = 'active';
+        user.suspendReason = null;
+        await user.save();
+      } else {
+        user.isSuspended = false;
+        user.status = 'active';
+        const usersPath = path.join(DATA_DIR, 'users.json');
+        let users = []; try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+        const idx = users.findIndex(u => String(u.id) === String(user.id || user.uid || user.firebaseUid) || String(u.uid) === String(user.uid || user.id || user.firebaseUid) || (u.email || '').toLowerCase() === String(user.email || '').toLowerCase());
+        if (idx >= 0) { users[idx] = { ...users[idx], isSuspended: false, status: 'active', suspendReason: null }; fs.writeFileSync(usersPath, JSON.stringify(users, null, 2)); }
+      }
+      return res.json({ ok: true, status: 'active' });
     }
 
     if (action === 'promote' || action === 'verified' || action === 'promoted') {

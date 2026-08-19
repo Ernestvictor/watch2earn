@@ -259,6 +259,26 @@ watch2earn/
 - Add approval/rejection UI (currently API-only)
 - Add fraud detection interface
 
+---
+
+## SMTP / Gmail (Admin email)
+
+To have admin messages and notifications sent from your Gmail account (watch2earn36@gmail.com) configure SMTP environment variables in your `.env`:
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=watch2earn36@gmail.com
+# Use an app password generated in your Google account (recommended)
+SMTP_PASS=your_gmail_app_password_here
+FROM_EMAIL=watch2earn36@gmail.com
+```
+
+Notes:
+- For Gmail, create an App Password (recommended) and use it as `SMTP_PASS`.
+- The server will fallback to console if SMTP is not configured.
+
 ### Notifications
 - Replace WebAudio beeps with .mp3 files
 - Add web push notifications

@@ -86,17 +86,28 @@
         window.location.href='home.html';
       }catch(error){
         if(error.code==='auth/email-already-in-use'){
-          errorMsg.innerText='✗ This email already has an account. Redirecting to login...';
-          setTimeout(()=>location.href='login.html',2000);
-        }else if(error.code==='auth/weak-password'){
+          // If email already exists in Firebase, still attempt to register a guest record
+          try {
+            await fetch('/api/auth/register-guest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, username: fullName, displayName: fullName, referredBy: localStorage.getItem('w2e_ref') || null })
+            });
+          } catch (e) {
+            console.warn('register-guest failed:', e && e.message);
+          }
+          // Redirect user to home so referral tracking isn't lost for invited users
+          location.href = 'home.html';
+          return;
+        } else if(error.code==='auth/weak-password'){
           errorMsg.innerText='✗ Password must be at least 6 characters.';
           btn.disabled=false;
           btn.innerText='Sign Up';
-        }else if(error.code==='auth/invalid-email'){
+        } else if(error.code==='auth/invalid-email'){
           errorMsg.innerText='✗ Please enter a valid email address.';
           btn.disabled=false;
           btn.innerText='Sign Up';
-        }else{
+        } else{
           errorMsg.innerText='✗ ' + (error.message || 'Signup failed');
           btn.disabled=false;
           btn.innerText='Sign Up';

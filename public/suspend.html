@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watch2Earn - Account Suspension</title>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin:0; background:#070709; color:#fff; font-family:Segoe UI, Arial, sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .card { width:min(680px, 90vw); background:#111; border:1px solid #242424; border-radius:18px; padding:24px; }
+    h1 { margin:0 0 12px; color:#4CAF50; }
+    .notice { background:#1a1a1d; border:1px solid #2b2b2f; border-radius:10px; padding:12px 14px; color:#dfe6df; line-height:1.6; }
+    textarea { width:100%; min-height:180px; margin-top:16px; padding:12px; border-radius:10px; border:1px solid #3b3b3b; background:#1a1a1d; color:#fff; resize:vertical; }
+    button { width:100%; margin-top:16px; border:none; border-radius:10px; background:#4CAF50; color:#fff; padding:12px; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:0.6; cursor:not-allowed; }
+    .error { color:#ff9a9a; margin-top:10px; min-height:18px; }
+    .success { color:#9ae6b4; margin-top:10px; min-height:18px; }
+    a { color:#4CAF50; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1><i class="fas fa-lock"></i> Account Suspended</h1>
+    <div class="notice">
+      Your account has been placed on suspension because of a policy issue. You may still log in to appeal, but your earnings and activity are temporarily paused while the review is under investigation.
+    </div>
+
+    <form id="appealForm">
+      <textarea id="appealMessage" placeholder="Write a clear apology and promise not to repeat the violation. Explain what happened and confirm you understand the rules. Your message must be at least 100 words." required></textarea>
+      <div id="wordCount" style="color:#8a8a8a; font-size:13px; margin-top:8px;">0 words</div>
+      <button id="submitBtn" type="submit">Request Appeal</button>
+      <div id="messageBox" class="error"></div>
+      <div id="successBox" class="success"></div>
+    </form>
+
+    <p style="margin-top:18px; text-align:center;"><a href="home.html">Return to Home</a></p>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    window.w2e.initFirebase();
+    const form = document.getElementById('appealForm');
+    const textarea = document.getElementById('appealMessage');
+    const wordCount = document.getElementById('wordCount');
+    const submitBtn = document.getElementById('submitBtn');
+    const messageBox = document.getElementById('messageBox');
+    const successBox = document.getElementById('successBox');
+
+    textarea.addEventListener('input', () => {
+      const words = textarea.value.trim().split(/\s+/).filter(Boolean).length;
+      wordCount.textContent = `${words} words`;
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      messageBox.textContent = '';
+      successBox.textContent = '';
+
+      const message = textarea.value.trim();
+      const words = message.split(/\s+/).filter(Boolean).length;
+      if (words < 100) {
+        messageBox.textContent = 'Your appeal must be at least 100 words.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+
+      try {
+        const token = await firebase.auth().currentUser?.getIdToken();
+        if (!token) {
+          throw new Error('Please sign in again to submit your appeal.');
+        }
+
+        const res = await fetch('/api/users/suspend-appeal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ message })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Unable to submit your appeal');
+
+        successBox.textContent = data.message || 'Your appeal has been submitted and is under review.';
+        form.reset();
+        wordCount.textContent = '0 words';
+      } catch (err) {
+        messageBox.textContent = err.message;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Request Appeal';
+      }
+    });
+
+    firebase.auth().onAuthStateChanged((user) => {
+      if (!user) {
+        window.location.href = 'login.html';
+      }
+    });
+  </script>
+</body>
+</html>

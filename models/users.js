@@ -54,6 +54,23 @@ const userSchema = new mongoose.Schema({
     type: Boolean, 
     default: false 
   },
+  isSuspended: {
+    type: Boolean,
+    default: false
+  },
+  status: {
+    type: String,
+    enum: ['active', 'suspended', 'banned'],
+    default: 'active'
+  },
+  suspendReason: {
+    type: String,
+    default: null
+  },
+  banReason: {
+    type: String,
+    default: null
+  },
   isDisabled: { 
     type: Boolean, 
     default: false 

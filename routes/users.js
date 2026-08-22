@@ -4,6 +4,7 @@ const { db } = require('../config/firebaseAdmin');
 const verifyToken = require('../middleware/auth');
 const fs = require('fs');
 const path = require('path');
+const mongoose = require('mongoose');
 
 // Mongoose models
 const User = require('../models/User');
@@ -70,13 +71,26 @@ router.get('/profile', verifyToken, async (req, res) => {
 });
 
 // -------------------- EARNINGS --------------------
-// GET user earning history (from MongoDB)
+// GET user earning history (from MongoDB) - grouped by type with date and time
 router.get('/earnings/:firebaseUid', verifyToken, async (req, res) => {
   try {
     const earnings = await Earning.find({ firebaseUid: req.params.firebaseUid })
       .sort({ createdAt: -1 })
-      .limit(50);
-    res.json(earnings);
+      .limit(200);
+    
+    const byType = {};
+    earnings.forEach(e => {
+      const type = e.type || 'other';
+      if (!byType[type]) byType[type] = [];
+      byType[type].push({
+        amount: e.amount,
+        description: e.description,
+        date: e.createdAt,
+        time: new Date(e.createdAt).toLocaleTimeString()
+      });
+    });
+    
+    res.json({ byType, total: earnings.length });
   } catch (err) {
     console.error('Earnings error:', err);
     res.status(500).json({ error: 'Failed to fetch earnings' });
@@ -97,7 +111,39 @@ router.get('/messages/:firebaseUid', verifyToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+// -------------------- EARNING HISTORY TABLE --------------------
+// GET detailed earning history as table format
+router.get('/earning-history/:firebaseUid', verifyToken, async (req, res) => {
+  try {
+    const earnings = await Earning.find({ firebaseUid: req.params.firebaseUid })
+      .sort({ createdAt: -1 })
+      .limit(500);
+    
+    const byType = {};
+    let totalEarned = 0;
+    
+    earnings.forEach(e => {
+      const type = e.type || 'other';
+      if (!byType[type]) byType[type] = { total: 0, items: [] };
+      byType[type].items.push({
+        amount: e.amount,
+        description: e.description,
+        date: new Date(e.createdAt).toLocaleDateString(),
+        time: new Date(e.createdAt).toLocaleTimeString(),
+        timestamp: e.createdAt
+      });
+      byType[type].total += e.amount;
+      totalEarned += e.amount;
+    });
+    
+    res.json({ byType, totalEarned, count: earnings.length });
+  } catch (err) {
+    console.error('Earning history error:', err);
+    res.status(500).json({ error: 'Failed to fetch earning history' });
+  }
+});
+
+const mongoNative = require('../mongodb');
 
 // GET /api/users/promoted-status - returns { promoted: bool, pending: bool, invitedCount, invitedEmails, activeCount, passiveCount, referralLink }
 router.get('/promoted-status', verifyToken, async (req, res) => {
@@ -122,8 +168,39 @@ router.get('/promoted-status', verifyToken, async (req, res) => {
         const invited = await User.find({ referredBy: u._id }).lean();
         invitedCount = invited.length;
         invitedEmails = invited.map(i => i.email).filter(Boolean);
-        activeCount = invited.filter(i => (i.balance || i.totalEarned || 0) > 0).length;
-        passiveCount = invitedCount - activeCount;
+
+        // Determine activity window (7 days)
+        const activeWindow = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
+        // If mongoNative activity collection is available, use it to detect recent activity
+        try {
+          if (mongoNative && typeof mongoNative.getCollection === 'function') {
+            const actCol = mongoNative.getCollection('user_activity');
+            const checks = await Promise.all(invited.map(async (inv) => {
+              const uid = inv.firebaseUid || inv.uid || inv.id || null;
+              if (!uid) return false;
+              const recent = await actCol.findOne({ userId: uid, timestamp: { $gte: activeWindow.toISOString() } });
+              return !!recent || ((inv.balance || inv.totalEarned || 0) > 0);
+            }));
+            activeCount = checks.filter(Boolean).length;
+            passiveCount = invitedCount - activeCount;
+          } else {
+            // Fallback: use file-based user_logs
+            const DATA_DIR = path.join(__dirname, '..', 'data');
+            const logsPath = path.join(DATA_DIR, 'user_logs.json');
+            let logs = [];
+            try { logs = JSON.parse(fs.readFileSync(logsPath, 'utf8') || '[]'); } catch (e) { logs = []; }
+            invited.forEach(inv => {
+              const uid = inv.firebaseUid || inv.uid || inv.id || null;
+              const hasRecent = logs.find(l => l.userId && uid && String(l.userId) === String(uid) && new Date(l.timestamp) >= activeWindow);
+              if (hasRecent || ((inv.balance || inv.totalEarned || 0) > 0)) activeCount++;
+            });
+            passiveCount = invitedCount - activeCount;
+          }
+        } catch (e) {
+          // fallback to balance-only computation
+          activeCount = invited.filter(i => (i.balance || i.totalEarned || 0) > 0).length;
+          passiveCount = invitedCount - activeCount;
+        }
       }
 
       return res.json({ promoted, pending, invitedCount, invitedEmails, activeCount, passiveCount, referralLink });
@@ -192,14 +269,16 @@ router.post('/suspend-appeal', verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid || req.user.id;
     const message = String((req.body && req.body.message) || '').trim();
-    if (!message || message.length < 100) {
+    if (!message || message.split(/\s+/).filter(Boolean).length < 100) {
       return res.status(400).json({ error: 'Your appeal must be at least 100 words.' });
     }
 
-    const appealsPath = path.join(__dirname, '..', 'data', 'appeals.json');
-    const fileExists = fs.existsSync(appealsPath);
+    const appealsDir = path.join(__dirname, '..', 'data');
+    if (!fs.existsSync(appealsDir)) fs.mkdirSync(appealsDir, { recursive: true });
+    const appealsPath = path.join(appealsDir, 'appeals.json');
+    
     let appeals = [];
-    if (fileExists) {
+    if (fs.existsSync(appealsPath)) {
       try { appeals = JSON.parse(fs.readFileSync(appealsPath, 'utf8') || '[]'); } catch (e) { appeals = []; }
     }
 
@@ -216,9 +295,23 @@ router.post('/suspend-appeal', verifyToken, async (req, res) => {
 
     appeals.unshift(entry);
     fs.writeFileSync(appealsPath, JSON.stringify(appeals, null, 2));
-    return res.json({ success: true, message: 'Your appeal has been submitted and is under review.' });
+    
+    // Also update user record in MongoDB
+    try {
+      const user = await User.findOne({ firebaseUid: userId });
+      if (user) {
+        user.suspendAppeal = message;
+        user.suspendAppealStatus = 'pending';
+        user.suspendAppealDate = new Date();
+        await user.save();
+      }
+    } catch (e) { console.error('Failed to update user appeal in MongoDB', e); }
+    
+    return res.json({ success: true, message: 'Your appeal has been submitted and is under review. Our team will review it shortly.' });
   } catch (error) {
     console.error('suspend-appeal error', error);
     return res.status(500).json({ error: 'Failed to submit appeal' });
   }
 });
+
+module.exports = router;

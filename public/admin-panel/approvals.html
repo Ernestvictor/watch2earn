@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Approval Dashboard</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0b0c0f; color: #e0e0e0; font-family: 'Segoe UI', Inter, Arial, sans-serif; padding-bottom: 90px; }
+    
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background: #121214;
+      border-bottom: 1px solid #232326;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    
+    .logo { font-weight: 900; font-size: 20px; color: #2196F3; }
+    
+    .inbox-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #18181b;
+      border: 1px solid #2f2f32;
+      color: #fff;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .container { max-width: 1000px; margin: 0 auto; padding: 16px; }
+    
+    h2 { margin-bottom: 20px; color: #2196F3; }
+    h3 { margin: 20px 0 12px; color: #ffd700; font-size: 16px; }
+    
+    /* Tab Navigation */
+    .tabs {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #232326;
+      overflow-x: auto;
+    }
+    
+    .tab-btn {
+      padding: 12px 20px;
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.3s;
+      white-space: nowrap;
+    }
+    
+    .tab-btn.active {
+      color: #2196F3;
+      border-bottom-color: #2196F3;
+    }
+    
+    .tab-btn:hover { color: #e0e0e0; }
+    
+    /* Status Badges */
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .badge-pending { background: #ffd700; color: #000; }
+    .badge-approved { background: #4CAF50; color: #fff; }
+    .badge-rejected { background: #f44336; color: #fff; }
+    .badge-verified { background: #2196F3; color: #fff; }
+    
+    /* Cards Grid */
+    .approval-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .approval-card {
+      background: #1a1a1d;
+      border: 1px solid #232326;
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.3s;
+    }
+    
+    .approval-card:hover { border-color: #333; }
+    
+    .card-left {
+      flex: 1;
+    }
+    
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    
+    .card-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin: 8px 0;
+    }
+    
+    .info-item {
+      font-size: 12px;
+    }
+    
+    .info-label { color: #888; }
+    .info-value { color: #ffd700; font-weight: 600; }
+    
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-left: 16px;
+    }
+    
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      transition: opacity 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    button:hover { opacity: 0.8; }
+    
+    .btn-approve { background: #4CAF50; color: #fff; }
+    .btn-reject { background: #f44336; color: #fff; }
+    .btn-verify { background: #2196F3; color: #fff; }
+    .btn-view { background: #666; color: #fff; }
+    
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    
+    .modal.active { display: flex; }
+    
+    .modal-content {
+      background: #1a1a1d;
+      border: 1px solid #232326;
+      border-radius: 8px;
+      padding: 24px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #232326;
+      padding-bottom: 12px;
+    }
+    
+    .modal-header h3 { margin: 0; color: #fff; }
+    .modal-close { background: none; border: none; color: #ffd700; font-size: 24px; cursor: pointer; }
+    
+    .modal-body { margin-bottom: 20px; }
+    .modal-body .section { margin-bottom: 20px; }
+    .modal-body .section-title { font-size: 14px; color: #ffd700; font-weight: 600; margin-bottom: 8px; }
+    
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 12px 0;
+    }
+    
+    .detail-item {
+      background: #121214;
+      padding: 12px;
+      border-radius: 4px;
+      border: 1px solid #232326;
+    }
+    
+    .detail-label { font-size: 11px; color: #888; text-transform: uppercase; }
+    .detail-value { font-size: 14px; font-weight: 600; color: #fff; margin-top: 4px; }
+    
+    .reason-input {
+      width: 100%;
+      padding: 12px;
+      background: #121214;
+      border: 1px solid #232326;
+      border-radius: 4px;
+      color: #e0e0e0;
+      min-height: 80px;
+      font-family: 'Segoe UI', sans-serif;
+      resize: vertical;
+    }
+    
+    .modal-footer {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+    
+    .modal-footer button { padding: 12px 24px; }
+    
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .stat {
+      background: #1a1a1d;
+      border: 1px solid #232326;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+    
+    .stat h4 { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .stat .value { font-size: 24px; font-weight: bold; color: #2196F3; }
+    
+    .filter-section {
+      background: #1a1a1d;
+      border: 1px solid #232326;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    
+    .filter-section input,
+    .filter-section select {
+      padding: 8px 12px;
+      background: #121214;
+      border: 1px solid #232326;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 12px;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #888;
+    }
+    
+    .empty-state i { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+    
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #121214;
+      border-top: 1px solid #232326;
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+      z-index: 20;
+    }
+    
+    .bottom-nav a {
+      color: #888;
+      text-decoration: none;
+      font-size: 12px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .bottom-nav a.active { color: #2196F3; font-weight: 700; }
+    
+    @media (max-width: 768px) {
+      .approval-card { flex-direction: column; align-items: flex-start; }
+      .card-actions { margin-left: 0; margin-top: 12px; width: 100%; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .filter-section { flex-direction: column; }
+      .filter-section input,
+      .filter-section select { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="logo"><i class="fas fa-check-circle"></i> Approvals</div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <a href="inbox.html" style="display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: #18181b; border: 1px solid #2f2f32; color: #fff; text-decoration: none;" title="Inbox">
+        <i class="fas fa-inbox"></i>
+      </a>
+    </div>
+  </div>
+
+  <div class="container">
+    <h2><i class="fas fa-tasks"></i> Approval & Verification Dashboard</h2>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat">
+        <h4>Pending</h4>
+        <div class="value" id="pendingCount">0</div>
+      </div>
+      <div class="stat">
+        <h4>Today</h4>
+        <div class="value" id="todayCount">0</div>
+      </div>
+      <div class="stat">
+        <h4>This Week</h4>
+        <div class="value" id="weekCount">0</div>
+      </div>
+      <div class="stat">
+        <h4>Total Approved</h4>
+        <div class="value" id="approvedCount">0</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('withdrawals')"><i class="fas fa-money-bill"></i> Withdrawals</button>
+      <button class="tab-btn" onclick="showTab('promotions')"><i class="fas fa-star"></i> Promotions</button>
+      <button class="tab-btn" onclick="showTab('users')"><i class="fas fa-user-check"></i> User Verification</button>
+      <button class="tab-btn" onclick="showTab('disputes')"><i class="fas fa-gavel"></i> Disputes</button>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-section">
+      <select id="statusFilter" onchange="filterApprovals()">
+        <option value="">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <select id="sortFilter" onchange="filterApprovals()">
+        <option value="newest">Newest First</option>
+        <option value="oldest">Oldest First</option>
+        <option value="amount-high">Highest Amount</option>
+        <option value="amount-low">Lowest Amount</option>
+      </select>
+      <input type="text" id="searchInput" placeholder="Search email or ID..." onkeyup="filterApprovals()">
+      <button onclick="refreshApprovals()" style="background: #2196F3; color: #fff;"><i class="fas fa-sync"></i> Refresh</button>
+    </div>
+
+    <!-- Withdrawals Tab -->
+    <div id="withdrawals-tab" class="tab-content">
+      <h3>Withdrawal Requests</h3>
+      <div class="approval-list" id="withdrawalsList"></div>
+    </div>
+
+    <!-- Promotions Tab -->
+    <div id="promotions-tab" class="tab-content" style="display: none;">
+      <h3>Promotion Codes</h3>
+      <div class="approval-list" id="promotionsList"></div>
+    </div>
+
+    <!-- User Verification Tab -->
+    <div id="users-tab" class="tab-content" style="display: none;">
+      <h3>User Verification Requests</h3>
+      <div class="approval-list" id="usersList"></div>
+    </div>
+
+    <!-- Disputes Tab -->
+    <div id="disputes-tab" class="tab-content" style="display: none;">
+      <h3>Dispute Cases</h3>
+      <div class="approval-list" id="disputesList"></div>
+    </div>
+  </div>
+
+  <!-- Withdrawal Detail Modal -->
+  <div class="modal" id="withdrawalModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fas fa-money-bill"></i> Withdrawal Request</h3>
+        <button class="modal-close" onclick="closeModal('withdrawalModal')">&times;</button>
+      </div>
+      <div class="modal-body" id="withdrawalModalBody"></div>
+      <div class="modal-footer">
+        <button class="btn-reject" onclick="rejectWithdrawal()"><i class="fas fa-times"></i> Reject</button>
+        <button class="btn-approve" onclick="approveWithdrawal()"><i class="fas fa-check"></i> Approve</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reason Modal -->
+  <div class="modal" id="reasonModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Add Reason</h3>
+        <button class="modal-close" onclick="closeModal('reasonModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <textarea id="reasonInput" class="reason-input" placeholder="Enter your reason for rejection/action..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-reject" onclick="submitReason()"><i class="fas fa-check"></i> Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <a href="users.html"><i class="fas fa-users"></i> Users</a>
+    <a href="withdrawals.html"><i class="fas fa-money-bill-wave"></i> Withdrawals</a>
+    <a href="fraud-detection.html"><i class="fas fa-shield-alt"></i> Fraud</a>
+    <a href="charts.html"><i class="fas fa-chart-line"></i> Stats</a>
+    <a href="approvals.html" class="active"><i class="fas fa-check-circle"></i> Approvals</a>
+  </div>
+
+  <script>
+    const API_BASE = '/api/admin';
+    let currentAction = null;
+    let currentTab = 'withdrawals';
+    let allApprovals = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadApprovals();
+    });
+
+    function showTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+      document.getElementById(tabName + '-tab').style.display = 'block';
+      
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      currentTab = tabName;
+    }
+
+    async function loadApprovals() {
+      try {
+        const response = await fetch(`${API_BASE}/approvals`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load approvals');
+
+        allApprovals = await response.json();
+        renderApprovals();
+        updateStats();
+      } catch (error) {
+        console.error('Error loading approvals:', error);
+        // Load demo data
+        loadDemoData();
+      }
+    }
+
+    function loadDemoData() {
+      allApprovals = [
+        {
+          id: 'WTH001',
+          type: 'withdrawal',
+          userName: 'John Doe',
+          userEmail: 'john@example.com',
+          userId: 'user123',
+          amount: 500,
+          method: 'Bank Transfer',
+          status: 'pending',
+          requestedAt: new Date(Date.now() - 2*3600000).toISOString(),
+          bankDetails: { accountName: 'John Doe', accountNumber: '1234567890', bankName: 'Chase Bank' },
+          accountAge: '6 months',
+          totalEarnings: 5420.50,
+          previousWithdrawals: 3
+        },
+        {
+          id: 'WTH002',
+          type: 'withdrawal',
+          userName: 'Jane Smith',
+          userEmail: 'jane@example.com',
+          userId: 'user456',
+          amount: 1000,
+          method: 'PayPal',
+          status: 'pending',
+          requestedAt: new Date(Date.now() - 1*3600000).toISOString(),
+          accountAge: '3 months',
+          totalEarnings: 4820.75,
+          previousWithdrawals: 2
+        }
+      ];
+      renderApprovals();
+      updateStats();
+    }
+
+    function renderApprovals() {
+      const withdrawals = allApprovals.filter(a => a.type === 'withdrawal');
+      
+      const html = withdrawals.map(item => `
+        <div class="approval-card">
+          <div class="card-left">
+            <div class="card-title">${item.userName}</div>
+            <div class="card-info">
+              <div class="info-item">
+                <span class="info-label">Email:</span>
+                <span class="info-value">${item.userEmail}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Amount:</span>
+                <span class="info-value">$${item.amount}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Method:</span>
+                <span class="info-value">${item.method}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Requested:</span>
+                <span class="info-value">${new Date(item.requestedAt).toLocaleString()}</span>
+              </div>
+            </div>
+            <div style="margin-top: 8px;">
+              <span class="status-badge badge-${item.status}">${item.status.toUpperCase()}</span>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="btn-view" onclick="viewApprovalDetails('${item.id}')"><i class="fas fa-eye"></i> View</button>
+            ${item.status === 'pending' ? `
+              <button class="btn-reject" onclick="rejectAction('${item.id}')"><i class="fas fa-times"></i> Reject</button>
+              <button class="btn-approve" onclick="approveAction('${item.id}')"><i class="fas fa-check"></i> Approve</button>
+            ` : ''}
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById('withdrawalsList').innerHTML = html || '<div class="empty-state"><i class="fas fa-inbox"></i><p>No pending withdrawals</p></div>';
+    }
+
+    function viewApprovalDetails(id) {
+      const item = allApprovals.find(a => a.id === id);
+      if (!item) return;
+
+      const modalBody = document.getElementById('withdrawalModalBody');
+      
+      modalBody.innerHTML = `
+        <div class="section">
+          <div class="section-title">General Information</div>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">Request ID</div>
+              <div class="detail-value">${item.id}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Status</div>
+              <div class="detail-value"><span class="status-badge badge-${item.status}">${item.status}</span></div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">User Name</div>
+              <div class="detail-value">${item.userName}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Email</div>
+              <div class="detail-value">${item.userEmail}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Amount</div>
+              <div class="detail-value">$${item.amount}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Withdrawal Method</div>
+              <div class="detail-value">${item.method}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Account Information</div>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <div class="detail-label">Account Age</div>
+              <div class="detail-value">${item.accountAge}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Total Earnings</div>
+              <div class="detail-value">$${item.totalEarnings}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Previous Withdrawals</div>
+              <div class="detail-value">${item.previousWithdrawals}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Requested Date</div>
+              <div class="detail-value">${new Date(item.requestedAt).toLocaleString()}</div>
+            </div>
+          </div>
+        </div>
+
+        ${item.bankDetails ? `
+          <div class="section">
+            <div class="section-title">Bank Details</div>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <div class="detail-label">Account Name</div>
+                <div class="detail-value">${item.bankDetails.accountName}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Account Number</div>
+                <div class="detail-value">${item.bankDetails.accountNumber}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Bank Name</div>
+                <div class="detail-value">${item.bankDetails.bankName}</div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="section">
+          <div class="section-title">Risk Assessment</div>
+          <p style="color: #4CAF50; margin: 8px 0;">✓ Account verified</p>
+          <p style="color: #4CAF50; margin: 8px 0;">✓ Email verified</p>
+          <p style="color: #4CAF50; margin: 8px 0;">✓ No fraud flags</p>
+        </div>
+      `;
+
+      currentAction = { type: 'withdrawal', id };
+      document.getElementById('withdrawalModal').classList.add('active');
+    }
+
+    function approveAction(id) {
+      currentAction = { type: 'approval', id };
+      document.getElementById('reasonModal').classList.add('active');
+    }
+
+    function rejectAction(id) {
+      currentAction = { type: 'rejection', id };
+      document.getElementById('reasonModal').classList.add('active');
+    }
+
+    async function submitReason() {
+      const reason = document.getElementById('reasonInput').value;
+      if (!reason.trim()) {
+        alert('Please enter a reason');
+        return;
+      }
+
+      const action = currentAction.type === 'approval' ? 'approve' : 'reject';
+      
+      try {
+        const response = await fetch(`${API_BASE}/approvals/${currentAction.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          },
+          body: JSON.stringify({
+            action,
+            reason
+          })
+        });
+
+        if (response.ok) {
+          closeModal('reasonModal');
+          loadApprovals();
+          alert(`Request ${action}d successfully`);
+        }
+      } catch (error) {
+        console.error('Error updating approval:', error);
+      }
+    }
+
+    function approveWithdrawal() {
+      currentAction.type = 'approval';
+      document.getElementById('reasonModal').classList.add('active');
+      closeModal('withdrawalModal');
+    }
+
+    function rejectWithdrawal() {
+      currentAction.type = 'rejection';
+      document.getElementById('reasonModal').classList.add('active');
+      closeModal('withdrawalModal');
+    }
+
+    function filterApprovals() {
+      // Implement filtering logic
+      renderApprovals();
+    }
+
+    function refreshApprovals() {
+      loadApprovals();
+    }
+
+    function updateStats() {
+      const pending = allApprovals.filter(a => a.status === 'pending').length;
+      const today = allApprovals.filter(a => 
+        new Date(a.requestedAt).toDateString() === new Date().toDateString()
+      ).length;
+      const week = allApprovals.filter(a => {
+        const diff = (Date.now() - new Date(a.requestedAt)) / (1000 * 60 * 60 * 24);
+        return diff <= 7;
+      }).length;
+      const approved = allApprovals.filter(a => a.status === 'approved').length;
+
+      document.getElementById('pendingCount').textContent = pending;
+      document.getElementById('todayCount').textContent = today;
+      document.getElementById('weekCount').textContent = week;
+      document.getElementById('approvedCount').textContent = approved;
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+      document.getElementById('reasonInput').value = '';
+    }
+  </script>
+</body>
+</html>

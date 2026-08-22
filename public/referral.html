@@ -52,7 +52,7 @@ firebase.auth().onAuthStateChanged(async user=>{
     } else {
       (data.referrals||[]).forEach(r=>{
         const el = document.createElement('div'); el.className='item';
-        el.innerHTML = `<div><b>${r.name}</b><div class="small">${r.email||'No email'}</div><div class="small" style="font-size:10px;color:#666;margin-top:4px">Joined: ${new Date(r.joined).toLocaleDateString()}</div></div><div style="text-align:right"><div>$${(r.totalUsd||0).toFixed(4)}</div><div class="small">₦${(r.totalNaira||0).toLocaleString()}</div></div>`;
+        el.innerHTML = `<div><b>${r.displayName || r.name || r.email.split('@')[0]}</b><div class="small">${r.email || 'No email'}</div><div class="small" style="font-size:10px;color:#666;margin-top:4px">Joined: ${new Date(r.joined || r.joinedAt || r.createdAt).toLocaleDateString()}</div></div><div style="text-align:right"><div>$${(r.totalUsd || r.earnings || 0).toFixed(4)}</div><div class="small">₦${(r.totalNaira || r.nairaEarnings || 0).toLocaleString()}</div></div>`;
         list.appendChild(el);
       });
     }

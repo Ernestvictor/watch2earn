@@ -34,8 +34,81 @@
     <div class="card">
       <div class="tabs">
         <button class="tab active" onclick="switchTab('templates')"><i class="fas fa-envelope"></i> Auto Messages</button>
+        <button class="tab" onclick="switchTab('triggers')"><i class="fas fa-bolt"></i> Triggers</button>
         <button class="tab" onclick="switchTab('manual')"><i class="fas fa-pen-fancy"></i> Manual Message</button>
         <button class="tab" onclick="switchTab('history')"><i class="fas fa-history"></i> Message History</button>
+      </div>
+
+      <!-- TAB: TRIGGERS - Send automatic messages based on user actions -->
+      <div id="triggers" class="tab-content">
+        <h3><i class="fas fa-bolt"></i> Message Triggers</h3>
+        <p style="color:#888">Set up automatic messages to send when specific user actions occur (signup, withdrawal, suspended, etc.)</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px">
+          <div class="template-card" onclick="configureTrigger('signup')" style="cursor:pointer;border:2px solid #4CAF50;padding:16px;border-radius:12px;background:#0a1f0a;transition:all 0.2s" onmouseover="this.style.borderColor='#81c784'" onmouseout="this.style.borderColor='#4CAF50'">
+            <h4><i class="fas fa-user-plus"></i> User Sign Up</h4>
+            <p style="font-size:12px;color:#aaa">Auto-welcome new users</p>
+          </div>
+          <div class="template-card" onclick="configureTrigger('ad_watch')" style="cursor:pointer;border:2px solid #2196F3;padding:16px;border-radius:12px;background:#0a1520;transition:all 0.2s" onmouseover="this.style.borderColor='#64b5f6'" onmouseout="this.style.borderColor='#2196F3'">
+            <h4><i class="fas fa-play-circle"></i> Ad Watched</h4>
+            <p style="font-size:12px;color:#aaa">Congratulate ad completers</p>
+          </div>
+          <div class="template-card" onclick="configureTrigger('referral')" style="cursor:pointer;border:2px solid #FF9800;padding:16px;border-radius:12px;background:#1a0a00;transition:all 0.2s" onmouseover="this.style.borderColor='#ffb74d'" onmouseout="this.style.borderColor='#FF9800'">
+            <h4><i class="fas fa-handshake"></i> Referral Made</h4>
+            <p style="font-size:12px;color:#aaa">Notify referrer earnings</p>
+          </div>
+          <div class="template-card" onclick="configureTrigger('withdrawal')" style="cursor:pointer;border:2px solid #f44336;padding:16px;border-radius:12px;background:#1a0a0a;transition:all 0.2s" onmouseover="this.style.borderColor='#ef5350'" onmouseout="this.style.borderColor='#f44336'">
+            <h4><i class="fas fa-money-bill"></i> Withdrawal Submitted</h4>
+            <p style="font-size:12px;color:#aaa">Confirm withdrawal receipt</p>
+          </div>
+          <div class="template-card" onclick="configureTrigger('suspended')" style="cursor:pointer;border:2px solid #FFC107;padding:16px;border-radius:12px;background:#1a1500;transition:all 0.2s" onmouseover="this.style.borderColor='#ffd54f'" onmouseout="this.style.borderColor='#FFC107'">
+            <h4><i class="fas fa-pause-circle"></i> Account Suspended</h4>
+            <p style="font-size:12px;color:#aaa">Explain suspension & appeal process</p>
+          </div>
+          <div class="template-card" onclick="configureTrigger('passive')" style="cursor:pointer;border:2px solid #9C27B0;padding:16px;border-radius:12px;background:#1a0a1a;transition:all 0.2s" onmouseover="this.style.borderColor='#ba68c8'" onmouseout="this.style.borderColor='#9C27B0'">
+            <h4><i class="fas fa-user-clock"></i> Inactive User (7+ days)</h4>
+            <p style="font-size:12px;color:#aaa">Re-engage inactive users</p>
+          </div>
+        </div>
+
+        <div class="card" id="triggerForm" style="display:none">
+          <h4>Configure Trigger: <span id="triggerName"></span></h4>
+          <div class="form-group">
+            <label>Message Title:</label>
+            <input type="text" id="triggerTitle" placeholder="Message title">
+          </div>
+          <div class="form-group">
+            <label>Message Content:</label>
+            <textarea id="triggerMessage" placeholder="Use {username}, {amount}, {event}, {reason} for dynamic content" rows="6"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Delivery Method:</label>
+            <div class="toggle-group">
+              <label><input type="checkbox" name="deliveryMethod" value="inbox" checked> Inbox</label>
+              <label><input type="checkbox" name="deliveryMethod" value="email"> Email</label>
+              <label><input type="checkbox" name="deliveryMethod" value="notification"> Notification</label>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button onclick="saveTrigger()" style="background:#4CAF50"><i class="fas fa-save"></i> Save Trigger</button>
+            <button onclick="cancelTrigger()" style="background:#666"><i class="fas fa-times"></i> Cancel</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px">
+          <h4>Active Triggers</h4>
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:2px solid #232326">
+                <th style="text-align:left;padding:12px">Event</th>
+                <th style="text-align:left;padding:12px">Title</th>
+                <th style="text-align:left;padding:12px">Status</th>
+                <th style="text-align:left;padding:12px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="triggersTable"></tbody>
+          </table>
+        </div>
       </div>
 
       <!-- TAB 1: AUTOMATIC TEMPLATES -->
@@ -586,9 +659,101 @@
       }
     }
 
+    // ===== TRIGGER FUNCTIONS =====
+    let currentTriggerEvent = null;
+
+    function configureTrigger(eventName) {
+      currentTriggerEvent = eventName;
+      const triggerNames = {
+        'signup': 'User Sign Up',
+        'ad_watch': 'Ad Watched',
+        'referral': 'Referral Made',
+        'withdrawal': 'Withdrawal Submitted',
+        'suspended': 'Account Suspended',
+        'passive': 'Inactive User (7+ days)'
+      };
+      document.getElementById('triggerName').textContent = triggerNames[eventName] || eventName;
+      document.getElementById('triggerTitle').value = '';
+      document.getElementById('triggerMessage').value = '';
+      document.getElementById('triggerForm').style.display = 'block';
+      loadActiveTriggers();
+    }
+
+    function cancelTrigger() {
+      document.getElementById('triggerForm').style.display = 'none';
+      currentTriggerEvent = null;
+    }
+
+    async function saveTrigger() {
+      if (!currentTriggerEvent) return alert('No trigger selected');
+      const title = document.getElementById('triggerTitle').value.trim();
+      const message = document.getElementById('triggerMessage').value.trim();
+      const methods = Array.from(document.querySelectorAll('input[name="deliveryMethod"]:checked')).map(el => el.value);
+
+      if (!title || !message) return alert('Enter title and message');
+      if (methods.length === 0) return alert('Select at least one delivery method');
+
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/triggers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ event: currentTriggerEvent, title, message, methods })
+        });
+        if (!res.ok) throw new Error('Failed to save trigger');
+        alert('Trigger saved successfully!');
+        cancelTrigger();
+        loadActiveTriggers();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    async function loadActiveTriggers() {
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/triggers', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Failed to load triggers');
+        const triggers = await res.json();
+        
+        const tbody = document.getElementById('triggersTable');
+        tbody.innerHTML = (triggers || []).map(t => `
+          <tr style="border-bottom:1px solid #232326">
+            <td style="padding:12px"><strong>${t.event}</strong></td>
+            <td style="padding:12px">${t.title}</td>
+            <td style="padding:12px"><span style="background:#4CAF50;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px">Active</span></td>
+            <td style="padding:12px">
+              <button onclick="deleteTrigger('${t.id}')" style="background:#f44336;color:#fff;padding:6px 10px;border:none;border-radius:4px;cursor:pointer;font-size:12px">Delete</button>
+            </td>
+          </tr>
+        `).join('') || '<tr><td colspan="4" style="text-align:center;padding:20px;color:#777">No triggers configured yet</td></tr>';
+      } catch (err) {
+        console.error('Load triggers error:', err);
+      }
+    }
+
+    async function deleteTrigger(triggerId) {
+      if (!confirm('Delete this trigger?')) return;
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch(`/api/admin/triggers/${triggerId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Failed to delete trigger');
+        alert('Trigger deleted');
+        loadActiveTriggers();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
     if (checkAuth()) {
       loadAllUsers();
       loadMessages();
+      loadActiveTriggers();
       window.addEventListener('load', ()=>{ document.body.setAttribute('data-ready','true'); setTimeout(()=>{ const el=document.getElementById('leading'); if(el) el.style.display='none'; },300); });
     }
   </script>

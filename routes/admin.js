@@ -13,6 +13,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const TRANSACTIONS_PATH = path.join(DATA_DIR, 'transactions.json');
 const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
 const PROMOTIONS_PATH = path.join(DATA_DIR, 'promotions.json');
+const TRIGGERS_PATH = path.join(DATA_DIR, 'triggers.json');
 const nodemailer = (() => {
   try { return require('nodemailer'); } catch (e) { return null; }
 })();
@@ -455,15 +456,53 @@ router.get('/bonuses', (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to read bonuses' }); }
 });
 
-router.post('/send-bonus', (req, res) => {
+router.post('/send-bonus', async (req, res) => {
   try {
     const b = req.body || {};
-    const bonuses = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'bonuses.json'), 'utf8') || '[]');
-    const entry = { id: Date.now().toString(), ...b, createdAt: new Date().toISOString(), claimed: false };
+    const amountUsd = Number(b.amountUsd ?? b.amount ?? 0);
+    const targetType = String(b.targetType || 'all').trim() || 'all';
+    const targetUserId = b.targetUserId || b.userId || null;
+
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+      return res.status(400).json({ error: 'Valid bonus amount is required' });
+    }
+
+    if (targetType === 'specific' && (!targetUserId || String(targetUserId).trim() === '')) {
+      return res.status(400).json({ error: 'A target user ID is required for specific bonuses' });
+    }
+
+    const entry = {
+      id: Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8),
+      title: b.title || 'Admin bonus',
+      description: b.description || 'You received a bonus from the admin team.',
+      amountUsd,
+      targetType,
+      targetUserId: targetType === 'specific' ? String(targetUserId).trim() : null,
+      targetUsers: Array.isArray(b.targetUsers) ? b.targetUsers : [],
+      createdAt: new Date().toISOString(),
+      claimed: false,
+      status: 'pending'
+    };
+
+    const bonusesPath = path.join(DATA_DIR, 'bonuses.json');
+    const bonuses = JSON.parse(fs.readFileSync(bonusesPath, 'utf8') || '[]');
     bonuses.unshift(entry);
-    fs.writeFileSync(path.join(DATA_DIR, 'bonuses.json'), JSON.stringify(bonuses, null, 2));
-    res.json({ ok: true, bonus: entry, count: 1 });
-  } catch (e) { res.status(500).json({ error: 'Failed to send bonus' }); }
+    fs.writeFileSync(bonusesPath, JSON.stringify(bonuses, null, 2));
+
+    try {
+      if (mongoNative && typeof mongoNative.getCollection === 'function') {
+        const bonusCol = mongoNative.getCollection('bonuses');
+        await bonusCol.insertOne(entry);
+      }
+    } catch (e) {
+      console.warn('Admin bonus Mongo sync skipped:', e && e.message);
+    }
+
+    res.json({ ok: true, bonus: entry, count: targetType === 'specific' ? 1 : 'all' });
+  } catch (e) {
+    console.error('Failed to send bonus:', e);
+    res.status(500).json({ error: 'Failed to send bonus' });
+  }
 });
 
 router.put('/users/:id', async (req, res) => {
@@ -473,8 +512,24 @@ router.put('/users/:id', async (req, res) => {
     const action = (body.action || body.actionType || '').toString();
     const userEmail = body.email || null;
 
+    // Validate that we have at least an id or email
+    if (( !id || id === 'undefined' || id === 'null' ) && ( !userEmail || userEmail === 'undefined' || userEmail === 'null' )) {
+      return res.status(400).json({ error: 'User ID or email is required' });
+    }
+
     const user = await findUserByAdminIdentifier(id, userEmail);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) {
+      // Log failed admin lookup for debugging promote/cast errors
+      try {
+        const errLogPath = path.join(DATA_DIR, 'promote_errors.json');
+        let errs = [];
+        try { errs = JSON.parse(fs.readFileSync(errLogPath, 'utf8') || '[]'); } catch (e) { errs = []; }
+        errs.unshift({ id: id || null, body: body || null, ip: req.ip || null, time: new Date().toISOString() });
+        fs.writeFileSync(errLogPath, JSON.stringify(errs.slice(0, 200), null, 2));
+      } catch (e) { console.warn('Failed to write promote_errors log', e && e.message); }
+      console.warn('Admin user lookup failed for:', { id, body });
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     if (action === 'banned' || action === 'ban') {
       if (isMongooseReady()) {
@@ -662,6 +717,168 @@ router.put('/users/:id', async (req, res) => {
 
     return res.status(400).json({ error: 'Unknown action' });
   } catch (e) { console.error('admin update user error', e); res.status(500).json({ error: 'Failed to update user' }); }
+});
+
+// ===== TRIGGER MANAGEMENT =====
+function readTriggers() {
+  try {
+    if (!fs.existsSync(TRIGGERS_PATH)) fs.writeFileSync(TRIGGERS_PATH, '[]');
+    return JSON.parse(fs.readFileSync(TRIGGERS_PATH, 'utf8') || '[]');
+  } catch (e) { return []; }
+}
+
+function writeTriggers(arr) {
+  fs.writeFileSync(TRIGGERS_PATH, JSON.stringify(arr, null, 2));
+}
+
+// GET all triggers
+router.get('/triggers', async (req, res) => {
+  try {
+    const triggers = readTriggers();
+    return res.json(triggers);
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to load triggers' });
+  }
+});
+
+// POST create trigger
+router.post('/triggers', async (req, res) => {
+  try {
+    const { event, title, message, methods } = req.body || {};
+    if (!event || !title || !message) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const trigger = {
+      id: Date.now().toString(),
+      event,
+      title,
+      message,
+      methods: methods || ['inbox'],
+      createdAt: new Date().toISOString(),
+      enabled: true
+    };
+
+    const triggers = readTriggers();
+    triggers.unshift(trigger);
+    writeTriggers(triggers);
+    return res.json({ ok: true, trigger });
+  } catch (e) {
+    console.error('Trigger create error:', e);
+    return res.status(500).json({ error: 'Failed to create trigger' });
+  }
+});
+
+// DELETE trigger
+router.delete('/triggers/:id', async (req, res) => {
+  try {
+    const triggerId = req.params.id;
+    let triggers = readTriggers();
+    triggers = triggers.filter(t => String(t.id) !== String(triggerId));
+    writeTriggers(triggers);
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to delete trigger' });
+  }
+});
+
+// ===== PASSIVE USER TRACKING =====
+// Identify passive users (no login for 7-30 days)
+router.get('/passive-users', async (req, res) => {
+  try {
+    const days = req.query.days || 7;
+    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+      const passiveUsers = await User.find({
+        $or: [
+          { lastLogin: { $lt: cutoffDate } },
+          { lastActivity: { $lt: cutoffDate } },
+          { lastLogin: null, lastActivity: null, createdAt: { $lt: cutoffDate } }
+        ],
+        isBanned: false,
+        isSuspended: false
+      }).limit(500).lean();
+
+      // Mark them as passive
+      await User.updateMany(
+        { _id: { $in: passiveUsers.map(u => u._id) } },
+        { isPassive: true }
+      );
+
+      return res.json({
+        count: passiveUsers.length,
+        days,
+        users: passiveUsers.slice(0, 50)
+      });
+    }
+
+    return res.json({ count: 0, message: 'MongoDB not ready' });
+  } catch (e) {
+    console.error('Passive users error:', e);
+    return res.status(500).json({ error: 'Failed to identify passive users' });
+  }
+});
+
+// Mark user as passive or active
+router.put('/passive-users/:id', async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { isPassive } = req.body || {};
+
+    if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+      const user = await User.findOne({
+        $or: [{ _id: userId }, { firebaseUid: userId }, { id: userId }]
+      });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      user.isPassive = isPassive === true || isPassive === 'true';
+      user.lastActivity = new Date();
+      await user.save();
+      return res.json({ ok: true });
+    }
+
+    return res.status(500).json({ error: 'MongoDB not ready' });
+  } catch (e) {
+    console.error('Update passive user error:', e);
+    return res.status(500).json({ error: 'Failed to update' });
+  }
+});
+
+// Diagnostics endpoint — shows Mongo status, activity collection counts, and SMTP config summary
+router.get('/diagnostics', async (req, res) => {
+  try {
+    const mongoReady = isMongooseReady();
+    let activityCount = null;
+    let lastActivity = null;
+    try {
+      if (mongoNative && typeof mongoNative.getCollection === 'function') {
+        const col = mongoNative.getCollection('user_activity');
+        activityCount = await col.countDocuments();
+        lastActivity = await col.find().sort({ timestamp: -1 }).limit(1).toArray();
+        lastActivity = lastActivity && lastActivity[0] ? lastActivity[0] : null;
+      } else {
+        const logsPath = path.join(DATA_DIR, 'user_logs.json');
+        if (fs.existsSync(logsPath)) {
+          const arr = JSON.parse(fs.readFileSync(logsPath, 'utf8') || '[]');
+          activityCount = arr.length;
+          lastActivity = arr[0] || null;
+        }
+      }
+    } catch (e) { console.warn('Diagnostics activity check failed:', e && e.message); }
+
+    const smtp = {
+      host: process.env.SMTP_HOST || process.env.SMPT_HOST || null,
+      port: process.env.SMTP_PORT || process.env.SMPT_PORT || null,
+      user: process.env.SMTP_USER || process.env.SMPT_USER || null,
+      secure: (process.env.SMTP_SECURE || process.env.SMPT_SECURE || '').toString().toLowerCase() === 'true'
+    };
+
+    return res.json({ ok: true, mongoReady, activityCount, lastActivity, smtp });
+  } catch (e) {
+    console.error('Diagnostics error:', e);
+    return res.status(500).json({ error: 'Failed to run diagnostics' });
+  }
 });
 
 module.exports = router;

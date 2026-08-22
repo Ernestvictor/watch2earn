@@ -247,4 +247,35 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// POST /api/referrals/update-referrer - Update referrer when new user signs up
+router.post('/update-referrer', async (req, res) => {
+  try {
+    const { referrerId, newUserId } = req.body;
+    if (!referrerId || !newUserId) {
+      return res.status(400).json({ error: 'referrerId and newUserId required' });
+    }
+
+    const referrer = await User.findOne({ firebaseUid: referrerId });
+    const newUser = await User.findOne({ firebaseUid: newUserId });
+
+    if (!referrer || !newUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Update new user's referredBy field
+    newUser.referredBy = referrer._id;
+    await newUser.save();
+
+    return res.json({ 
+      success: true, 
+      message: 'Referrer updated successfully',
+      referrerEmail: referrer.email,
+      newUserEmail: newUser.email
+    });
+  } catch (err) {
+    console.error('❌ /update-referrer error:', err);
+    return res.status(500).json({ error: 'Failed to update referrer' });
+  }
+});
+
 module.exports = router;

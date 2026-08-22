@@ -121,7 +121,7 @@ async function loadMessages(){
       return;
     }
     list.innerHTML = items.map(m => `
-      <div class="message-item">
+      <div class="message-item" data-id="${m.id || ''}" onclick="deleteMessage('${m.id}')" style="cursor:pointer">
         <div class="title">${m.title || 'Update'}</div>
         <div class="meta">${new Date(m.createdAt || m.date || Date.now()).toLocaleString()} • ${m.channel || 'In-App'}</div>
         <div class="body">${m.message || ''}</div>
@@ -130,6 +130,14 @@ async function loadMessages(){
   } catch (e) {
     list.innerHTML = '<div class="empty"><i class="fas fa-inbox"></i> Unable to load inbox right now.</div>';
   }
+}
+
+async function deleteMessage(id){
+  if(!id) return;
+  try{
+    await fetch('/api/admin/messages/' + encodeURIComponent(id), { method: 'DELETE' });
+  }catch(e){ console.warn('Failed to remove message', e); }
+  await loadMessages();
 }
 
 </script>

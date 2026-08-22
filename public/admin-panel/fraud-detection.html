@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Fraud Detection</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0b0c0f; color: #e0e0e0; font-family: 'Segoe UI', Inter, Arial, sans-serif; padding-bottom: 90px; }
+    
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background: #121214;
+      border-bottom: 1px solid #232326;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo { font-weight: 900; font-size: 20px; color: #f44336; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    
+    h2 { margin-bottom: 20px; color: #f44336; }
+    h3 { margin: 20px 0 12px; color: #ffd700; font-size: 16px; }
+    
+    /* Alert Summary */
+    .alert-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    
+    .alert-card {
+      background: #1a1a1d;
+      border: 1px solid #232326;
+      border-left: 4px solid #f44336;
+      border-radius: 8px;
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .alert-card.warning { border-left-color: #ffd700; }
+    .alert-card.info { border-left-color: #2196F3; }
+    .alert-card.success { border-left-color: #4CAF50; }
+    
+    .alert-card-content h4 { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .alert-card-content .value { font-size: 24px; font-weight: bold; color: #fff; }
+    .alert-card-icon { font-size: 30px; color: #f44336; opacity: 0.7; }
+    .alert-card.warning .alert-card-icon { color: #ffd700; }
+    .alert-card.info .alert-card-icon { color: #2196F3; }
+    .alert-card.success .alert-card-icon { color: #4CAF50; }
+    
+    /* Charts Section */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .chart-container {
+      background: #1a1a1d;
+      border: 1px solid #232326;
+      border-radius: 8px;
+      padding: 16px;
+      position: relative;
+      height: 300px;
+    }
+    
+    .chart-container canvas { max-height: 250px; }
+    
+    /* Filtered Lists */
+    .filter-section {
+      background: #1a1a1d;
+      border: 1px solid #232326;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    
+    .filter-controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    
+    .filter-controls input,
+    .filter-controls select {
+      padding: 8px 12px;
+      background: #121214;
+      border: 1px solid #232326;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 14px;
+    }
+    
+    .filter-controls button {
+      padding: 8px 16px;
+      background: #2196F3;
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.3s;
+    }
+    
+    .filter-controls button:hover { background: #1976d2; }
+    
+    .filter-controls button.reset { background: #888; }
+    .filter-controls button.reset:hover { background: #666; }
+    
+    /* Table Styles */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    
+    th, td { padding: 12px; border-bottom: 1px solid #232326; text-align: left; }
+    th { background: #121214; color: #ffd700; font-weight: 600; font-size: 13px; }
+    tr:hover { background: #1f2023; }
+    
+    .risk-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .risk-critical { background: #c62828; color: #fff; }
+    .risk-high { background: #f44336; color: #fff; }
+    .risk-medium { background: #ffd700; color: #000; }
+    .risk-low { background: #4CAF50; color: #fff; }
+    
+    /* Action Buttons */
+    .action-buttons {
+      display: flex;
+      gap: 6px;
+    }
+    
+    button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: opacity 0.3s;
+    }
+    
+    button:hover { opacity: 0.8; }
+    
+    .btn-review { background: #2196F3; color: #fff; }
+    .btn-block { background: #f44336; color: #fff; }
+    .btn-approve { background: #4CAF50; color: #fff; }
+    .btn-details { background: #666; color: #fff; }
+    
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .modal.active { display: flex; }
+    
+    .modal-content {
+      background: #1a1a1d;
+      border: 1px solid #232326;
+      border-radius: 8px;
+      padding: 24px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #232326;
+      padding-bottom: 12px;
+    }
+    
+    .modal-header h3 { margin: 0; color: #fff; }
+    .modal-close { background: none; border: none; color: #ffd700; font-size: 24px; cursor: pointer; }
+    
+    .modal-body { margin-bottom: 20px; }
+    .modal-body p { margin: 8px 0; line-height: 1.6; }
+    .modal-body strong { color: #ffd700; }
+    
+    .modal-footer {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+    
+    .modal-footer button { padding: 10px 20px; }
+    
+    /* Status Badge */
+    .status-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .status-pending { background: #ffd700; color: #000; }
+    .status-reviewing { background: #2196F3; color: #fff; }
+    .status-blocked { background: #f44336; color: #fff; }
+    .status-cleared { background: #4CAF50; color: #fff; }
+    
+    /* Details Grid */
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+    
+    .detail-item {
+      background: #121214;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #232326;
+    }
+    
+    .detail-label { font-size: 12px; color: #888; text-transform: uppercase; }
+    .detail-value { font-size: 16px; font-weight: 600; color: #fff; margin-top: 4px; }
+    
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #121214;
+      border-top: 1px solid #232326;
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+      z-index: 20;
+    }
+    
+    .bottom-nav a {
+      color: #888;
+      text-decoration: none;
+      font-size: 12px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .bottom-nav a.active { color: #f44336; font-weight: 700; }
+    
+    .loading { text-align: center; padding: 20px; color: #888; }
+    .error { background: #c62828; color: #fff; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
+    .success { background: #4CAF50; color: #fff; padding: 12px; border-radius: 6px; margin-bottom: 12px; }
+    
+    @media (max-width: 768px) {
+      .charts-grid { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .filter-controls { flex-direction: column; }
+      .filter-controls input,
+      .filter-controls select,
+      .filter-controls button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div class="logo"><i class="fas fa-shield-alt"></i> Fraud Detection</div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <a href="inbox.html" style="display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background: #18181b; border: 1px solid #2f2f32; color: #fff; text-decoration: none;" title="Inbox">
+        <i class="fas fa-inbox"></i>
+      </a>
+    </div>
+  </div>
+
+  <div class="container">
+    <h2><i class="fas fa-exclamation-triangle"></i> Fraud Detection Dashboard</h2>
+
+    <!-- Alert Summary -->
+    <div class="alert-summary">
+      <div class="alert-card">
+        <div class="alert-card-content">
+          <h4>CRITICAL ALERTS</h4>
+          <div class="value" id="criticalCount">0</div>
+        </div>
+        <div class="alert-card-icon"><i class="fas fa-fire"></i></div>
+      </div>
+      <div class="alert-card warning">
+        <div class="alert-card-content">
+          <h4>HIGH RISK</h4>
+          <div class="value" id="highRiskCount">0</div>
+        </div>
+        <div class="alert-card-icon"><i class="fas fa-exclamation-circle"></i></div>
+      </div>
+      <div class="alert-card info">
+        <div class="alert-card-content">
+          <h4>UNDER REVIEW</h4>
+          <div class="value" id="reviewingCount">0</div>
+        </div>
+        <div class="alert-card-icon"><i class="fas fa-hourglass-half"></i></div>
+      </div>
+      <div class="alert-card success">
+        <div class="alert-card-content">
+          <h4>CLEARED TODAY</h4>
+          <div class="value" id="clearedCount">0</div>
+        </div>
+        <div class="alert-card-icon"><i class="fas fa-check-circle"></i></div>
+      </div>
+    </div>
+
+    <!-- Charts Section -->
+    <h3><i class="fas fa-chart-bar"></i> Analytics</h3>
+    <div class="charts-grid">
+      <div class="chart-container">
+        <canvas id="riskDistributionChart"></canvas>
+      </div>
+      <div class="chart-container">
+        <canvas id="fraudTypesChart"></canvas>
+      </div>
+      <div class="chart-container">
+        <canvas id="timelineChart"></canvas>
+      </div>
+      <div class="chart-container">
+        <canvas id="severityChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Filter Section -->
+    <h3><i class="fas fa-filter"></i> Suspicious Activities</h3>
+    <div class="filter-section">
+      <div class="filter-controls">
+        <select id="riskFilter">
+          <option value="">All Risk Levels</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select id="statusFilter">
+          <option value="">All Status</option>
+          <option value="pending">Pending Review</option>
+          <option value="reviewing">Under Review</option>
+          <option value="cleared">Cleared</option>
+          <option value="blocked">Blocked</option>
+        </select>
+        <select id="typeFilter">
+          <option value="">All Types</option>
+          <option value="withdrawal">Withdrawal Pattern</option>
+          <option value="earning">Earning Pattern</option>
+          <option value="referral">Suspicious Referral</option>
+          <option value="location">Location Anomaly</option>
+          <option value="login">Login Pattern</option>
+          <option value="velocity">High Velocity</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="Search email or user ID...">
+        <button class="reset" onclick="resetFilters()"><i class="fas fa-redo"></i> Reset</button>
+      </div>
+
+      <div id="messageArea"></div>
+      <div id="fraudListLoading" class="loading" style="display: none;">
+        <i class="fas fa-spinner fa-spin"></i> Loading fraud alerts...
+      </div>
+      <table id="fraudTable" style="display: none;">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Type</th>
+            <th>Risk Level</th>
+            <th>Status</th>
+            <th>Detected</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="fraudBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Rules Section -->
+    <h3><i class="fas fa-cogs"></i> Fraud Detection Rules</h3>
+    <div class="filter-section">
+      <table id="rulesTable">
+        <thead>
+          <tr>
+            <th>Rule Name</th>
+            <th>Threshold</th>
+            <th>Status</th>
+            <th>Alerts Triggered</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rulesBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Fraud Details Modal -->
+  <div class="modal" id="fraudModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fas fa-exclamation-triangle"></i> Fraud Alert Details</h3>
+        <button class="modal-close" onclick="closeFraudModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="fraudModalBody"></div>
+      <div class="modal-footer">
+        <button class="btn-approve" onclick="approveFraud()"><i class="fas fa-check"></i> Clear/Approve</button>
+        <button class="btn-review" onclick="markForReview()"><i class="fas fa-tasks"></i> Mark Review</button>
+        <button class="btn-block" onclick="blockUser()"><i class="fas fa-ban"></i> Block User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rule Edit Modal -->
+  <div class="modal" id="ruleModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fas fa-cogs"></i> Edit Fraud Rule</h3>
+        <button class="modal-close" onclick="closeRuleModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="ruleModalBody"></div>
+      <div class="modal-footer">
+        <button class="btn-approve" onclick="saveRule()"><i class="fas fa-save"></i> Save Rule</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <a href="users.html"><i class="fas fa-users"></i> Users</a>
+    <a href="withdrawals.html"><i class="fas fa-money-bill-wave"></i> Withdrawals</a>
+    <a href="fraud-detection.html" class="active"><i class="fas fa-shield-alt"></i> Fraud</a>
+    <a href="charts.html"><i class="fas fa-chart-line"></i> Stats</a>
+    <a href="inbox.html"><i class="fas fa-envelope"></i> Messages</a>
+  </div>
+
+  <script>
+    const API_BASE = '/api/admin';
+    let currentFraud = null;
+    let currentRule = null;
+    let fraudData = [];
+    let rulesData = [];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadFraudAlerts();
+      loadFraudRules();
+      initCharts();
+      setupEventListeners();
+    });
+
+    function setupEventListeners() {
+      document.getElementById('riskFilter').addEventListener('change', filterFraudList);
+      document.getElementById('statusFilter').addEventListener('change', filterFraudList);
+      document.getElementById('typeFilter').addEventListener('change', filterFraudList);
+      document.getElementById('searchInput').addEventListener('keyup', filterFraudList);
+    }
+
+    // Load Fraud Alerts
+    async function loadFraudAlerts() {
+      const loading = document.getElementById('fraudListLoading');
+      const table = document.getElementById('fraudTable');
+      const body = document.getElementById('fraudBody');
+      const messageArea = document.getElementById('messageArea');
+
+      loading.style.display = 'block';
+      messageArea.innerHTML = '';
+
+      try {
+        const response = await fetch(`${API_BASE}/fraud-alerts`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load fraud alerts');
+
+        fraudData = await response.json();
+        loading.style.display = 'none';
+
+        if (fraudData.length === 0) {
+          messageArea.innerHTML = '<div class="success"><i class="fas fa-check-circle"></i> No suspicious activities detected</div>';
+          table.style.display = 'none';
+          return;
+        }
+
+        renderFraudList(fraudData);
+        table.style.display = 'table';
+        updateAlertCounts();
+      } catch (error) {
+        loading.style.display = 'none';
+        messageArea.innerHTML = `<div class="error"><i class="fas fa-exclamation-circle"></i> ${error.message}</div>`;
+      }
+    }
+
+    function renderFraudList(data) {
+      const body = document.getElementById('fraudBody');
+      body.innerHTML = '';
+
+      data.forEach(fraud => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><strong>${fraud.userName || 'Unknown'}</strong></td>
+          <td>${fraud.email || 'N/A'}</td>
+          <td>${fraud.type}</td>
+          <td><span class="risk-badge risk-${fraud.riskLevel}">${fraud.riskLevel.toUpperCase()}</span></td>
+          <td><span class="status-badge status-${fraud.status}">${fraud.status}</span></td>
+          <td>${new Date(fraud.detectedAt).toLocaleDateString()}</td>
+          <td class="action-buttons">
+            <button class="btn-details" onclick="viewFraudDetails('${fraud.id}')"><i class="fas fa-eye"></i> View</button>
+            <button class="btn-block" onclick="quickBlockUser('${fraud.userId}')"><i class="fas fa-ban"></i></button>
+          </td>
+        `;
+        body.appendChild(row);
+      });
+    }
+
+    function filterFraudList() {
+      const risk = document.getElementById('riskFilter').value;
+      const status = document.getElementById('statusFilter').value;
+      const type = document.getElementById('typeFilter').value;
+      const search = document.getElementById('searchInput').value.toLowerCase();
+
+      const filtered = fraudData.filter(fraud => {
+        const matchRisk = !risk || fraud.riskLevel === risk;
+        const matchStatus = !status || fraud.status === status;
+        const matchType = !type || fraud.type === type;
+        const matchSearch = !search || 
+          fraud.email.toLowerCase().includes(search) || 
+          fraud.userName.toLowerCase().includes(search) ||
+          fraud.userId.includes(search);
+        return matchRisk && matchStatus && matchType && matchSearch;
+      });
+
+      renderFraudList(filtered);
+    }
+
+    function resetFilters() {
+      document.getElementById('riskFilter').value = '';
+      document.getElementById('statusFilter').value = '';
+      document.getElementById('typeFilter').value = '';
+      document.getElementById('searchInput').value = '';
+      renderFraudList(fraudData);
+    }
+
+    // Fraud Details Modal
+    async function viewFraudDetails(fraudId) {
+      const fraud = fraudData.find(f => f.id === fraudId);
+      if (!fraud) return;
+
+      currentFraud = fraud;
+      const modalBody = document.getElementById('fraudModalBody');
+
+      const riskColor = fraud.riskLevel === 'critical' ? '#c62828' : 
+                       fraud.riskLevel === 'high' ? '#f44336' : 
+                       fraud.riskLevel === 'medium' ? '#ffd700' : '#4CAF50';
+
+      modalBody.innerHTML = `
+        <strong style="color: ${riskColor};">Risk Level: ${fraud.riskLevel.toUpperCase()}</strong>
+        <p style="margin-top: 8px;"><strong>User:</strong> ${fraud.userName}</p>
+        <p><strong>Email:</strong> ${fraud.email}</p>
+        <p><strong>User ID:</strong> ${fraud.userId}</p>
+        <p><strong>Alert Type:</strong> ${fraud.type}</p>
+        <p><strong>Status:</strong> ${fraud.status}</p>
+        <p><strong>Reason:</strong> ${fraud.reason}</p>
+        <p><strong>Detected at:</strong> ${new Date(fraud.detectedAt).toLocaleString()}</p>
+        
+        <h4 style="margin-top: 16px; color: #ffd700;">Suspicious Indicators</h4>
+        <div class="detail-grid">
+          ${Object.entries(fraud.indicators || {}).map(([key, value]) => `
+            <div class="detail-item">
+              <div class="detail-label">${key}</div>
+              <div class="detail-value">${value}</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <h4 style="margin-top: 16px; color: #ffd700;">User Activity Summary</h4>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <div class="detail-label">Total Earnings</div>
+            <div class="detail-value">\$${(fraud.totalEarnings || 0).toFixed(2)}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Withdrawal Attempts</div>
+            <div class="detail-value">${fraud.withdrawalAttempts || 0}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Account Age</div>
+            <div class="detail-value">${fraud.accountAge || 'N/A'}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">IP Addresses</div>
+            <div class="detail-value">${fraud.uniqueIPs || 0}</div>
+          </div>
+        </div>
+
+        <p style="margin-top: 16px; font-size: 12px; color: #888; background: #121214; padding: 12px; border-radius: 6px;">
+          <strong>Recommendation:</strong> ${fraud.recommendation}
+        </p>
+      `;
+
+      document.getElementById('fraudModal').classList.add('active');
+    }
+
+    function closeFraudModal() {
+      document.getElementById('fraudModal').classList.remove('active');
+      currentFraud = null;
+    }
+
+    async function approveFraud() {
+      if (!currentFraud) return;
+      await updateFraudStatus(currentFraud.id, 'cleared');
+      closeFraudModal();
+      loadFraudAlerts();
+    }
+
+    async function markForReview() {
+      if (!currentFraud) return;
+      await updateFraudStatus(currentFraud.id, 'reviewing');
+      closeFraudModal();
+      loadFraudAlerts();
+    }
+
+    async function blockUser() {
+      if (!currentFraud) return;
+      await updateFraudStatus(currentFraud.id, 'blocked');
+      await quickBlockUser(currentFraud.userId);
+      closeFraudModal();
+      loadFraudAlerts();
+    }
+
+    async function updateFraudStatus(fraudId, status) {
+      try {
+        const response = await fetch(`${API_BASE}/fraud-alerts/${fraudId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          },
+          body: JSON.stringify({ status })
+        });
+
+        if (!response.ok) throw new Error('Failed to update fraud status');
+      } catch (error) {
+        console.error('Error updating fraud status:', error);
+      }
+    }
+
+    async function quickBlockUser(userId) {
+      try {
+        const response = await fetch(`${API_BASE}/users/${userId}/block`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        });
+
+        if (response.ok) {
+          showNotification('User blocked successfully', 'success');
+        }
+      } catch (error) {
+        console.error('Error blocking user:', error);
+      }
+    }
+
+    // Fraud Rules
+    async function loadFraudRules() {
+      try {
+        const response = await fetch(`${API_BASE}/fraud-rules`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to load fraud rules');
+
+        rulesData = await response.json();
+        renderRulesList(rulesData);
+      } catch (error) {
+        console.error('Error loading fraud rules:', error);
+      }
+    }
+
+    function renderRulesList(rules) {
+      const body = document.getElementById('rulesBody');
+      body.innerHTML = '';
+
+      rules.forEach(rule => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${rule.name}</td>
+          <td>${rule.threshold}</td>
+          <td><span class="status-badge" style="background: ${rule.enabled ? '#4CAF50' : '#666'}; color: #fff;">${rule.enabled ? 'Enabled' : 'Disabled'}</span></td>
+          <td>${rule.triggeredCount || 0}</td>
+          <td class="action-buttons">
+            <button class="btn-details" onclick="editRule('${rule.id}')"><i class="fas fa-edit"></i> Edit</button>
+            <button class="btn-approve" onclick="toggleRule('${rule.id}', ${!rule.enabled})"><i class="fas fa-toggle-${rule.enabled ? 'on' : 'off'}"></i></button>
+          </td>
+        `;
+        body.appendChild(row);
+      });
+    }
+
+    function editRule(ruleId) {
+      const rule = rulesData.find(r => r.id === ruleId);
+      if (!rule) return;
+
+      currentRule = rule;
+      const modalBody = document.getElementById('ruleModalBody');
+
+      modalBody.innerHTML = `
+        <div class="detail-item">
+          <div class="detail-label">Rule Name</div>
+          <input type="text" id="ruleName" value="${rule.name}" style="width: 100%; padding: 8px; margin-top: 4px; background: #121214; border: 1px solid #232326; border-radius: 4px; color: #fff;">
+        </div>
+        <div class="detail-item" style="margin-top: 12px;">
+          <div class="detail-label">Threshold</div>
+          <input type="text" id="ruleThreshold" value="${rule.threshold}" style="width: 100%; padding: 8px; margin-top: 4px; background: #121214; border: 1px solid #232326; border-radius: 4px; color: #fff;">
+        </div>
+        <div class="detail-item" style="margin-top: 12px;">
+          <div class="detail-label">Description</div>
+          <textarea id="ruleDescription" style="width: 100%; padding: 8px; margin-top: 4px; background: #121214; border: 1px solid #232326; border-radius: 4px; color: #fff; min-height: 80px;">${rule.description}</textarea>
+        </div>
+        <p style="margin-top: 12px; color: #888; font-size: 12px;">
+          Triggered: <strong>${rule.triggeredCount || 0}</strong> times
+        </p>
+      `;
+
+      document.getElementById('ruleModal').classList.add('active');
+    }
+
+    function closeRuleModal() {
+      document.getElementById('ruleModal').classList.remove('active');
+      currentRule = null;
+    }
+
+    async function saveRule() {
+      if (!currentRule) return;
+      try {
+        const response = await fetch(`${API_BASE}/fraud-rules/${currentRule.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          },
+          body: JSON.stringify({
+            name: document.getElementById('ruleName').value,
+            threshold: document.getElementById('ruleThreshold').value,
+            description: document.getElementById('ruleDescription').value
+          })
+        });
+
+        if (response.ok) {
+          showNotification('Rule updated successfully', 'success');
+          closeRuleModal();
+          loadFraudRules();
+        }
+      } catch (error) {
+        console.error('Error saving rule:', error);
+      }
+    }
+
+    async function toggleRule(ruleId, enabled) {
+      try {
+        const response = await fetch(`${API_BASE}/fraud-rules/${ruleId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          },
+          body: JSON.stringify({ enabled })
+        });
+
+        if (response.ok) {
+          loadFraudRules();
+        }
+      } catch (error) {
+        console.error('Error toggling rule:', error);
+      }
+    }
+
+    // Alert Counts
+    function updateAlertCounts() {
+      const critical = fraudData.filter(f => f.riskLevel === 'critical').length;
+      const highRisk = fraudData.filter(f => f.riskLevel === 'high').length;
+      const reviewing = fraudData.filter(f => f.status === 'reviewing').length;
+      const cleared = fraudData.filter(f => f.status === 'cleared').length;
+
+      document.getElementById('criticalCount').textContent = critical;
+      document.getElementById('highRiskCount').textContent = highRisk;
+      document.getElementById('reviewingCount').textContent = reviewing;
+      document.getElementById('clearedCount').textContent = cleared;
+    }
+
+    // Charts
+    let charts = {};
+
+    function initCharts() {
+      const chartConfigs = {
+        riskDistributionChart: {
+          type: 'doughnut',
+          data: {
+            labels: ['Critical', 'High', 'Medium', 'Low'],
+            datasets: [{
+              data: [2, 5, 8, 3],
+              backgroundColor: ['#c62828', '#f44336', '#ffd700', '#4CAF50']
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#e0e0e0' } } }
+          }
+        },
+        fraudTypesChart: {
+          type: 'bar',
+          data: {
+            labels: ['Withdrawal', 'Earning', 'Referral', 'Login', 'Location'],
+            datasets: [{
+              label: 'Count',
+              data: [5, 8, 3, 4, 2],
+              backgroundColor: '#2196F3',
+              borderRadius: 4
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#e0e0e0' } } },
+            scales: { x: { ticks: { color: '#e0e0e0' }, grid: { color: '#232326' } }, y: { ticks: { color: '#e0e0e0' }, grid: { color: '#232326' } } }
+          }
+        },
+        timelineChart: {
+          type: 'line',
+          data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+              label: 'Fraud Alerts',
+              data: [3, 5, 2, 8, 4, 6, 3],
+              borderColor: '#f44336',
+              backgroundColor: 'rgba(244, 67, 54, 0.1)',
+              tension: 0.4,
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#e0e0e0' } } },
+            scales: { x: { ticks: { color: '#e0e0e0' }, grid: { color: '#232326' } }, y: { ticks: { color: '#e0e0e0' }, grid: { color: '#232326' } } }
+          }
+        },
+        severityChart: {
+          type: 'radar',
+          data: {
+            labels: ['Withdrawal Pattern', 'Earning Pattern', 'Referral Fraud', 'Login Anomaly', 'Geographic Risk'],
+            datasets: [{
+              label: 'Risk Score',
+              data: [75, 65, 50, 80, 45],
+              borderColor: '#f44336',
+              backgroundColor: 'rgba(244, 67, 54, 0.2)',
+              pointBackgroundColor: '#f44336'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { labels: { color: '#e0e0e0' } } },
+            scales: { r: { ticks: { color: '#e0e0e0' }, grid: { color: '#232326' } } }
+          }
+        }
+      };
+
+      Object.entries(chartConfigs).forEach(([canvasId, config]) => {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        charts[canvasId] = new Chart(ctx, config);
+      });
+    }
+
+    function showNotification(message, type = 'info') {
+      const messageArea = document.getElementById('messageArea');
+      const div = document.createElement('div');
+      div.className = type === 'success' ? 'success' : 'error';
+      div.textContent = message;
+      messageArea.innerHTML = '';
+      messageArea.appendChild(div);
+      setTimeout(() => div.remove(), 3000);
+    }
+  </script>
+</body>
+</html>

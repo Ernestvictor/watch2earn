@@ -93,6 +93,42 @@ router.post('/login', (req, res) => {
   res.json({ message: 'Login handled on frontend with Firebase' });
 });
 
+// Public status lookup used by the frontend before redirecting after sign-in
+router.post('/status', async (req, res) => {
+  try {
+    const email = String((req.body && req.body.email) || req.query.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.json({ status: 'unknown', redirect: null, message: 'Email required' });
+    }
+
+    const user = await User.findOne({ email }).lean();
+    if (!user) {
+      return res.json({ status: 'new', redirect: null, message: 'No account found yet.' });
+    }
+
+    if (user.isBanned || user.status === 'banned') {
+      return res.json({
+        status: 'banned',
+        redirect: '/banned.html',
+        message: 'This account has been banned for violating the site rules.'
+      });
+    }
+
+    if (user.isSuspended || user.status === 'suspended') {
+      return res.json({
+        status: 'suspended',
+        redirect: '/suspend.html',
+        message: 'This account is suspended and waiting for review.'
+      });
+    }
+
+    return res.json({ status: 'active', redirect: '/home.html' });
+  } catch (error) {
+    console.error('Auth status error:', error);
+    return res.status(500).json({ error: 'Failed to resolve account status' });
+  }
+});
+
 // LOGOUT placeholder (handled client-side with Firebase)
 router.post('/logout', (req, res) => {
   res.json({ message: 'Logout handled on frontend with Firebase' });

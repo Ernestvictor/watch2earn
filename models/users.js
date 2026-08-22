@@ -74,6 +74,40 @@ const userSchema = new mongoose.Schema({
   isDisabled: { 
     type: Boolean, 
     default: false 
+  },
+  lastLogin: {
+    type: Date,
+    default: null
+  },
+  lastActivity: {
+    type: Date,
+    default: null
+  },
+  isPassive: {
+    type: Boolean,
+    default: false
+  },
+  suspendAppeal: {
+    type: String,
+    default: null,
+    maxlength: 2000
+  },
+  suspendAppealStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected', null],
+    default: null
+  },
+  suspendAppealDate: {
+    type: Date,
+    default: null
+  },
+  suspendedDate: {
+    type: Date,
+    default: null
+  },
+  bannedDate: {
+    type: Date,
+    default: null
   }
 }, { timestamps: true });
 

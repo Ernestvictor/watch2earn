@@ -74,31 +74,43 @@
       try{
         const cred=await firebase.auth().createUserWithEmailAndPassword(email,password);
         await cred.user.updateProfile({displayName:fullName});
-        await db.collection('users').doc(cred.user.uid).set({
-          email,
-          displayName:fullName,
-          createdAt:new Date(),
-          referredBy:localStorage.getItem('w2e_ref')||null
+        
+        // Register with backend - mark as NEW user
+        const registerRes = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firebaseUid: cred.user.uid,
+            email,
+            username: fullName,
+            displayName: fullName,
+            referredBy: localStorage.getItem('w2e_ref') || null
+          })
         });
-        if (window.w2e && typeof window.w2e.syncMongoUser === 'function') {
-          await window.w2e.syncMongoUser({ username: fullName, displayName: fullName, referredBy: localStorage.getItem('w2e_ref') || null });
+        
+        const registerData = registerRes.ok ? await registerRes.json() : null;
+        if (!registerRes.ok) {
+          throw new Error(registerData?.error || 'Failed to register with backend');
         }
+        
+        // If referrer exists, update referrer's referred count
+        const refId = localStorage.getItem('w2e_ref');
+        if (refId) {
+          await fetch('/api/referrals/update-referrer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ referrerId: refId, newUserId: cred.user.uid })
+          }).catch(() => {});
+        }
+        
+        localStorage.removeItem('w2e_ref');
         window.location.href='home.html';
       }catch(error){
         if(error.code==='auth/email-already-in-use'){
-          // If email already exists in Firebase, still attempt to register a guest record
-          try {
-            await fetch('/api/auth/register-guest', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, username: fullName, displayName: fullName, referredBy: localStorage.getItem('w2e_ref') || null })
-            });
-          } catch (e) {
-            console.warn('register-guest failed:', e && e.message);
-          }
-          // Redirect user to home so referral tracking isn't lost for invited users
-          location.href = 'home.html';
-          return;
+          // Email already exists - user trying to sign up again
+          errorMsg.innerText = '✗ This email already has an account. Please login instead.';
+          btn.disabled=false;
+          btn.innerText='Sign Up';
         } else if(error.code==='auth/weak-password'){
           errorMsg.innerText='✗ Password must be at least 6 characters.';
           btn.disabled=false;

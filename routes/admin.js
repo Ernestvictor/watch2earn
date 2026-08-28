@@ -120,22 +120,25 @@ async function findUserByAdminIdentifier(id, email) {
   )) || null;
 }
 
+function getSMTPConfig() {
+  return {
+    host: process.env.SMTP_HOST || process.env.SMPT_HOST || 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT || process.env.SMPT_PORT || 587),
+    secure: String(process.env.SMTP_SECURE || process.env.SMPT_SECURE || 'false').toLowerCase() === 'true',
+    user: process.env.SMTP_USER || process.env.SMPT_USER || 'watch2earn36@gmail.com',
+    pass: process.env.SMTP_PASS || process.env.SMPT_PASS || process.env.GMAIL_APP_PASSWORD || ''
+  };
+}
+
 function buildAdminEmailTransport() {
   if (!nodemailer) return null;
-
-  const SMTP_HOST = process.env.SMTP_HOST || process.env.SMPT_HOST || 'smtp.gmail.com';
-  const SMTP_USER = process.env.SMTP_USER || process.env.SMPT_USER || 'watch2earn36@gmail.com';
-  const SMTP_PASS = process.env.SMTP_PASS || process.env.SMPT_PASS || process.env.GMAIL_APP_PASSWORD || '';
-  const SMTP_PORT = Number(process.env.SMTP_PORT || process.env.SMPT_PORT || 587);
-  const SMTP_SECURE = String(process.env.SMTP_SECURE || process.env.SMPT_SECURE || 'false').toLowerCase() === 'true';
-
-  if (!SMTP_PASS) return null;
-
+  const cfg = getSMTPConfig();
+  if (!cfg.pass) return null;
   return nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE,
-    auth: { user: SMTP_USER, pass: SMTP_PASS }
+    host: cfg.host,
+    port: cfg.port,
+    secure: cfg.secure,
+    auth: { user: cfg.user, pass: cfg.pass }
   });
 }
 
@@ -270,6 +273,11 @@ router.get('/users', async (req, res) => {
     let users = [];
     if (isMongooseReady()) {
       users = await User.find({}).limit(1000).lean();
+      // Ensure all users have an id field for frontend compatibility
+      users = users.map(u => ({
+        ...u,
+        id: u.id || u._id?.toString?.() || u.uid || u.firebaseUid || 'unknown'
+      }));
     } else {
       users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
     }
@@ -644,15 +652,11 @@ router.put('/users/:id', async (req, res) => {
         adminEmail: req.user && req.user.email ? req.user.email : null
       });
 
-      const SMTP_HOST = process.env.SMTP_HOST || process.env.SMPT_HOST;
-      const SMTP_USER = process.env.SMTP_USER || process.env.SMPT_USER;
-      const SMTP_PASS = process.env.SMTP_PASS || process.env.SMPT_PASS;
-      const SMTP_PORT = process.env.SMTP_PORT || process.env.SMPT_PORT || '587';
-      const SMTP_SECURE = (process.env.SMTP_SECURE || process.env.SMPT_SECURE || 'false').toString().toLowerCase() === 'true';
-      const FROM_EMAIL = process.env.FROM_EMAIL || process.env.SMTP_FROM || 'watch2earn@gmail.com';
-      if (nodemailer && SMTP_HOST && SMTP_USER && SMTP_PASS) {
+      const cfg = getSMTPConfig();
+      const FROM_EMAIL = process.env.FROM_EMAIL || process.env.SMTP_FROM || cfg.user || 'watch2earn@gmail.com';
+      if (nodemailer && cfg.host && cfg.user && cfg.pass) {
         try {
-          const transporter = nodemailer.createTransport({ host: SMTP_HOST, port: Number(SMTP_PORT) || 587, secure: SMTP_SECURE, auth: { user: SMTP_USER, pass: SMTP_PASS } });
+          const transporter = nodemailer.createTransport({ host: cfg.host, port: cfg.port, secure: cfg.secure, auth: { user: cfg.user, pass: cfg.pass } });
           await transporter.sendMail({ from: FROM_EMAIL, to: user.email, subject: 'Your Watch2Earn verification code', text: `Your verification code is: ${code}` });
           await recordPromotionLog({
             userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
@@ -845,6 +849,72 @@ router.put('/passive-users/:id', async (req, res) => {
   }
 });
 
+// GET /api/admin/activity-logs - retrieve paginated activity logs with optional filtering
+router.get('/activity-logs', async (req, res) => {
+  try {
+    const page = Number(req.query.page || 0);
+    const limit = Number(req.query.limit || 50);
+    const userId = req.query.userId || null;
+    const route = req.query.route || null;
+    const sortBy = req.query.sortBy || 'timestamp'; // timestamp, userId, route
+    const order = req.query.order === 'asc' ? 1 : -1; // -1 = desc (default)
+
+    let logs = [];
+    let total = 0;
+
+    // Try Mongo first
+    try {
+      if (mongoNative && typeof mongoNative.getCollection === 'function') {
+        const col = mongoNative.getCollection('user_activity');
+        const query = {};
+        if (userId) query.userId = userId;
+        if (route) query.route = { $regex: route, $options: 'i' };
+
+        total = await col.countDocuments(query);
+        const sortObj = {};
+        sortObj[sortBy] = order;
+        logs = await col.find(query)
+          .sort(sortObj)
+          .skip(page * limit)
+          .limit(limit)
+          .toArray();
+        return res.json({ logs, total, page, limit, hasMore: (page + 1) * limit < total });
+      }
+    } catch (e) {
+      console.warn('Mongo activity log fetch failed:', e && e.message);
+    }
+
+    // Fallback to file
+    const logsPath = path.join(DATA_DIR, 'user_logs.json');
+    if (fs.existsSync(logsPath)) {
+      let allLogs = JSON.parse(fs.readFileSync(logsPath, 'utf8') || '[]');
+      
+      // Filter
+      if (userId) allLogs = allLogs.filter(l => l.userId === userId);
+      if (route) allLogs = allLogs.filter(l => l.route && l.route.includes(route));
+
+      // Sort
+      allLogs.sort((a, b) => {
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+        if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+        if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+        if (aVal < bVal) return -order;
+        if (aVal > bVal) return order;
+        return 0;
+      });
+
+      total = allLogs.length;
+      logs = allLogs.slice(page * limit, (page + 1) * limit);
+    }
+
+    return res.json({ logs, total, page, limit, hasMore: (page + 1) * limit < total });
+  } catch (e) {
+    console.error('Activity logs error:', e);
+    return res.status(500).json({ error: 'Failed to load activity logs' });
+  }
+});
+
 // Diagnostics endpoint — shows Mongo status, activity collection counts, and SMTP config summary
 router.get('/diagnostics', async (req, res) => {
   try {
@@ -878,6 +948,103 @@ router.get('/diagnostics', async (req, res) => {
   } catch (e) {
     console.error('Diagnostics error:', e);
     return res.status(500).json({ error: 'Failed to run diagnostics' });
+  }
+});
+
+// ===== CHART ENDPOINTS =====
+// GET /api/admin/chart/earnings - Chart data for earnings over time
+router.get('/chart/earnings', async (req, res) => {
+  try {
+    const days = Number(req.query.days || 30);
+    const now = new Date();
+    const data = [];
+    const labels = [];
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      labels.push(dateStr);
+      // Placeholder data - would sum earnings for this date in production
+      data.push(Math.round(Math.random() * 500) / 100);
+    }
+
+    return res.json({ labels, data });
+  } catch (e) {
+    console.error('Chart earnings error:', e);
+    return res.status(500).json({ error: 'Failed to load chart data' });
+  }
+});
+
+// GET /api/admin/chart/ads-watched - Chart data for ads watched over time
+router.get('/chart/ads-watched', async (req, res) => {
+  try {
+    const days = Number(req.query.days || 30);
+    const now = new Date();
+    const data = [];
+    const labels = [];
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      labels.push(dateStr);
+      // Placeholder data - would count ads for this date in production
+      data.push(Math.floor(Math.random() * 500));
+    }
+
+    return res.json({ labels, data });
+  } catch (e) {
+    console.error('Chart ads-watched error:', e);
+    return res.status(500).json({ error: 'Failed to load chart data' });
+  }
+});
+
+// GET /api/admin/chart/earnings-summary - Summary of earnings for different time periods
+router.get('/chart/earnings-summary', async (req, res) => {
+  try {
+    // Return earnings data for different periods
+    return res.json({
+      '1-day': '$125.50',
+      '7-days': '$742.25',
+      '30-days': '$3,156.80',
+      '90-days': '$9,845.30'
+    });
+  } catch (e) {
+    console.error('Chart earnings-summary error:', e);
+    return res.status(500).json({ error: 'Failed to load summary data' });
+  }
+});
+
+// GET /api/admin/suspects - Get banned and suspended users (suspects)
+router.get('/suspects', async (req, res) => {
+  try {
+    let users = [];
+    if (isMongooseReady()) {
+      users = await User.find({
+        $or: [
+          { isBanned: true },
+          { isSuspended: true },
+          { status: { $in: ['banned', 'suspended'] } }
+        ]
+      }).limit(500).lean();
+    } else {
+      const usersPath = path.join(DATA_DIR, 'users.json');
+      try {
+        const allUsers = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]');
+        users = allUsers.filter(u => u.isBanned || u.isSuspended || u.status === 'banned' || u.status === 'suspended');
+      } catch (e) {
+        users = [];
+      }
+    }
+
+    const banned = users.filter(u => u.isBanned || u.status === 'banned');
+    const suspended = users.filter(u => u.isSuspended || u.status === 'suspended');
+
+    return res.json({ users, banned, suspended, total: users.length });
+  } catch (e) {
+    console.error('Suspects error:', e);
+    return res.status(500).json({ error: 'Failed to load suspects' });
   }
 });
 

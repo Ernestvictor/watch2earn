@@ -22,25 +22,49 @@
   <div class="container">
     <div class="card">
       <h2>Promote User</h2>
-      <p>Enter the user ID or email to promote. This will mark the user as promoted and make <strong>verifild.html</strong> visible to them.</p>
+      <p>Enter the user ID or email to promote. The user will receive a verification code via email.</p>
       <input id="ident" placeholder="User ID or email">
       <div style="display:flex;gap:8px">
         <button id="btnPromote">Promote</button>
         <button id="btnCancel" onclick="history.back()" type="button">Cancel</button>
       </div>
-      <div id="msg" style="margin-top:12px;color:#bbb"></div>
+      <div id="msg" style="margin-top:12px;color:#bbb;"></div>
     </div>
   </div>
   <script>
     document.getElementById('btnPromote').addEventListener('click', async ()=>{
-      const id = document.getElementById('ident').value.trim();
-      if(!id) return document.getElementById('msg').innerText = 'Enter id or email';
+      const ident = document.getElementById('ident').value.trim();
+      if(!ident) return document.getElementById('msg').innerText = 'Enter id or email';
       const token = localStorage.getItem('adminToken');
+      if(!token) return document.getElementById('msg').innerText = 'Login required';
+      
+      const msgEl = document.getElementById('msg');
+      msgEl.innerText = 'Processing...';
+      msgEl.style.color = '#4CAF50';
+      
       try{
-        const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`,{ method:'PUT', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ action: 'promote' }) });
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        document.getElementById('msg').innerText = 'User promoted successfully.';
-      }catch(e){ document.getElementById('msg').innerText = 'Failed to promote: '+(e.message||e); }
+        const res = await fetch(`/api/admin/users/${encodeURIComponent(ident)}`,{ 
+          method:'PUT', 
+          headers: { 
+            'Content-Type':'application/json', 
+            'Authorization': `Bearer ${token}` 
+          }, 
+          body: JSON.stringify({ action: 'promote' }) 
+        });
+        
+        if(!res.ok) {
+          const err = await res.json().catch(()=>({}));
+          throw new Error(err.error || 'HTTP '+res.status);
+        }
+        
+        const data = await res.json();
+        msgEl.innerText = data.message || 'User promoted successfully. Verification code sent via email.';
+        msgEl.style.color = '#4CAF50';
+        setTimeout(() => { window.location.href = 'users.html'; }, 2000);
+      }catch(e){ 
+        msgEl.innerText = 'Failed to promote: '+(e.message||e); 
+        msgEl.style.color = '#f44336';
+      }
     });
   </script>
 </body>

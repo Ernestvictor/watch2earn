@@ -7,19 +7,8 @@ const db = require('./db'); // PostgreSQL connection
 const mongoose = require('mongoose');
 const app = express();
 
-const { startTelegramBot } = require('./telegram-bot');
-const { auth: firebaseAuth } = require('./config/firebaseAdmin');
-const authMiddleware = require('./middleware/auth');
-const User = require('./models/User');
-const activityLogger = require('./middleware/activity');
-
-// Start Telegram bot if BOT_TOKEN is configured
-startTelegramBot();
-
 app.use(express.json());
 app.use(cookieParser(process.env.COOKIE_SECRET));
-// Log authenticated requests (and attempts) to track active vs passive users
-app.use(activityLogger);
 
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
 if (mongoUri) {
@@ -46,6 +35,10 @@ mongoNative.connectDB().then(() => {
     }
   }
 }).catch(err => { /* already logged in module */ });
+
+const { auth: firebaseAuth } = require('./config/firebaseAdmin');
+const authMiddleware = require('./middleware/auth');
+const User = require('./models/User');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -382,17 +375,71 @@ app.get('/claim', authMiddleware, async (req, res) => {
     });
     fs.writeFileSync(transactionsPath, JSON.stringify(transactions, null, 2));
 
-    // Return a concise success response with updated coin/balance info
     return res.json({
       ok: true,
-      message: `🎉 ${rewardNaira} coins added!`,
-      coins: (user && (user.coins || 0)) || rewardNaira,
-      balanceUsd: (user && (user.balance || 0)) || rewardUsd
+    const amountNaira = Math.round(amountUsd * 1500);
+
+    const transactions = loadTransactions();
+    const newTx = {
+      id: trans_id,
+      userId: user_id,
+      type: 'survey',
+      source: 'cpx',
+      title: 'CPX Survey Completed',
+      amountUsd: amountUsd,
+      amountNaira: amountNaira,
+      date: new Date().toISOString(),
+      cpxTransId: trans_id
+    };
+
+    transactions.unshift(newTx);
+    saveTransactions(transactions);
+
+    // Track this trans_id
+    tracking.push({
+      trans_id: trans_id,
+      user_id: user_id,
+      amount_usd: amountUsd,
+      status: 'completed',
+      date: new Date().toISOString()
     });
-  } catch (err) {
-    console.error('/claim error:', err);
-    return res.status(500).json({ error: err && err.message ? err.message : 'Internal server error' });
+    saveCpxTracking(tracking);
+
+    console.log(`✅ Credited ₦${amountNaira} ($${amountUsd}) to user ${user_id} for CPX survey`);
+  } else if (status === '2') {
+    // Reversed - remove earnings
+    const amountUsd = parseFloat(amount_usd || 0);
+    const amountNaira = Math.round(amountUsd * 1500);
+
+    const transactions = loadTransactions();
+    const reversal = {
+      id: trans_id + '_reversed',
+      userId: user_id,
+      type: 'survey_reversal',
+      source: 'cpx',
+      title: 'CPX Survey Reversed',
+      amountUsd: -amountUsd,
+      amountNaira: -amountNaira,
+      date: new Date().toISOString(),
+      cpxTransId: trans_id
+    };
+
+    transactions.unshift(reversal);
+    saveTransactions(transactions);
+
+    // Track reversal
+    const idx = tracking.findIndex(t => t.trans_id === trans_id);
+    if (idx !== -1) {
+      tracking[idx].status = 'reversed';
+      tracking[idx].reversedAt = new Date().toISOString();
+    }
+    saveCpxTracking(tracking);
+
+    console.log(`⚠️ Reversed ₦${amountNaira} ($${amountUsd}) from user ${user_id}`);
   }
+
+  // MUST return 'OK' or CPX will retry
+  res.send('OK');
 });
 
 // CPAGrip server-to-server postback handler (MongoDB with Mongoose)

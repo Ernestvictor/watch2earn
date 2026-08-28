@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Activity Logs - Watch2Earn Admin</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #fff; font-family: 'Segoe UI', Arial, sans-serif; padding-bottom: 40px; }
+.navbar { display: flex; justify-content: space-between; align-items: center; background: #111; border-bottom: 2px solid #4CAF50; padding: 15px 20px; }
+.title { font-size: 24px; font-weight: 800; color: #4CAF50; }
+.logout-btn { background: #f44336; color: #fff; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; }
+.logout-btn:hover { background: #d32f2f; }
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+.section { background: #111; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+.section h2 { font-size: 20px; margin-bottom: 15px; color: #4CAF50; }
+.filters { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px; }
+.filter-group { display: flex; flex-direction: column; gap: 5px; }
+.filter-group label { font-size: 12px; color: #aaa; }
+.filter-group input,
+.filter-group select { padding: 8px 12px; background: #0a0a0a; border: 1px solid #333; border-radius: 6px; color: #fff; }
+.btn { background: #4CAF50; color: #fff; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+.btn:hover { background: #45a049; }
+.btn-secondary { background: #666; }
+.btn-secondary:hover { background: #555; }
+.table-container { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; }
+th { background: #1a1a1a; font-weight: 700; color: #4CAF50; }
+tr:hover { background: #1a1a1a; }
+.status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.status-active { background: #4CAF50; color: #fff; }
+.status-idle { background: #ff9800; color: #fff; }
+.pagination { display: flex; justify-content: center; gap: 10px; margin-top: 20px; }
+.pagination button { padding: 8px 12px; background: #333; border: none; border-radius: 4px; color: #fff; cursor: pointer; }
+.pagination button.active { background: #4CAF50; }
+.pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+.stat-card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 15px; text-align: center; }
+.stat-card .number { font-size: 32px; font-weight: 800; color: #4CAF50; }
+.stat-card .label { font-size: 12px; color: #aaa; margin-top: 5px; }
+.empty { text-align: center; padding: 40px; color: #888; }
+.loading { text-align: center; padding: 20px; color: #888; }
+</style>
+</head>
+<body>
+
+<div class="navbar">
+  <div class="title"><i class="fas fa-chart-line"></i> Activity Logs</div>
+  <button class="logout-btn" onclick="logout()">Logout</button>
+</div>
+
+<div class="container">
+  <!-- Diagnostics Section -->
+  <div class="section">
+    <h2>Logging Status</h2>
+    <div class="stats">
+      <div class="stat-card">
+        <div class="number" id="mongoStatus">—</div>
+        <div class="label">MongoDB Status</div>
+      </div>
+      <div class="stat-card">
+        <div class="number" id="activityCount">—</div>
+        <div class="label">Total Activities Logged</div>
+      </div>
+      <div class="stat-card">
+        <div class="number" id="lastActivityTime">—</div>
+        <div class="label">Last Activity</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity Logs Section -->
+  <div class="section">
+    <h2>User Activity Logs</h2>
+    
+    <div class="filters">
+      <div class="filter-group">
+        <label>User ID</label>
+        <input type="text" id="filterUserId" placeholder="Filter by user ID..." />
+      </div>
+      <div class="filter-group">
+        <label>Route</label>
+        <input type="text" id="filterRoute" placeholder="Filter by route..." />
+      </div>
+      <div class="filter-group">
+        <label>Sort By</label>
+        <select id="sortBy">
+          <option value="timestamp">Timestamp (newest first)</option>
+          <option value="userId">User ID</option>
+          <option value="route">Route</option>
+        </select>
+      </div>
+      <div class="filter-group" style="align-self: flex-end;">
+        <button class="btn" onclick="loadActivityLogs(0)"><i class="fas fa-search"></i> Filter</button>
+        <button class="btn btn-secondary" onclick="resetFilters()"><i class="fas fa-redo"></i> Reset</button>
+      </div>
+    </div>
+
+    <div id="logsContainer" class="table-container">
+      <div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading activity logs...</div>
+    </div>
+
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <!-- Export Section -->
+  <div class="section">
+    <h2>Export Data</h2>
+    <button class="btn" onclick="exportLogsCSV()"><i class="fas fa-download"></i> Download as CSV</button>
+    <button class="btn btn-secondary" onclick="exportLogsJSON()"><i class="fas fa-code"></i> Download as JSON</button>
+  </div>
+</div>
+
+<script>
+let currentPage = 0;
+let totalLogs = 0;
+const limit = 50;
+
+async function loadDiagnostics() {
+  try {
+    const res = await fetch('/api/admin/diagnostics');
+    const data = await res.json();
+    
+    document.getElementById('mongoStatus').innerText = data.mongoReady ? 'Connected' : 'Offline';
+    document.getElementById('activityCount').innerText = data.activityCount ? data.activityCount.toLocaleString() : '0';
+    
+    if (data.lastActivity && data.lastActivity.timestamp) {
+      const time = new Date(data.lastActivity.timestamp);
+      document.getElementById('lastActivityTime').innerText = time.toLocaleTimeString();
+    } else {
+      document.getElementById('lastActivityTime').innerText = 'Never';
+    }
+  } catch (e) {
+    console.error('Failed to load diagnostics:', e);
+    document.getElementById('mongoStatus').innerText = 'Error';
+  }
+}
+
+async function loadActivityLogs(page = 0) {
+  try {
+    currentPage = page;
+    const userId = document.getElementById('filterUserId').value || '';
+    const route = document.getElementById('filterRoute').value || '';
+    const sortBy = document.getElementById('sortBy').value;
+    
+    const params = new URLSearchParams();
+    params.append('page', page);
+    params.append('limit', limit);
+    if (userId) params.append('userId', userId);
+    if (route) params.append('route', route);
+    params.append('sortBy', sortBy);
+    
+    const res = await fetch('/api/admin/activity-logs?' + params.toString());
+    const data = await res.json();
+    
+    totalLogs = data.total;
+    renderLogsTable(data.logs);
+    renderPagination(data.total, page, data.hasMore);
+  } catch (e) {
+    console.error('Failed to load activity logs:', e);
+    document.getElementById('logsContainer').innerHTML = '<div class="empty"><i class="fas fa-exclamation-circle"></i> Error loading logs</div>';
+  }
+}
+
+function renderLogsTable(logs) {
+  const container = document.getElementById('logsContainer');
+  
+  if (!logs || logs.length === 0) {
+    container.innerHTML = '<div class="empty"><i class="fas fa-inbox"></i> No activity logs found</div>';
+    return;
+  }
+  
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>User ID</th>
+          <th>Route</th>
+          <th>Method</th>
+          <th>IP Address</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  
+  logs.forEach(log => {
+    const time = new Date(log.timestamp).toLocaleString();
+    const userId = log.userId ? log.userId.slice(0, 16) + (log.userId.length > 16 ? '...' : '') : '(Anonymous)';
+    const route = log.route ? log.route.slice(0, 30) + (log.route.length > 30 ? '...' : '') : '—';
+    html += `
+      <tr title="${log.userId || ''}">
+        <td>${time}</td>
+        <td><code>${userId}</code></td>
+        <td><small>${route}</small></td>
+        <td>${log.method || '—'}</td>
+        <td><small>${log.ip || '—'}</small></td>
+      </tr>
+    `;
+  });
+  
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function renderPagination(total, currentPage, hasMore) {
+  const totalPages = Math.ceil(total / limit);
+  const paginationEl = document.getElementById('pagination');
+  
+  if (totalPages <= 1) {
+    paginationEl.innerHTML = '';
+    return;
+  }
+  
+  let html = '';
+  const startPage = Math.max(0, currentPage - 2);
+  const endPage = Math.min(totalPages - 1, currentPage + 2);
+  
+  if (startPage > 0) {
+    html += `<button onclick="loadActivityLogs(0)"><i class="fas fa-angle-double-left"></i> First</button>`;
+  }
+  
+  if (currentPage > 0) {
+    html += `<button onclick="loadActivityLogs(${currentPage - 1})"><i class="fas fa-angle-left"></i> Previous</button>`;
+  }
+  
+  for (let i = startPage; i <= endPage; i++) {
+    html += `<button ${i === currentPage ? 'class="active"' : ''} onclick="loadActivityLogs(${i})">${i + 1}</button>`;
+  }
+  
+  if (currentPage < totalPages - 1) {
+    html += `<button onclick="loadActivityLogs(${currentPage + 1})">Next <i class="fas fa-angle-right"></i></button>`;
+  }
+  
+  if (endPage < totalPages - 1) {
+    html += `<button onclick="loadActivityLogs(${totalPages - 1})">Last <i class="fas fa-angle-double-right"></i></button>`;
+  }
+  
+  paginationEl.innerHTML = html;
+}
+
+function resetFilters() {
+  document.getElementById('filterUserId').value = '';
+  document.getElementById('filterRoute').value = '';
+  document.getElementById('sortBy').value = 'timestamp';
+  loadActivityLogs(0);
+}
+
+async function exportLogsCSV() {
+  try {
+    const res = await fetch('/api/admin/activity-logs?page=0&limit=10000');
+    const data = await res.json();
+    const logs = data.logs || [];
+    
+    let csv = 'Timestamp,User ID,Route,Method,IP Address\n';
+    logs.forEach(log => {
+      csv += `"${log.timestamp}","${log.userId || ''}","${log.route || ''}","${log.method || ''}","${log.ip || ''}"\n`;
+    });
+    
+    downloadFile(csv, 'activity-logs.csv', 'text/csv');
+  } catch (e) {
+    alert('Failed to export logs');
+  }
+}
+
+async function exportLogsJSON() {
+  try {
+    const res = await fetch('/api/admin/activity-logs?page=0&limit=10000');
+    const data = await res.json();
+    downloadFile(JSON.stringify(data.logs || [], null, 2), 'activity-logs.json', 'application/json');
+  } catch (e) {
+    alert('Failed to export logs');
+  }
+}
+
+function downloadFile(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function logout() {
+  localStorage.removeItem('adminToken');
+  window.location.href = '/verify';
+}
+
+// Load on page init
+window.addEventListener('load', () => {
+  loadDiagnostics();
+  loadActivityLogs(0);
+  
+  // Refresh diagnostics every 30 seconds
+  setInterval(loadDiagnostics, 30000);
+});
+</script>
+
+</body>
+</html>

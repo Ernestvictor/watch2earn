@@ -532,7 +532,7 @@ router.get('/bonuses', (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to read bonuses' }); }
 });
 
-router.post('/send-bonus', async (req, res) => {
+router.post('/send-bonus', verifyAdminToken, async (req, res) => {
   try {
     const b = req.body || {};
     const amountUsd = Number(b.amountUsd ?? b.amount ?? 0);

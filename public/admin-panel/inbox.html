@@ -17,6 +17,9 @@
     .reply-box{width:100%;padding:8px;background:#0f0f10;border:1px solid #333;color:#fff;border-radius:6px}
     .btn{padding:8px 12px;border-radius:8px;border:none;background:#4CAF50;color:#fff;cursor:pointer}
     .danger{background:#f44336}
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
+    .bottom-nav a{color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+    .bottom-nav a.active{color:#4CAF50;font-weight:700}
   </style>
 </head>
 <body>
@@ -189,5 +192,17 @@ function escapeHtml(text) {
 
 if(localStorage.getItem('adminToken')){ loadInbox(); setInterval(loadInbox,15000); } else { document.getElementById('helpList').innerText='Please login as admin'; }
 </script>
+
+  <div class="bottom-nav">
+    <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="/admin-panel/past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="/admin-panel/charts.html"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
+  </div>
+
+</body>
+</html>
 </body>
 </html>

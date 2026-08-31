@@ -416,36 +416,41 @@ router.post('/claim-bonus', verifyToken, async (req, res) => {
   try {
     // Prefer Mongo for claiming bonuses
     if (typeof mongoNative.getCollection === 'function' && typeof mongoNative.getTransactionsCollection === 'function') {
-      const bcol = mongoNative.getCollection('bonuses');
-      const txCol = mongoNative.getTransactionsCollection();
-      // Find and update atomically
-      const result = await bcol.findOneAndUpdate(
-        { id: bonusId, claimed: { $ne: true } },
-        { $set: { claimed: true }, $push: { claimedBy: { userId, claimedAt: new Date() } } },
-        { returnDocument: 'after' }
-      );
-      const bonus = result.value;
-      if (!bonus) return res.status(404).json({ error: 'Bonus not found or already claimed' });
+      try {
+        const bcol = mongoNative.getCollection('bonuses');
+        const txCol = mongoNative.getTransactionsCollection();
+        // Find and update atomically
+        const result = await bcol.findOneAndUpdate(
+          { id: bonusId, claimed: { $ne: true } },
+          { $set: { claimed: true }, $push: { claimedBy: { userId, claimedAt: new Date() } } },
+          { returnDocument: 'after' }
+        );
+        const bonus = result.value;
+        if (!bonus) return res.status(404).json({ error: 'Bonus not found or already claimed' });
 
-      // Eligibility checks
-      if (bonus.targetType === 'specific' && bonus.targetUserId !== userId) {
-        return res.status(403).json({ error: 'Not eligible for this bonus' });
+        // Eligibility checks
+        if (bonus.targetType === 'specific' && bonus.targetUserId !== userId) {
+          return res.status(403).json({ error: 'Not eligible for this bonus' });
+        }
+
+        // Insert transaction
+        const bonusTx = {
+          id: Date.now().toString(),
+          userId,
+          type: 'bonus',
+          source: 'admin_bonus',
+          title: bonus.title || 'Admin Bonus',
+          amountUsd: bonus.amountUsd,
+          amountNaira: Math.round((bonus.amountUsd || 0) * 1500),
+          date: new Date(),
+          bonusId: bonusId
+        };
+        await txCol.insertOne(bonusTx);
+        return res.json({ message: 'Bonus claimed successfully', amount: bonus.amountUsd });
+      } catch (mongoErr) {
+        console.warn('MongoDB claim bonus failed, falling back to file:', mongoErr.message);
+        // Fall through to file-based flow
       }
-
-      // Insert transaction
-      const bonusTx = {
-        id: Date.now().toString(),
-        userId,
-        type: 'bonus',
-        source: 'admin_bonus',
-        title: bonus.title || 'Admin Bonus',
-        amountUsd: bonus.amountUsd,
-        amountNaira: Math.round((bonus.amountUsd || 0) * 1500),
-        date: new Date(),
-        bonusId: bonusId
-      };
-      await txCol.insertOne(bonusTx);
-      return res.json({ message: 'Bonus claimed successfully', amount: bonus.amountUsd });
     }
 
     // Fallback to file-based flow
@@ -494,7 +499,7 @@ router.post('/claim-bonus', verifyToken, async (req, res) => {
     res.json({ message: 'Bonus claimed successfully', amount: bonus.amountUsd });
   } catch (e) {
     console.error('Error claiming bonus:', e);
-    res.status(500).json({ error: 'Failed to claim bonus' });
+    res.status(500).json({ error: 'Failed to claim bonus: ' + (e && e.message || 'unknown error') });
   }
 });
 

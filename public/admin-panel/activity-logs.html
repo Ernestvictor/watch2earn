@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0a0a0a; color: #fff; font-family: 'Segoe UI', Arial, sans-serif; padding-bottom: 40px; }
+body { background: #0a0a0a; color: #fff; font-family: 'Segoe UI', Arial, sans-serif; padding-bottom: 90px; }
 .navbar { display: flex; justify-content: space-between; align-items: center; background: #111; border-bottom: 2px solid #4CAF50; padding: 15px 20px; }
 .title { font-size: 24px; font-weight: 800; color: #4CAF50; }
 .logout-btn { background: #f44336; color: #fff; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; }
@@ -42,6 +42,9 @@ tr:hover { background: #1a1a1a; }
 .stat-card .label { font-size: 12px; color: #aaa; margin-top: 5px; }
 .empty { text-align: center; padding: 40px; color: #888; }
 .loading { text-align: center; padding: 20px; color: #888; }
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #121214; border-top: 1px solid #232326; display: flex; justify-content: space-around; padding: 10px 0; z-index: 20; }
+.bottom-nav a { color: #888; text-decoration: none; font-size: 12px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.bottom-nav a.active { color: #4CAF50; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -309,6 +312,13 @@ window.addEventListener('load', () => {
   setInterval(loadDiagnostics, 30000);
 });
 </script>
-
+  <div class="bottom-nav">
+    <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="/admin-panel/past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="/admin-panel/charts.html" class="active"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
+  </div>
 </body>
 </html>

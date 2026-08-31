@@ -18,6 +18,18 @@ const nodemailer = (() => {
   try { return require('nodemailer'); } catch (e) { return null; }
 })();
 
+// ✅ Admin Auth Middleware - verify admin token
+function verifyAdminToken(req, res, next) {
+  const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
+  if (!token) return res.status(401).json({ error: 'Unauthorized - no token' });
+  
+  // For now, simple token validation (in production, use JWT)
+  if (token !== 'admin-local-token') {
+    return res.status(403).json({ error: 'Forbidden - invalid token' });
+  }
+  next();
+}
+
 function safeObjectId(value) {
   if (!value || value === 'undefined' || value === 'null') return null;
   const str = String(value).trim();
@@ -171,7 +183,7 @@ async function readUserRecords() {
   try { return JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { return []; }
 }
 
-router.get('/inbox', async (req, res) => {
+router.get('/inbox', verifyAdminToken, async (req, res) => {
   try {
     const inboxMessages = readJson(MESSAGES_PATH).filter(Boolean);
     const users = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]'); } catch { return []; } })();
@@ -193,7 +205,7 @@ router.get('/inbox', async (req, res) => {
 });
 
 // GET /api/admin/approvals - return pending withdrawals and approval items
-router.get('/approvals', async (req, res) => {
+router.get('/approvals', verifyAdminToken, async (req, res) => {
   try {
     const withdrawalsPath = path.join(DATA_DIR, 'withdrawals.json');
     const usersPath = path.join(DATA_DIR, 'users.json');
@@ -324,7 +336,7 @@ router.post('/login', (req, res) => {
   return res.status(403).json({ error: 'Invalid credentials' });
 });
 
-router.get('/users', async (req, res) => {
+router.get('/users', verifyAdminToken, async (req, res) => {
   try {
     let users = [];
     if (isMongooseReady()) {
@@ -356,7 +368,7 @@ router.get('/users', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to read users' }); }
 });
 
-router.get('/messages', async (req, res) => {
+router.get('/messages', verifyAdminToken, async (req, res) => {
   try {
     if (isMongooseReady()) {
       const messages = await Message.find({}).sort({ createdAt: -1 }).limit(200).lean();

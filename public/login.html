@@ -26,7 +26,7 @@
     <h2>Login</h2>
     <form id="loginForm">
       <input type="email" id="loginEmail" placeholder="Email" required>
-      <input type="password" id="loginPassword" placeholder="Password" required>
+      <input type="hidden" id="loginPassword" value="" />
       <button type="submit" id="loginBtn">Login</button>
       <div id="errorMsg" class="error"></div>
     </form>
@@ -54,42 +54,22 @@
       e.preventDefault();
       errorMsg.innerText='';
       btn.disabled=true;
-      btn.innerText='Logging in...';
+      btn.innerText='Sending link...';
       const email=document.getElementById('loginEmail').value.trim();
-      const password=document.getElementById('loginPassword').value;
 
       try {
-        const userCred = await firebase.auth().signInWithEmailAndPassword(email, password);
-        const statusRes = await fetch('/api/auth/status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: userCred.user.email || email })
-        });
-        const statusData = statusRes.ok ? await statusRes.json() : null;
-
-        if (statusData && statusData.status === 'banned') {
-          errorMsg.innerText = 'This account has been banned for violating the site rules. Contact support for more information.';
-          await firebase.auth().signOut().catch(() => {});
-          btn.disabled=false;
-          btn.innerText='Login';
-          return;
-        }
-
-        if (statusData && statusData.status === 'suspended') {
-          window.location.href = 'suspend.html';
-          return;
-        }
-
-        if (window.w2e && typeof window.w2e.syncMongoUser === 'function') {
-          await window.w2e.syncMongoUser({
-            username: userCred.user.displayName || email.split('@')[0],
-            displayName: userCred.user.displayName || email.split('@')[0],
-            email: userCred.user.email || email
-          });
-        }
-        window.location.href='home.html';
+        const actionCodeSettings = {
+          url: window.location.origin + '/verify..html',
+          handleCodeInApp: true
+        };
+        // Save a marker so the handler can complete sign-in
+        localStorage.setItem('w2e_login_email', email);
+        await firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings);
+        alert('A sign-in link has been sent to your email. Check your inbox and spam.');
+        btn.innerText='Link sent';
+        btn.disabled=true;
       } catch (error) {
-        errorMsg.innerText = error.message;
+        errorMsg.innerText = error.message || 'Unable to send sign-in link.';
         btn.disabled=false;
         btn.innerText='Login';
       }

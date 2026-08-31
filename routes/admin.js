@@ -192,6 +192,62 @@ router.get('/inbox', async (req, res) => {
   }
 });
 
+// GET /api/admin/approvals - return pending withdrawals and approval items
+router.get('/approvals', async (req, res) => {
+  try {
+    const withdrawalsPath = path.join(DATA_DIR, 'withdrawals.json');
+    const usersPath = path.join(DATA_DIR, 'users.json');
+    let withdrawals = [];
+    try { withdrawals = JSON.parse(fs.readFileSync(withdrawalsPath, 'utf8') || '[]'); } catch (e) { withdrawals = []; }
+    let users = [];
+    try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+
+    const mapped = (withdrawals || []).map(w => {
+      const user = users.find(u => (u.id && String(u.id) === String(w.userId)) || (u.firebaseUid && String(u.firebaseUid) === String(w.userId)) || (u.uid && String(u.uid) === String(w.userId)) ) || {};
+      return {
+        id: w.id || w._id || ('W-' + (w.id || Math.random().toString(36).slice(2,8))),
+        type: 'withdrawal',
+        userName: user.displayName || user.username || w.name || (user.email || '').split('@')[0] || 'User',
+        userEmail: user.email || w.email || '',
+        userId: user.id || user.uid || user.firebaseUid || w.userId || null,
+        amount: w.amount || w.value || 0,
+        method: w.method || w.paymentMethod || (w.bank ? 'Bank' : 'Unknown'),
+        status: w.status || 'pending',
+        requestedAt: w.requestedAt || w.createdAt || new Date().toISOString(),
+        bankDetails: w.bankDetails || w.bank || null,
+        accountAge: user.createdAt || null,
+        totalEarnings: user.totalEarned || user.balance || 0,
+        previousWithdrawals: (user.withdrawals && user.withdrawals.length) || 0
+      };
+    });
+
+    return res.json(mapped);
+  } catch (error) {
+    console.error('Approvals error:', error);
+    return res.status(500).json({ error: 'Failed to load approvals' });
+  }
+});
+
+// POST /api/admin/inbox/update-status - update a message/alert status
+router.post('/inbox/update-status', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const id = String(body.id || '').trim();
+    const status = String(body.status || '').trim();
+    if (!id || !status) return res.status(400).json({ error: 'id and status required' });
+
+    const items = readJson(MESSAGES_PATH);
+    const idx = items.findIndex(m => String(m.id) === id || String(m._id) === id);
+    if (idx === -1) return res.status(404).json({ error: 'Message not found' });
+    items[idx].status = status;
+    fs.writeFileSync(MESSAGES_PATH, JSON.stringify(items, null, 2));
+    return res.json({ ok: true, item: items[idx] });
+  } catch (error) {
+    console.error('Update inbox status error:', error);
+    return res.status(500).json({ error: 'Failed to update status' });
+  }
+});
+
 router.post('/reply-message/:id', async (req, res) => {
   try {
     const id = req.params.id;

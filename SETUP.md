@@ -255,7 +255,7 @@ watch2earn/
 - Add crypto payment gateway
 
 ### Admin Dashboard
-- Add charts (Canvas/Chart.js) for stats visualization
+- Add charts (/Chart.js) for stats visualization
 - Add approval/rejection UI (currently API-only)
 - Add fraud detection interface
 
@@ -299,3 +299,4 @@ If you see errors when running `npm start`, check:
 3. `.env` file exists with correct credentials
 4. `config/firebaseAdmin.js` and `config/serviceAccountKey.json` exist
 5. Firebase project is set up and Firestore database created
+    

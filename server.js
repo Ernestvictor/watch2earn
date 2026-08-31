@@ -49,6 +49,8 @@ const withdrawalsRoutes = require('./routes/withdrawals');
 const accountsRoutes = require('./routes/accounts');
 const bonusRoutes = require('./routes/bonus');
 const adsRoutes = require('./routes/ads');
+const earningRoutes = require('./routes/earning');
+const cpxRoutes = require('./routes/cpx');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
@@ -83,6 +85,8 @@ app.use('/api/withdrawals', withdrawalsRoutes);
 app.use('/api/accounts', accountsRoutes);
 app.use('/api/bonus', bonusRoutes);
 app.use('/api/ads', adsRoutes);
+app.use('/api/earning', earningRoutes);
+app.use('/api/cpx', cpxRoutes);
 
 // ✅ Serve ads.txt from project root for ad verification sources
 app.get('/ads.txt', (req, res) => {
@@ -376,7 +380,28 @@ app.get('/claim', authMiddleware, async (req, res) => {
     fs.writeFileSync(transactionsPath, JSON.stringify(transactions, null, 2));
 
     return res.json({
-      ok: true,
+      ok: true
+    });
+  } catch (error) {
+    console.error('Error claiming Telegram reward:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// CPX server-to-server postback handler (MongoDB with Mongoose)
+// Expected query params: trans_id, user_id, amount_usd, status, secret
+app.get('/postback/cpx', async (req, res) => {
+  const { trans_id, user_id, amount_usd, status, secret } = req.query;
+
+  // Security check
+  if (secret !== process.env.CPX_SECRET) {
+    console.warn('Invalid CPX secret on postback');
+    return res.status(403).send('Invalid Secret');
+  }
+
+  if (status === '1') {
+    // Completed - credit earnings
+    const amountUsd = parseFloat(amount_usd || 0);
     const amountNaira = Math.round(amountUsd * 1500);
 
     const transactions = loadTransactions();

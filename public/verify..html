@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Watch2Earn - Verify Sign-in</title>
+        <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+        <style>
+            body{background:#070709;color:#fff;font-family:Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}
+            .card{background:#111;padding:20px;border-radius:10px;border:1px solid #222;max-width:480px;width:90%;text-align:center}
+            input{width:100%;padding:10px;margin:10px 0;border-radius:6px;border:1px solid #333;background:#191919;color:#fff}
+            button{background:#4CAF50;color:#fff;padding:10px;border-radius:6px;border:none;width:100%}
+            .msg{color:#bfe8c9;margin-top:10px}
+        </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Completing sign-in...</h2>
+        <div id="instructions">Please wait while we verify your sign-in link.</div>
+        <div id="emailPrompt" style="display:none;margin-top:12px">
+            <p>Enter the email you used to sign up / login:</p>
+            <input type="email" id="promptEmail" placeholder="you@example.com">
+            <button id="submitEmail">Continue</button>
+        </div>
+        <div id="status" class="msg"></div>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+        window.w2e.initFirebase();
+
+        async function completeSignIn(email) {
+            try {
+                const url = window.location.href;
+                const result = await firebase.auth().signInWithEmailLink(email, url);
+                const user = result.user;
+                if (!user) throw new Error('No user returned');
+
+                // If a display name was stored during signup, set it
+                const storedName = localStorage.getItem('w2e_signup_name') || '';
+                if (storedName && (!user.displayName || user.displayName==='')) {
+                    try { await user.updateProfile({ displayName: storedName }); } catch(e){}
+                }
+
+                // Sync with backend
+                try {
+                    const token = await user.getIdToken();
+                    await fetch('/api/auth/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                        body: JSON.stringify({
+                            firebaseUid: user.uid,
+                            email: user.email,
+                            username: user.displayName || (user.email||'').split('@')[0],
+                            displayName: user.displayName || (user.email||'').split('@')[0]
+                        })
+                    });
+                } catch(e) { console.warn('Failed to sync with backend', e); }
+
+                // Clean localStorage markers
+                localStorage.removeItem('w2e_signup_name');
+                localStorage.removeItem('w2e_signup_email');
+                localStorage.removeItem('w2e_login_email');
+
+                document.getElementById('status').innerText = 'Sign-in successful. Redirecting...';
+                setTimeout(()=>{ window.location.href = '/home.html'; }, 900);
+            } catch (err) {
+                document.getElementById('status').innerText = 'Error completing sign-in: ' + (err.message || err);
+            }
+        }
+
+        (function(){
+            try {
+                const url = window.location.href;
+                if (firebase.auth().isSignInWithEmailLink(url)) {
+                    // Try to get email from stored signup/login values
+                    const saved = localStorage.getItem('w2e_signup_email') || localStorage.getItem('w2e_login_email') || '';
+                    if (saved) {
+                        document.getElementById('instructions').innerText = 'Signing you in with ' + saved + ' ...';
+                        completeSignIn(saved);
+                        return;
+                    }
+
+                    // Otherwise prompt user to enter their email
+                    document.getElementById('instructions').innerText = 'Please confirm your email to complete sign-in.';
+                    document.getElementById('emailPrompt').style.display = 'block';
+                    document.getElementById('submitEmail').addEventListener('click', ()=>{
+                        const e = document.getElementById('promptEmail').value.trim();
+                        if (!e) return alert('Please enter your email.');
+                        document.getElementById('instructions').innerText = 'Completing sign-in...';
+                        completeSignIn(e);
+                    });
+                    return;
+                }
+
+                document.getElementById('instructions').innerText = 'No sign-in link detected. Please use the sign-in link sent to your email.';
+            } catch (e) {
+                document.getElementById('status').innerText = 'Unexpected error: ' + (e.message || e);
+            }
+        })();
+    </script>
+</body>
+</html>

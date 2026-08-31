@@ -26,7 +26,7 @@
     <form id="signupForm">
       <input type="text" id="name" placeholder="Full Name" required>
       <input type="email" id="email" placeholder="Email" required>
-      <input type="password" id="password" placeholder="Password" required>
+      <input type="hidden" id="password" value="" />
       <label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:14px;text-align:left">
         <input type="checkbox" id="terms" required style="width:auto;margin:0"> I agree to <a href="terms.html">Terms & Services</a>
       </label>
@@ -72,39 +72,24 @@
       localStorage.setItem('watch2earn_name',fullName);
 
       try{
-        const cred=await firebase.auth().createUserWithEmailAndPassword(email,password);
-        await cred.user.updateProfile({displayName:fullName});
-        
-        // Register with backend - mark as NEW user
-        const registerRes = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            firebaseUid: cred.user.uid,
-            email,
-            username: fullName,
-            displayName: fullName,
-            referredBy: localStorage.getItem('w2e_ref') || null
-          })
-        });
-        
-        const registerData = registerRes.ok ? await registerRes.json() : null;
-        if (!registerRes.ok) {
-          throw new Error(registerData?.error || 'Failed to register with backend');
-        }
-        
-        // If referrer exists, update referrer's referred count
-        const refId = localStorage.getItem('w2e_ref');
-        if (refId) {
-          await fetch('/api/referrals/update-referrer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ referrerId: refId, newUserId: cred.user.uid })
-          }).catch(() => {});
-        }
-        
-        localStorage.removeItem('w2e_ref');
-        window.location.href='home.html';
+          // Use email-link (passwordless) sign-in similar to forget-password flow
+          const actionCodeSettings = {
+            url: window.location.origin + '/verify..html',
+            handleCodeInApp: true
+          };
+
+          // Save name and email for completing sign-in in the link handler
+          localStorage.setItem('w2e_signup_name', fullName);
+          localStorage.setItem('w2e_signup_email', email);
+
+          await firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings);
+
+          btn.innerText = 'Link sent';
+          btn.disabled = true;
+          alert('A sign-in link has been sent to your email. Check your inbox and spam.');
+          localStorage.removeItem('w2e_ref');
+          form.reset();
+          return;
       }catch(error){
         if(error.code==='auth/email-already-in-use'){
           // Email already exists - user trying to sign up again

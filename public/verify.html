@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Watch2Earn - Verify Sign-in</title>
+        <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+        <style>
+            body{background:#070709;color:#fff;font-family:Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}
+            .card{background:#111;padding:20px;border-radius:10px;border:1px solid #222;max-width:480px;width:90%;text-align:center}
+            input{width:100%;padding:10px;margin:10px 0;border-radius:6px;border:1px solid #333;background:#191919;color:#fff}
+            button{background:#4CAF50;color:#fff;padding:10px;border-radius:6px;border:none;width:100%}
+            .msg{color:#bfe8c9;margin-top:10px}
+        </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Verify Your Email</h2>
+        <div id="instructions">We've sent a verification email to the address you used during signup. Please check your inbox or spam folder and click the verification link.</div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-direction:column;align-items:stretch">
+            <button id="backToLogin" style="padding:10px;border-radius:6px;border:none;background:#4CAF50;color:#fff;cursor:pointer">Back to Login</button>
+            <button id="showResend" style="padding:10px;border-radius:6px;border:1px solid #2f2f32;background:#121214;color:#fff;cursor:pointer">Resend verification email</button>
+            <div id="resendForm" style="display:none;margin-top:8px;padding:10px;border-radius:8px;background:#0f0f10;border:1px solid #222">
+                <input id="resendEmail" type="email" placeholder="Email" style="width:100%;padding:8px;margin-bottom:8px;border-radius:6px;border:1px solid #333;background:#191919;color:#fff">
+                <input id="resendPass" type="password" placeholder="Password" style="width:100%;padding:8px;margin-bottom:8px;border-radius:6px;border:1px solid #333;background:#191919;color:#fff">
+                <button id="resendBtn" style="width:100%;padding:8px;border-radius:6px;border:none;background:#4CAF50;color:#fff;cursor:pointer">Resend</button>
+                <div id="resendMsg" style="margin-top:8px;color:#bfe8c9"></div>
+            </div>
+        </div>
+        <div id="status" class="msg"></div>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script>
+        // Simple informative page: invite users to check their inbox and allow resending a verification email by signing in.
+        document.getElementById('backToLogin').addEventListener('click', ()=>{ window.location.href = '/login.html'; });
+
+        const showResend = document.getElementById('showResend');
+        const resendForm = document.getElementById('resendForm');
+        const resendBtn = document.getElementById('resendBtn');
+        const resendMsg = document.getElementById('resendMsg');
+
+        showResend.addEventListener('click', ()=>{
+            resendForm.style.display = resendForm.style.display === 'none' ? 'block' : 'none';
+        });
+
+        resendBtn.addEventListener('click', async ()=>{
+            resendMsg.innerText = '';
+            resendBtn.disabled = true;
+            resendBtn.innerText = 'Sending...';
+            const email = document.getElementById('resendEmail').value.trim();
+            const pass = document.getElementById('resendPass').value;
+            if(!email || !pass){ resendMsg.style.color = '#ff8c8c'; resendMsg.innerText = 'Please provide email and password.'; resendBtn.disabled=false; resendBtn.innerText='Resend'; return; }
+            try{
+                // Sign in temporarily to send verification
+                const cred = await firebase.auth().signInWithEmailAndPassword(email, pass);
+                const user = cred.user;
+                if(!user){ throw new Error('User not found'); }
+                if(user.emailVerified){
+                    resendMsg.style.color = '#bfe8c9';
+                    resendMsg.innerText = 'Email is already verified. Please login.';
+                    await firebase.auth().signOut();
+                    resendBtn.disabled=false; resendBtn.innerText='Resend';
+                    return;
+                }
+                await user.sendEmailVerification();
+                resendMsg.style.color = '#bfe8c9';
+                resendMsg.innerText = 'Verification email sent. Check inbox or spam.';
+                // sign out the temporary session
+                await firebase.auth().signOut();
+            }catch(err){
+                resendMsg.style.color = '#ff8c8c';
+                resendMsg.innerText = err && err.message ? err.message : 'Unable to resend verification.';
+            } finally {
+                resendBtn.disabled=false; resendBtn.innerText='Resend';
+            }
+        });
+    </script>
+</body>
+</html>

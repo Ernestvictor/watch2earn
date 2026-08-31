@@ -306,7 +306,7 @@ router.post('/watch-ad', async (req, res) => {
   }
 });
 
-router.get('/login', (req, res) => {
+router.post('/login', (req, res) => {
   const body = req.body || {};
   const email = (body.email || body.username || '').toString().trim();
   const password = (body.password || body.pass || '').toString();

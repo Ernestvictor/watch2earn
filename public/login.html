@@ -26,7 +26,7 @@
     <h2>Login</h2>
     <form id="loginForm">
       <input type="email" id="loginEmail" placeholder="Email" required>
-      <input type="hidden" id="loginPassword" value="" />
+      <input type="password" id="loginPassword" placeholder="Password" required />
       <button type="submit" id="loginBtn">Login</button>
       <div id="errorMsg" class="error"></div>
     </form>
@@ -54,22 +54,25 @@
       e.preventDefault();
       errorMsg.innerText='';
       btn.disabled=true;
-      btn.innerText='Sending link...';
+      btn.innerText='Signing in...';
       const email=document.getElementById('loginEmail').value.trim();
+      const password=document.getElementById('loginPassword').value;
 
       try {
-        const actionCodeSettings = {
-          url: window.location.origin + '/verify..html',
-          handleCodeInApp: true
-        };
-        // Save a marker so the handler can complete sign-in
-        localStorage.setItem('w2e_login_email', email);
-        await firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings);
-        alert('A sign-in link has been sent to your email. Check your inbox and spam.');
-        btn.innerText='Link sent';
-        btn.disabled=true;
+        const cred = await firebase.auth().signInWithEmailAndPassword(email, password);
+        const user = cred.user;
+        if (user && !user.emailVerified) {
+          // If not verified, sign out and ask to verify
+          await firebase.auth().signOut();
+          errorMsg.innerText = '✗ Email not verified. Check your inbox or spam.';
+          btn.disabled=false;
+          btn.innerText='Login';
+          return;
+        }
+        // successful signin
+        window.location.href = 'home.html';
       } catch (error) {
-        errorMsg.innerText = error.message || 'Unable to send sign-in link.';
+        errorMsg.innerText = error.message || 'Unable to sign in.';
         btn.disabled=false;
         btn.innerText='Login';
       }

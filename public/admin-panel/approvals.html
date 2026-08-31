@@ -475,45 +475,18 @@
         updateStats();
       } catch (error) {
         console.error('Error loading approvals:', error);
-        // Load demo data
-        loadDemoData();
+        document.getElementById('withdrawalsList').innerHTML = `
+          <div class="empty-state">
+            <i class="fas fa-exclamation-circle"></i>
+            <p>Unable to load live approval data right now.</p>
+            <small style="color:#ff8c8c">${error.message || 'API request failed'}</small>
+          </div>
+        `;
+        document.getElementById('pendingCount').textContent = '0';
+        document.getElementById('todayCount').textContent = '0';
+        document.getElementById('weekCount').textContent = '0';
+        document.getElementById('approvedCount').textContent = '0';
       }
-    }
-
-    function loadDemoData() {
-      allApprovals = [
-        {
-          id: 'WTH001',
-          type: 'withdrawal',
-          userName: 'John Doe',
-          userEmail: 'john@example.com',
-          userId: 'user123',
-          amount: 500,
-          method: 'Bank Transfer',
-          status: 'pending',
-          requestedAt: new Date(Date.now() - 2*3600000).toISOString(),
-          bankDetails: { accountName: 'John Doe', accountNumber: '1234567890', bankName: 'Chase Bank' },
-          accountAge: '6 months',
-          totalEarnings: 5420.50,
-          previousWithdrawals: 3
-        },
-        {
-          id: 'WTH002',
-          type: 'withdrawal',
-          userName: 'Jane Smith',
-          userEmail: 'jane@example.com',
-          userId: 'user456',
-          amount: 1000,
-          method: 'PayPal',
-          status: 'pending',
-          requestedAt: new Date(Date.now() - 1*3600000).toISOString(),
-          accountAge: '3 months',
-          totalEarnings: 4820.75,
-          previousWithdrawals: 2
-        }
-      ];
-      renderApprovals();
-      updateStats();
     }
 
     function renderApprovals() {

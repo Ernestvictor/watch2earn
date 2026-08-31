@@ -26,7 +26,7 @@
     <form id="signupForm">
       <input type="text" id="name" placeholder="Full Name" required>
       <input type="email" id="email" placeholder="Email" required>
-      <input type="hidden" id="password" value="" />
+      <input type="password" id="password" placeholder="Password (min 6 chars)" required />
       <label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:14px;text-align:left">
         <input type="checkbox" id="terms" required style="width:auto;margin:0"> I agree to <a href="terms.html">Terms & Services</a>
       </label>
@@ -65,50 +65,53 @@
       errorMsg.innerText='';
       btn.disabled=true;
       btn.innerText='Signing up...';
-
       const fullName=document.getElementById('name').value.trim();
       const email=document.getElementById('email').value.trim();
       const password=document.getElementById('password').value;
       localStorage.setItem('watch2earn_name',fullName);
 
       try{
-          // Use email-link (passwordless) sign-in similar to forget-password flow
-          const actionCodeSettings = {
-            url: window.location.origin + '/verify..html',
-            handleCodeInApp: true
-          };
+        const userCred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        const user = userCred.user;
+        if (user) {
+          try { await user.updateProfile({ displayName: fullName }); } catch(e){}
+          // send verification email
+          await user.sendEmailVerification();
+        }
 
-          // Save name and email for completing sign-in in the link handler
-          localStorage.setItem('w2e_signup_name', fullName);
-          localStorage.setItem('w2e_signup_email', email);
+        // Optionally sync user with backend (best-effort)
+        try {
+          const token = user ? await user.getIdToken() : null;
+          if (token) {
+            await fetch('/api/auth/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+              body: JSON.stringify({ firebaseUid: user.uid, email: user.email, username: fullName, displayName: fullName })
+            });
+          }
+        } catch(e) { console.warn('Backend register sync failed', e); }
 
-          await firebase.auth().sendSignInLinkToEmail(email, actionCodeSettings);
-
-          btn.innerText = 'Link sent';
-          btn.disabled = true;
-          alert('A sign-in link has been sent to your email. Check your inbox and spam.');
-          localStorage.removeItem('w2e_ref');
-          form.reset();
-          return;
-      }catch(error){
+        btn.innerText = 'Signed up';
+        btn.disabled = true;
+        alert('Account created. A verification email was sent — check inbox or spam.');
+        localStorage.removeItem('w2e_ref');
+        form.reset();
+        // Sign out user so they must verify email first
+        try { await firebase.auth().signOut(); } catch(e){}
+        window.location.href = '/verify.html';
+        return;
+      } catch (error) {
         if(error.code==='auth/email-already-in-use'){
-          // Email already exists - user trying to sign up again
           errorMsg.innerText = '✗ This email already has an account. Please login instead.';
-          btn.disabled=false;
-          btn.innerText='Sign Up';
         } else if(error.code==='auth/weak-password'){
           errorMsg.innerText='✗ Password must be at least 6 characters.';
-          btn.disabled=false;
-          btn.innerText='Sign Up';
         } else if(error.code==='auth/invalid-email'){
           errorMsg.innerText='✗ Please enter a valid email address.';
-          btn.disabled=false;
-          btn.innerText='Sign Up';
         } else{
           errorMsg.innerText='✗ ' + (error.message || 'Signup failed');
-          btn.disabled=false;
-          btn.innerText='Sign Up';
         }
+        btn.disabled=false;
+        btn.innerText='Sign Up';
       }
     });
   </script>

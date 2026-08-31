@@ -721,7 +721,11 @@ const fraudCheck = require('./middleware/fraudcheck');
 
 // ✅ Admin panel entry routes
 app.get('/admin-panel', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin-panel', 'verify.html'));
+  res.redirect('/admin-panel/carbinate.html');
+});
+
+app.get('/admin-panel/', (req, res) => {
+  res.redirect('/admin-panel/carbinate.html');
 });
 
 app.get('/admin-dashboard', (req, res) => {

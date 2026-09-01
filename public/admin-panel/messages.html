@@ -32,122 +32,128 @@
   <div class="container">
     <!-- TABS -->
     <div class="card">
-      <div class="tabs">
-        <button class="tab active" onclick="switchTab('templates')"><i class="fas fa-envelope"></i> Auto Messages</button>
-        <button class="tab" onclick="switchTab('triggers')"><i class="fas fa-bolt"></i> Triggers</button>
-        <button class="tab" onclick="switchTab('manual')"><i class="fas fa-pen-fancy"></i> Manual Message</button>
-        <button class="tab" onclick="switchTab('history')"><i class="fas fa-history"></i> Message History</button>
+      <div style="display:flex;gap:8px;border-bottom:2px solid #232326;padding-bottom:12px;overflow-x:auto">
+        <button class="tab" id="tab-auto" onclick="switchTab('auto')" style="padding:10px 16px;background:none;border:none;color:#888" data-active><i class="fas fa-envelope"></i> Auto Messages</button>
+        <button class="tab" id="tab-trigger" onclick="switchTab('trigger')" style="padding:10px 16px;background:none;border:none;color:#888" data-active><i class="fas fa-bolt"></i> Trigger Messages</button>
+        <button class="tab" id="tab-manual" onclick="switchTab('manual')" style="padding:10px 16px;background:none;border:none;color:#888" data-active><i class="fas fa-pen-fancy"></i> Manual Messages</button>
+        <button class="tab" id="tab-history" onclick="switchTab('history')" style="padding:10px 16px;background:none;border:none;color:#888" data-active><i class="fas fa-history"></i> Message History</button>
       </div>
 
-      <!-- TAB: TRIGGERS - Send automatic messages based on user actions -->
-      <div id="triggers" class="tab-content">
-        <h3><i class="fas fa-bolt"></i> Message Triggers</h3>
-        <p style="color:#888">Set up automatic messages to send when specific user actions occur (signup, withdrawal, suspended, etc.)</p>
+      <!-- AUTO MESSAGES SECTION -->
+      <div id="auto" class="tab-content" style="display:none;padding-top:16px">
+        <h3 style="margin-bottom:16px">Auto Messages</h3>
+        <p style="color:#888;margin-bottom:16px">Scheduled messages that are sent automatically to users</p>
+        <div class="card" style="background:#222326;border:1px solid #333">
+          <h4 style="margin-bottom:12px">Create New Auto Message</h4>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Message Title</label>
+              <input type="text" id="autoTitle" placeholder="e.g., Welcome to Watch2Earn" style="width:100%;padding:10px;background:#1a1a1d;border:1px solid #333;border-radius:8px;color:#fff">
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Target Users</label>
+              <select id="autoTarget" style="width:100%;padding:10px;background:#1a1a1d;border:1px solid #333;border-radius:8px;color:#fff">
+                <option value="all">All Users</option>
+                <option value="new_users">New Users Only</option>
+                <option value="inactive">Inactive Users (7+ days)</option>
+                <option value="verified">Verified Users Only</option>
+              </select>
+            </div>
+          </div>
+          <textarea id="autoMessage" placeholder="Message content - use {username}, {email}, {balance} for dynamic values" style="width:100%;padding:10px;background:#1a1a1d;border:1px solid #333;border-radius:8px;color:#fff;min-height:100px;margin-bottom:12px"></textarea>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Send Date & Time</label>
+              <input type="datetime-local" id="autoSchedule" style="width:100%;padding:10px;background:#1a1a1d;border:1px solid #333;border-radius:8px;color:#fff">
+            </div>
+            <div>
+              <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Repeat</label>
+              <select id="autoFrequency" style="width:100%;padding:10px;background:#1a1a1d;border:1px solid #333;border-radius:8px;color:#fff">
+                <option value="once">Once</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+          </div>
+          <button onclick="createAutoMessage()" style="padding:12px 16px;background:#4CAF50;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;width:100%"><i class="fas fa-paper-plane"></i> Schedule Message</button>
+        </div>
+        <div id="autoMessagesList" style="margin-top:20px"></div>
+      </div>
 
+      <!-- TRIGGER MESSAGES SECTION -->
+      <div id="trigger" class="tab-content" style="display:none;padding-top:16px">
+        <h3 style="margin-bottom:16px">Trigger Messages</h3>
+        <p style="color:#888;margin-bottom:16px">Automatic responses to specific user events</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px">
-          <div class="template-card" onclick="configureTrigger('signup')" style="cursor:pointer;border:2px solid #4CAF50;padding:16px;border-radius:12px;background:#0a1f0a;transition:all 0.2s" onmouseover="this.style.borderColor='#81c784'" onmouseout="this.style.borderColor='#4CAF50'">
+          <div class="trigger-card" onclick="editTrigger('signup')" style="cursor:pointer;border:2px solid #4CAF50;padding:16px;border-radius:12px;background:#0a1f0a;transition:all 0.2s">
             <h4><i class="fas fa-user-plus"></i> User Sign Up</h4>
-            <p style="font-size:12px;color:#aaa">Auto-welcome new users</p>
+            <p style="font-size:12px;color:#aaa">Welcome message</p>
           </div>
-          <div class="template-card" onclick="configureTrigger('ad_watch')" style="cursor:pointer;border:2px solid #2196F3;padding:16px;border-radius:12px;background:#0a1520;transition:all 0.2s" onmouseover="this.style.borderColor='#64b5f6'" onmouseout="this.style.borderColor='#2196F3'">
+          <div class="trigger-card" onclick="editTrigger('ad_watch')" style="cursor:pointer;border:2px solid #2196F3;padding:16px;border-radius:12px;background:#0a1520;transition:all 0.2s">
             <h4><i class="fas fa-play-circle"></i> Ad Watched</h4>
-            <p style="font-size:12px;color:#aaa">Congratulate ad completers</p>
+            <p style="font-size:12px;color:#aaa">Congratulate viewer</p>
           </div>
-          <div class="template-card" onclick="configureTrigger('referral')" style="cursor:pointer;border:2px solid #FF9800;padding:16px;border-radius:12px;background:#1a0a00;transition:all 0.2s" onmouseover="this.style.borderColor='#ffb74d'" onmouseout="this.style.borderColor='#FF9800'">
+          <div class="trigger-card" onclick="editTrigger('referral')" style="cursor:pointer;border:2px solid #FF9800;padding:16px;border-radius:12px;background:#1a0a00;transition:all 0.2s">
             <h4><i class="fas fa-handshake"></i> Referral Made</h4>
-            <p style="font-size:12px;color:#aaa">Notify referrer earnings</p>
+            <p style="font-size:12px;color:#aaa">Notify earnings</p>
           </div>
-          <div class="template-card" onclick="configureTrigger('withdrawal')" style="cursor:pointer;border:2px solid #f44336;padding:16px;border-radius:12px;background:#1a0a0a;transition:all 0.2s" onmouseover="this.style.borderColor='#ef5350'" onmouseout="this.style.borderColor='#f44336'">
+          <div class="trigger-card" onclick="editTrigger('withdrawal')" style="cursor:pointer;border:2px solid #f44336;padding:16px;border-radius:12px;background:#1a0a0a;transition:all 0.2s">
             <h4><i class="fas fa-money-bill"></i> Withdrawal Submitted</h4>
-            <p style="font-size:12px;color:#aaa">Confirm withdrawal receipt</p>
-          </div>
-          <div class="template-card" onclick="configureTrigger('suspended')" style="cursor:pointer;border:2px solid #FFC107;padding:16px;border-radius:12px;background:#1a1500;transition:all 0.2s" onmouseover="this.style.borderColor='#ffd54f'" onmouseout="this.style.borderColor='#FFC107'">
-            <h4><i class="fas fa-pause-circle"></i> Account Suspended</h4>
-            <p style="font-size:12px;color:#aaa">Explain suspension & appeal process</p>
-          </div>
-          <div class="template-card" onclick="configureTrigger('passive')" style="cursor:pointer;border:2px solid #9C27B0;padding:16px;border-radius:12px;background:#1a0a1a;transition:all 0.2s" onmouseover="this.style.borderColor='#ba68c8'" onmouseout="this.style.borderColor='#9C27B0'">
-            <h4><i class="fas fa-user-clock"></i> Inactive User (7+ days)</h4>
-            <p style="font-size:12px;color:#aaa">Re-engage inactive users</p>
+            <p style="font-size:12px;color:#aaa">Confirm receipt</p>
           </div>
         </div>
-
-        <div class="card" id="triggerForm" style="display:none">
-          <h4>Configure Trigger: <span id="triggerName"></span></h4>
-          <div class="form-group">
-            <label>Message Title:</label>
-            <input type="text" id="triggerTitle" placeholder="Message title">
-          </div>
-          <div class="form-group">
-            <label>Message Content:</label>
-            <textarea id="triggerMessage" placeholder="Use {username}, {amount}, {event}, {reason} for dynamic content" rows="6"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Delivery Method:</label>
-            <div class="toggle-group">
-              <label><input type="checkbox" name="deliveryMethod" value="inbox" checked> Inbox</label>
-              <label><input type="checkbox" name="deliveryMethod" value="email"> Email</label>
-              <label><input type="checkbox" name="deliveryMethod" value="notification"> Notification</label>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:16px">
-            <button onclick="saveTrigger()" style="background:#4CAF50"><i class="fas fa-save"></i> Save Trigger</button>
-            <button onclick="cancelTrigger()" style="background:#666"><i class="fas fa-times"></i> Cancel</button>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top:20px">
-          <h4>Active Triggers</h4>
-          <table style="width:100%;border-collapse:collapse">
-            <thead>
-              <tr style="border-bottom:2px solid #232326">
-                <th style="text-align:left;padding:12px">Event</th>
-                <th style="text-align:left;padding:12px">Title</th>
-                <th style="text-align:left;padding:12px">Status</th>
-                <th style="text-align:left;padding:12px">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="triggersTable"></tbody>
-          </table>
-        </div>
+        <div id="triggersList" style="margin-top:20px"></div>
       </div>
 
-      <!-- TAB 1: AUTOMATIC TEMPLATES -->
-      <div id="templates" class="tab-content active">
-        <h3>Automatic Message Templates</h3>
-        <p style="color:#888">Click a template to use it, then customize and schedule:</p>
-        <div class="template-grid">
-          <div class="template-card" onclick="useTemplate('new_signin')">
-            <h4>👋 New Sign In</h4>
-            <p>Welcome message for new users</p>
-          </div>
-          <div class="template-card" onclick="useTemplate('withdrawal')">
-            <h4>💳 Withdrawal Submitted</h4>
-            <p>Notify user about pending withdrawal</p>
-          </div>
-          <div class="template-card" onclick="useTemplate('rejected')">
-            <h4>❌ Withdrawal Rejected</h4>
-            <p>Inform about rejected withdrawal</p>
-          </div>
-          <div class="template-card" onclick="useTemplate('success')">
-            <h4>✅ Withdrawal Successful</h4>
-            <p>Confirm money has been sent</p>
-          </div>
-        </div>
-
-        <div style="margin-top:20px">
-          <h4>Template Preview:</h4>
-          <div class="template-preview" id="templatePreview">Select a template to see preview...</div>
-
-          <div class="form-group">
-            <label>Message Type:</label>
-            <div class="toggle-group">
-              <label><input type="radio" name="sendType" value="manual" checked onchange="updateScheduleFields()"> Manual Send</label>
-              <label><input type="radio" name="sendType" value="automatic" onchange="updateScheduleFields()"> Automatic Send</label>
+      <!-- MANUAL MESSAGES SECTION -->
+      <div id="manual" class="tab-content" style="display:none;padding-top:16px">
+        <h3 style="margin-bottom:16px">Send Manual Messages</h3>
+        <p style="color:#888;margin-bottom:16px">Send individual or bulk messages to users immediately</p>
+        <div class="card" style="background:#222326;border:1px solid #333">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Recipient Type</label>
+              <select id="manualTarget" style="width:100%;padding:10px;background:#1a1a1d;border:1px solid #333;border-radius:8px;color:#fff" onchange="toggleRecipientFields()">
+                <option value="all">Send to All Users</option>
+                <option value="specific">Send to Specific User</option>
+                <option value="group">Send to User Group</option>
+              </select>
+            </div>
+            <div id="recipientField" style="display:none">
+              <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">User ID / Email</label>
+              <input type="text" id="manualRecipient" placeholder="Enter user ID or email" style="width:100%;padding:10px;background:#1a1a1d;border:1px solid #333;border-radius:8px;color:#fff">
             </div>
           </div>
+          <div style="margin-bottom:12px">
+            <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Subject</label>
+            <input type="text" id="manualSubject" placeholder="Message subject" style="width:100%;padding:10px;background:#1a1a1d;border:1px solid #333;border-radius:8px;color:#fff">
+          </div>
+          <textarea id="manualMessage" placeholder="Message content" style="width:100%;padding:10px;background:#1a1a1d;border:1px solid #333;border-radius:8px;color:#fff;min-height:120px;margin-bottom:12px"></textarea>
+          <button onclick="sendManualMessage()" style="padding:12px 16px;background:#2196F3;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;width:100%"><i class="fas fa-paper-plane"></i> Send Message</button>
+        </div>
+        <div id="manualMessagesList" style="margin-top:20px"></div>
+      </div>
 
-          <div id="scheduleFields" style="display:none">
-            <div class="two-col">
+      <!-- MESSAGE HISTORY SECTION -->
+      <div id="history" class="tab-content" style="display:none;padding-top:16px">
+        <h3 style="margin-bottom:16px">Message History</h3>
+        <p style="color:#888;margin-bottom:16px">All messages sent to users</p>
+        <table style="width:100%;border-collapse:collapse;margin-top:12px">
+          <thead>
+            <tr style="border-bottom:2px solid #232326">
+              <th style="text-align:left;padding:12px;color:#4CAF50">Date/Time</th>
+              <th style="text-align:left;padding:12px;color:#4CAF50">Subject</th>
+              <th style="text-align:left;padding:12px;color:#4CAF50">Recipients</th>
+              <th style="text-align:left;padding:12px;color:#4CAF50">Type</th>
+              <th style="text-align:left;padding:12px;color:#4CAF50">Status</th>
+            </tr>
+          </thead>
+          <tbody id="historyTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
               <div class="form-group">
                 <label>Schedule Date & Time:</label>
                 <input type="datetime-local" id="scheduleDateTime">

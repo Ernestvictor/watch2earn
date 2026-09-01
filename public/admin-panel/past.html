@@ -109,6 +109,77 @@
         });
         
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const history = await res.json();
+        
+        // Calculate statistics
+        let totalPaid = 0;
+        let paidThisMonth = 0;
+        const now = new Date();
+        const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        
+        history.forEach(h => {
+          const amount = Number(h.amount || h.amountUsd || 0);
+          totalPaid += amount;
+          
+          if (h.status === 'approved' || (h.type && h.type.includes('withdrawal'))) {
+            if (new Date(h.createdAt || h.date || Date.now()) >= thisMonth) {
+              paidThisMonth += amount;
+            }
+          }
+        });
+        
+        document.getElementById('totalPaid').textContent = `$${totalPaid.toFixed(2)}`;
+        document.getElementById('paidMonth').textContent = `$${paidThisMonth.toFixed(2)}`;
+        
+        // Populate history table
+        const tbody = document.querySelector('#historyTable tbody');
+        if (!history.length) {
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;">No history yet</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = history.slice(0, 100).map(h => {
+          const date = new Date(h.createdAt || h.date || Date.now());
+          return `
+            <tr>
+              <td>${date.toLocaleDateString()}</td>
+              <td>${h.id || h._id || 'N/A'}</td>
+              <td>${h.userId || h.firebaseUid || 'N/A'}</td>
+              <td>$${Number(h.amount || h.amountUsd || 0).toFixed(2)}</td>
+              <td>${h.type || 'earning'}</td>
+              <td><span style="color:#4CAF50">${h.status || 'completed'}</span></td>
+              <td>$0.00</td>
+              <td>$${Number(h.amount || h.amountUsd || 0).toFixed(2)}</td>
+              <td><button style="padding:4px 8px;background:#2196F3;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">View</button></td>
+            </tr>
+          `;
+        }).join('');
+      } catch(err) {
+        console.error('History load error:', err);
+        document.querySelector('#historyTable tbody').innerHTML = `<tr><td colspan="9" style="color:#f44336;text-align:center;">Error loading history: ${err.message}</td></tr>`;
+      }
+    }
+
+    function exportData(format) {
+      alert(`Export as ${format.toUpperCase()} - Feature coming soon`);
+    }
+
+    if (checkAuth()) {
+      loadHistory();
+      setInterval(loadHistory, 30000); // Reload every 30 seconds
+    }
+  </script>
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/history', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          credentials: 'include'
+        });
+        
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         
         document.getElementById('totalPaid').textContent = `$${data.totalPaid || 0}`;

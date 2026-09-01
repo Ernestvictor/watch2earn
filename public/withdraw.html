@@ -249,6 +249,16 @@
       }
       document.getElementById('statusMsg').innerText = `✅ Request submitted: ${method === 'bank' ? 'Bank' : 'Crypto'} • Charge ₦${data.charge} • Net ₦${data.netAmount}`;
       alert(`Withdrawal request submitted. Charge: ₦${data.charge}, Net: ₦${data.netAmount}`);
+      
+      // Update balance after successful withdrawal
+      currentBalance -= amount;
+      document.getElementById('bal').innerText = currentBalance.toLocaleString();
+      document.getElementById('usdBal').innerText = (currentBalance / 1500).toFixed(2);
+      document.getElementById('topBal').innerText = '₦' + currentBalance.toLocaleString();
+      
+      // Clear form and reload
+      document.getElementById(method === 'bank' ? 'bankAmount' : 'cryptoAmount').value = '';
+      setTimeout(() => location.reload(), 2000);
     }
   </script>
 <script src="/js/aclib-ad-wrapper.js"></script>

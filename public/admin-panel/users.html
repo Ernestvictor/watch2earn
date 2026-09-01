@@ -101,19 +101,26 @@
         if ((data.users || []).length === 0) {
           tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">No users yet</td></tr>';
         } else {
-          tbody.innerHTML = data.users.map(u=>`
+          tbody.innerHTML = data.users.map(u=>{
+            const name = u.displayName || u.username || (u.email ? u.email.split('@')[0] : 'Unknown');
+            const email = u.email || 'N/A';
+            const role = u.role || (u.promoted ? 'Verified' : 'User');
+            const status = (u.isBanned ? 'Banned' : u.isSuspended ? 'Suspended' : u.status || 'Active');
+            const userId = u.id || u._id || u.uid || u.firebaseUid || 'unknown';
+            return `
             <tr>
-              <td>${u.name}</td>
-              <td>${u.email}</td>
-              <td>${u.role}</td>
-              <td>${u.status}</td>
+              <td>${name}</td>
+              <td>${email}</td>
+              <td>${role}</td>
+              <td style="color:${status==='Banned'?'#ff8a80':status==='Suspended'?'#ffca28':'#81c784'};font-weight:600">${status}</td>
               <td>
-                <button class="view" onclick="viewUser('${u.id}')">View</button>
-                <button class="ban" onclick="updateUser('${u.id}','banned')">Ban</button>
-                <button style="background:#ff9800;color:#fff" onclick="updateUser('${u.id}','suspend')">Suspend</button>
-                <button class="promote" onclick="updateUser('${u.id}','promote')">Promote</button>
+                <button class="view" onclick="viewUser('${userId}')">View</button>
+                <button class="ban" onclick="updateUser('${userId}','ban')">Ban</button>
+                <button style="background:#ff9800;color:#fff" onclick="updateUser('${userId}','suspend')">Suspend</button>
+                <button class="promote" onclick="updateUser('${userId}','promote')">Promote</button>
               </td>
-            </tr>`).join('');
+            </tr>`;
+          }).join('');
         }
       } catch(err) {
         console.error('Users load error:', err);
@@ -139,7 +146,8 @@
       }).then(async (res)=>{
         const json = await res.json().catch(()=>({}));
         if(res.ok) {
-          showToast(json.message || 'Action completed', 'success');
+          const actionText = action === 'ban' ? 'Banned' : action === 'suspend' ? 'Suspended' : action === 'promote' ? 'Promoted' : 'Updated';
+          showToast(`User ${actionText}`, 'success');
           setTimeout(()=>location.reload(), 900);
         } else {
           showToast(json.error || 'Action failed', 'error');

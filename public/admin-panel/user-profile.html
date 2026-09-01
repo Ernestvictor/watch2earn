@@ -179,7 +179,25 @@
 
     document.getElementById('suspendBtn').addEventListener('click', () => setUserStatus('suspend'));
     document.getElementById('banBtn').addEventListener('click', () => setUserStatus('ban'));
-    document.getElementById('restoreBtn').addEventListener('click', () => setUserStatus('unsuspend'));
+    document.getElementById('restoreBtn').addEventListener('click', () => {
+      const action = confirm('Remove Ban/Suspend from this user?');
+      if (action) {
+        const token = localStorage.getItem('adminToken');
+        fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ action: 'unban' })
+        }).then(async res => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            alert(data.error || 'Action failed');
+            return;
+          }
+          alert('User restored successfully');
+          loadProfile();
+        }).catch(err => alert('Error: ' + err.message));
+      }
+    });
 
     loadProfile();
   </script>

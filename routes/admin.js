@@ -624,19 +624,49 @@ router.get('/history', async (req, res) => {
 
 router.get('/dashboard', async (req, res) => {
   try {
+    // Provide dashboard fields expected by frontend: totalBalance, profit, userProfit, users, withdrawals, revenue, activity
     if (isMongooseReady()) {
       const totalUsers = await User.countDocuments();
-      const totalTransactions = await Earning.countDocuments();
-      const agg = await Earning.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }]);
-      const totalEarnedUsd = (agg[0] && agg[0].total) || 0;
-      return res.json({ totalUsers, totalTransactions, totalEarnedUsd });
+      // Sum user wallets
+      const balAgg = await User.aggregate([{ $group: { _id: null, totalBalance: { $sum: { $ifNull: ["$wallet", 0] } } } }]);
+      const totalBalance = (balAgg[0] && balAgg[0].totalBalance) || 0;
+
+      // Total user earnings (sum of Earning.amount)
+      const earnAgg = await Earning.aggregate([{ $group: { _id: null, totalEarned: { $sum: { $ifNull: ["$amount", 0] } } } }]);
+      const userProfit = (earnAgg[0] && earnAgg[0].totalEarned) || 0;
+
+      // Total withdrawn (approved)
+      let withdrawnSum = 0;
+      try {
+        const wdAgg = await Withdrawal.aggregate([{ $match: { status: { $in: ['approved','Approved'] } } }, { $group: { _id: null, total: { $sum: { $ifNull: ["$amount", 0] } } } }]);
+        withdrawnSum = (wdAgg[0] && wdAgg[0].total) || 0;
+      } catch (e) { withdrawnSum = 0; }
+
+      const profit = Math.max(0, (userProfit - withdrawnSum));
+
+      const pendingWithdrawals = await Withdrawal.countDocuments({ status: { $in: ['Pending','pending','PENDING'] } });
+
+      // Recent activity (last 8 earnings)
+      const recent = await Earning.find({}).sort({ createdAt: -1 }).limit(8).lean();
+      const activity = (recent || []).map(r => `${r.type || 'earning'}: ${r.amount || 0} ${r.amountUsd ? '($' + r.amountUsd + ')' : ''}`);
+
+      return res.json({ totalBalance, profit, userProfit, users: totalUsers, withdrawals: pendingWithdrawals, revenue: userProfit, activity });
     }
+
+    // Fallback to file-based metrics
     const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
     const tx = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transactions.json'), 'utf8') || '[]');
+    const wd = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'withdrawals.json'), 'utf8') || '[]');
+
     const totalUsers = users.length;
-    const totalTransactions = tx.length;
-    const totalEarnedUsd = tx.reduce((s,t)=>s + Number(t.amountUsd || 0), 0);
-    res.json({ totalUsers, totalTransactions, totalEarnedUsd });
+    const totalBalance = users.reduce((s,u) => s + Number(u.wallet || u.balance || 0), 0);
+    const userProfit = tx.reduce((s,t) => s + Number(t.amount || t.amountUsd || 0), 0);
+    const withdrawnSum = wd.filter(w => w.status && String(w.status).toLowerCase().includes('approv')).reduce((s,w) => s + Number(w.amount||0), 0);
+    const profit = Math.max(0, userProfit - withdrawnSum);
+    const pendingWithdrawals = wd.filter(w => String(w.status || '').toLowerCase().includes('pend')).length;
+    const recentActivity = tx.slice(0,8).map(t => `${t.type || 'txn'}: ${t.amount || t.amountUsd || 0}`);
+
+    return res.json({ totalBalance, profit, userProfit, users: totalUsers, withdrawals: pendingWithdrawals, revenue: userProfit, activity: recentActivity });
   } catch (e) { res.status(500).json({ error: 'Failed to compute dashboard' }); }
 });
 

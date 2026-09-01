@@ -389,6 +389,75 @@
       <h3>Promotion Codes</h3>
       <div class="approval-list" id="promotionsList"></div>
     </div>
+  <script>
+    // Tab handling
+    function showTab(name){
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
+      const btn = Array.from(document.querySelectorAll('.tab-btn')).find(b=>b.getAttribute('onclick') && b.getAttribute('onclick').includes("showTab('"+name+"')"));
+      if(btn) btn.classList.add('active');
+      const el = document.getElementById(`${name}-tab`);
+      if(el) el.style.display = 'block';
+    }
+
+    async function loadApprovals(){
+      try{
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/approvals', { headers: { Authorization: `Bearer ${token}` } });
+        if(!res.ok) throw new Error('Failed to fetch approvals');
+        const items = await res.json();
+
+        const wList = document.getElementById('withdrawalsList');
+        if(!items || !items.length){
+          wList.innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><div>No approval items</div></div>';
+        } else {
+          wList.innerHTML = items.map(i => {
+            const bankDetails = i.bankDetails || {};
+            const bankInfo = (i.method === 'bank' || i.method === 'Bank') ? `
+              <div class="info-item"><div class="info-label">Account Name</div><div class="info-value">${bankDetails.accountName || i.accountName || 'N/A'}</div></div>
+              <div class="info-item"><div class="info-label">Account Number</div><div class="info-value">${bankDetails.accountNumber || i.accountNumber || 'N/A'}</div></div>
+              <div class="info-item"><div class="info-label">Bank Name</div><div class="info-value">${bankDetails.bankName || i.bankName || 'N/A'}</div></div>
+            ` : '';
+            return `
+            <div class="approval-card">
+              <div class="card-left">
+                <div class="card-title">${i.userName || 'User'} <small style="color:#999">${i.userEmail || ''}</small></div>
+                <div class="card-info">
+                  <div class="info-item"><div class="info-label">Amount</div><div class="info-value">₦${Number(i.amount || 0).toLocaleString()}</div></div>
+                  <div class="info-item"><div class="info-label">Method</div><div class="info-value">${i.method || ''}</div></div>
+                  <div class="info-item"><div class="info-label">Status</div><div class="info-value">${i.status || ''}</div></div>
+                  ${bankInfo}
+                </div>
+              </div>
+              <div class="card-actions">
+                <button class="btn btn-approve" onclick="handleApproval('${i.id}','approve')">Approve</button>
+                <button class="btn btn-reject" onclick="handleApproval('${i.id}','reject')">Reject</button>
+                <button class="btn btn-view" onclick="viewUser('${i.userId}')">View</button>
+              </div>
+            </div>
+          `; }).join('');
+        }
+      }catch(e){
+        console.error('Load approvals failed', e);
+      }
+    }
+
+    async function handleApproval(id, action){
+      try{
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch(`/api/admin/approvals/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type':'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: action==='approve' ? 'approve_withdrawal' : 'reject_withdrawal', reason: 'Admin action' }) });
+        if(!res.ok) throw new Error('Action failed');
+        await loadApprovals();
+      }catch(e){ console.error(e); alert('Action failed'); }
+    }
+
+    function viewUser(id){ location.href = '/admin-panel/user-profile.html?id=' + encodeURIComponent(id); }
+
+    // Init
+    showTab('withdrawals');
+    loadApprovals();
+    setInterval(loadApprovals, 20000);
+  </script>
 
     <!-- User Verification Tab -->
     <div id="users-tab" class="tab-content" style="display: none;">
@@ -436,7 +505,12 @@
 
   <div class="bottom-nav">
     <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
-    <a href="/admin-panel/suspect.html"><i class="fas fa-shield-alt"></i>Suspect</a>
+    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/approvals.html" class="active"><i class="fas fa-wallet"></i>Approvals</a>
+    <a href="/admin-panel/past.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="/admin-panel/charts.html"><i class="fas fa-chart-line"></i>Charts</a>
+    <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
+  </div>
     <a href="/admin-panel/approvals.html" class="active"><i class="fas fa-check-circle"></i> Approvals</a>
     <a href="/admin-panel/fraud-detection.html"><i class="fas fa-shield-alt"></i> Fraud</a>
     <a href="/admin-panel/promoted.html" style="color:#4CAF50;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-crown"></i>Promoted</a>

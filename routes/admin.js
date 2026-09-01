@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Earning = require('../models/earning');
 const Message = require('../models/messeges');
+const Withdrawal = require('../models/withdrawal');
 const fs = require('fs');
 const path = require('path');
 const mongoNative = require('../mongodb');
@@ -237,6 +238,67 @@ router.get('/approvals', verifyAdminToken, async (req, res) => {
   } catch (error) {
     console.error('Approvals error:', error);
     return res.status(500).json({ error: 'Failed to load approvals' });
+  }
+});
+
+// PUT /api/admin/approvals/:id - approve or reject a withdrawal/approval
+router.put('/approvals/:id', verifyAdminToken, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { action, reason } = req.body || {};
+    if (!action || !['approve','reject','approve_withdrawal','reject_withdrawal'].includes(action) && !['approve','reject'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    // Try MongoDB first
+    if (isMongooseReady()) {
+      // Accept either ObjectId or string id stored in record
+      let withdrawal = null;
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        withdrawal = await Withdrawal.findOne({ _id: id });
+      }
+      if (!withdrawal) {
+        withdrawal = await Withdrawal.findOne({ id: id });
+      }
+
+      if (!withdrawal) return res.status(404).json({ error: 'Withdrawal not found' });
+
+      if (action === 'approve' || action === 'approve_withdrawal') {
+        withdrawal.status = 'approved';
+        withdrawal.approvedAt = new Date().toISOString();
+        await withdrawal.save();
+        return res.json({ ok: true, item: withdrawal });
+      }
+
+      if (action === 'reject' || action === 'reject_withdrawal') {
+        withdrawal.status = 'rejected';
+        withdrawal.approvedAt = new Date().toISOString();
+        withdrawal.rejectionReason = reason || '';
+        await withdrawal.save();
+        return res.json({ ok: true, item: withdrawal });
+      }
+    }
+
+    // Fallback to file-based data
+    const withdrawalsPath = path.join(DATA_DIR, 'withdrawals.json');
+    let withdrawals = [];
+    try { withdrawals = JSON.parse(fs.readFileSync(withdrawalsPath, 'utf8') || '[]'); } catch (e) { withdrawals = []; }
+    const idx = withdrawals.findIndex(w => String(w.id || w._id) === String(id));
+    if (idx === -1) return res.status(404).json({ error: 'Withdrawal not found' });
+
+    if (action === 'approve' || action === 'approve_withdrawal') {
+      withdrawals[idx].status = 'approved';
+      withdrawals[idx].approvedAt = new Date().toISOString();
+    } else {
+      withdrawals[idx].status = 'rejected';
+      withdrawals[idx].rejectionReason = reason || '';
+    }
+
+    fs.writeFileSync(withdrawalsPath, JSON.stringify(withdrawals, null, 2));
+    return res.json({ ok: true, item: withdrawals[idx] });
+  } catch (error) {
+    console.error('Update approval error:', error);
+    return res.status(500).json({ error: 'Failed to update approval' });
   }
 });
 
@@ -523,6 +585,77 @@ router.get('/dashboard', async (req, res) => {
     const totalEarnedUsd = tx.reduce((s,t)=>s + Number(t.amountUsd || 0), 0);
     res.json({ totalUsers, totalTransactions, totalEarnedUsd });
   } catch (e) { res.status(500).json({ error: 'Failed to compute dashboard' }); }
+});
+
+// GET /api/admin/leaderboard - aggregated leaderboards: referral, ads, withdrawals
+router.get('/leaderboard', async (req, res) => {
+  try {
+    if (isMongooseReady()) {
+      // Top referrers: count users grouped by referredBy
+      const refAgg = await User.aggregate([
+        { $match: { referredBy: { $ne: null } } },
+        { $group: { _id: '$referredBy', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 50 }
+      ]);
+
+      const referral = [];
+      for (const r of refAgg) {
+        const u = await User.findById(r._id).lean();
+        if (u) referral.push({ userId: u._id.toString(), name: u.displayName || u.username || u.email, count: r.count });
+      }
+
+      // Ads watched leaderboard: count earnings of type ad_watch
+      const adsAgg = await Earning.aggregate([
+        { $match: { type: 'ad_watch' } },
+        { $group: { _id: '$userId', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 50 }
+      ]);
+      const ads = [];
+      for (const a of adsAgg) {
+        const u = await User.findById(a._id).lean();
+        if (u) ads.push({ userId: u._id.toString(), name: u.displayName || u.username || u.email, count: a.count });
+      }
+
+      // Withdrawals: highest total withdrawn per user
+      const wdAgg = await Withdrawal.aggregate([
+        { $match: { status: { $in: ['approved','Approved','approved'] } } },
+        { $group: { _id: '$userId', total: { $sum: '$amount' } } },
+        { $sort: { total: -1 } },
+        { $limit: 50 }
+      ]);
+      const withdrawals = [];
+      for (const w of wdAgg) {
+        // w._id may be ObjectId or string
+        const user = await User.findOne({ $or: [ { _id: safeObjectId(w._id) }, { id: String(w._id) }, { firebaseUid: String(w._id) } ] }).lean();
+        withdrawals.push({ userId: w._id, name: user ? (user.displayName || user.username || user.email) : String(w._id), total: w.total });
+      }
+
+      return res.json({ referral, ads, withdrawals });
+    }
+
+    // Fallback: compute from data files
+    const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
+    const tx = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transactions.json'), 'utf8') || '[]');
+    const referralsMap = {};
+    users.forEach(u => { if (u.referredBy) referralsMap[u.referredBy] = (referralsMap[u.referredBy]||0) + 1; });
+    const referral = Object.keys(referralsMap).map(k => ({ userId: k, name: (users.find(x=>x.id===k)||{}).displayName || (users.find(x=>x.id===k)||{}).username || k, count: referralsMap[k] })).sort((a,b)=>b.count-a.count).slice(0,50);
+
+    const adsMap = {};
+    tx.filter(t=>t.type==='ad').forEach(t => { adsMap[t.userId] = (adsMap[t.userId]||0) + 1; });
+    const ads = Object.keys(adsMap).map(k => ({ userId: k, name: (users.find(x=>x.id===k)||{}).displayName || (users.find(x=>x.id===k)||{}).username || k, count: adsMap[k] })).sort((a,b)=>b.count-a.count).slice(0,50);
+
+    const wdMap = {};
+    const withdrawalsFile = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'withdrawals.json'), 'utf8') || '[]');
+    withdrawalsFile.filter(w=>w.status && String(w.status).toLowerCase().includes('approv')).forEach(w=>{ wdMap[w.userId] = (wdMap[w.userId]||0) + Number(w.amount||0); });
+    const withdrawals = Object.keys(wdMap).map(k => ({ userId: k, name: (users.find(x=>x.id===k)||{}).displayName || (users.find(x=>x.id===k)||{}).username || k, total: wdMap[k] })).sort((a,b)=>b.total-a.total).slice(0,50);
+
+    return res.json({ referral, ads, withdrawals });
+  } catch (e) {
+    console.error('Leaderboard error:', e);
+    return res.status(500).json({ error: 'Failed to compute leaderboard' });
+  }
 });
 
 router.get('/bonuses', (req, res) => {

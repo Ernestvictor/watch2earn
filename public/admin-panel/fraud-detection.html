@@ -323,10 +323,11 @@
 
   <nav class="bottom-nav">
     <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
+    <a href="/admin-panel/suspect.html"><i class="fas fa-shield-alt"></i>Suspect</a>
     <a href="/admin-panel/approvals.html"><i class="fas fa-check-circle"></i>Approvals</a>
     <a href="/admin-panel/fraud-detection.html" class="active"><i class="fas fa-shield-alt"></i>Fraud</a>
-    <a href="/admin-panel/charts.html"><i class="fas fa-chart-line"></i>Charts</a>
     <a href="/admin-panel/promoted.html" style="color:#4CAF50;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-crown"></i>Promoted</a>
+    <a href="/admin-panel/activity-logs.html" style="color:#4CAF50;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-chart-line"></i>Logs</a>
   </nav>
 
   <script>
@@ -334,7 +335,10 @@
 
     async function loadFraudAlerts() {
       try {
-        const res = await fetch('/api/admin/inbox');
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/inbox', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         if (!res.ok) throw new Error('Failed to fetch');
         const data = await res.json();
 
@@ -398,10 +402,13 @@
 
     async function updateAlertStatus(id, status) {
       try {
-        // Attempt to call an admin endpoint to update message status if exists
+        const token = localStorage.getItem('adminToken');
         await fetch('/api/admin/inbox/update-status', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify({ id, status })
         }).catch(()=>{});
       } catch(e){}

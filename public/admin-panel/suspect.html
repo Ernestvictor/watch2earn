@@ -48,9 +48,11 @@
 
   <div class="bottom-nav">
     <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
-    <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
-    <a href="/admin-panel/withdrawals.html"><i class="fas fa-wallet"></i>Withdrawals</a>
     <a href="/admin-panel/suspect.html" class="active"><i class="fas fa-shield-alt"></i>Suspect</a>
+    <a href="/admin-panel/approvals.html"><i class="fas fa-check-circle"></i>Approvals</a>
+    <a href="/admin-panel/fraud-detection.html" class="active"><i class="fas fa-shield-alt"></i>Fraud</a>
+    <a href="/admin-panel/promoted.html" style="color:#4CAF50;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-crown"></i>Promoted</a>
+    <a href="/admin-panel/activity-logs.html"><i class="fas fa-chart-line"></i>Logs</a>
   </div>
 
   <script>
@@ -61,17 +63,23 @@
         return;
       }
 
-      node.innerHTML = list.map(u => `
+      node.innerHTML = list.map(u => {
+        const uid = (u.id || u.uid || u.firebaseUid || '').replace(/'/g, "\\'");
+        const isBanned = (u.status || '').toLowerCase() === 'banned';
+        const isSuspended = (u.status || '').toLowerCase() === 'suspended';
+        return `
         <div class="item">
           <div style="font-weight:700">${u.displayName || u.username || u.email || 'User'}</div>
           <div class="meta">${u.email || 'No email'} • ${u.status || 'active'}</div>
           ${u.appeal ? `<textarea readonly rows="4">${u.appeal}</textarea>` : ''}
           <div class="actions">
-            <button class="btn approve" onclick="restoreStatus('${u.id || u.uid || u.firebaseUid}', '${type === 'banned' ? 'unban' : 'unsuspend'}')">Remove from ${type === 'banned' ? 'Ban' : 'Suspend'}</button>
-            ${type === 'banned' ? '<button class="btn neutral" onclick="restoreStatus(\'' + (u.id || u.uid || u.firebaseUid) + '\', \'unsuspend\')">Clear status</button>' : ''}
+            ${!isBanned ? `<button class="btn danger" onclick="restoreStatus('${uid}', 'ban')">Ban</button>` : `<button class="btn approve" onclick="restoreStatus('${uid}', 'unban')">Unban</button>`}
+            ${!isSuspended ? `<button class="btn neutral" onclick="restoreStatus('${uid}', 'suspend')">Suspend</button>` : `<button class="btn approve" onclick="restoreStatus('${uid}', 'unsuspend')">Unsuspend</button>`}
+            <button class="btn" style="background:#8b5cf6" onclick="restoreStatus('${uid}', 'promote')">Promote</button>
+            <button class="btn approve" onclick="restoreStatus('${uid}', '${isBanned ? 'unban' : (isSuspended ? 'unsuspend' : 'unsuspend')}')">Clear status</button>
           </div>
         </div>
-      `).join('');
+      `; }).join('');
     }
 
     async function loadSuspects() {

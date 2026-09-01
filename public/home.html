@@ -97,7 +97,7 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
   <div class="card" id="bonusCard" style="display:none">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <div><b style="font-size:14px;color:#f59e0b">🎁 Bonus Available</b><br><small class="muted" id="bonusDesc">You have a bonus waiting!</small></div>
-      <button class="btn btn-dark" style="width:auto;padding:9px 16px;font-size:12px" onclick="claimBonus()">
+      <button id="claimBtn" class="btn btn-dark" style="width:auto;padding:9px 16px;font-size:12px" onclick="claimBonus()">
         <i class="fas fa-gift"></i> Claim
       </button>
     </div>
@@ -247,31 +247,61 @@ async function loadBonuses(){
 async function claimBonus(){
   const user = window.w2e.getCurrentUser();
   if(!user) return alert('Login required');
-
+  const btn = document.getElementById('claimBtn');
+  const origText = btn.innerHTML;
   try{
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Claiming...';
     const headers = await window.w2e.getAuthHeaders();
     const available = await fetch('/api/transactions/bonuses', { headers });
     const availableData = await available.json();
     const bonus = (availableData.bonuses || [])[0];
-    if(!bonus) return alert('No bonus available');
+    if(!bonus) return showToast('No bonus available', 'warn');
 
-    const res = await fetch('/api/transactions/claim-bonus', {
+    const res = await fetch('/api/transactions/bonuses/claim', {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bonusId: bonus.id })
+      body: JSON.stringify({ id: bonus.id })
     });
 
+    const result = await res.json().catch(() => ({}));
     if(res.ok){
-      alert(`Bonus claimed! You received $${bonus.amountUsd?.toFixed(2) || '0'}`);
+      showToast(result.message || (`Bonus claimed! You received $${(bonus.amountUsd || 0).toFixed ? bonus.amountUsd.toFixed(2) : (bonus.amountUsd||0)}`), 'success');
       await load();
       await loadBonuses();
     } else {
-      alert('Failed to claim bonus');
+      showToast(result.error || result.message || 'Failed to claim bonus', 'error');
     }
   }catch(e){
     console.error('Claim bonus error:', e);
-    alert('Error claiming bonus');
+    showToast('Error claiming bonus', 'error');
+  } finally {
+    btn.disabled = false; btn.innerHTML = origText;
   }
+}
+
+// small toast helper
+function showToast(msg, type = 'info', timeout = 3000){
+  if(!msg) return;
+  let t = document.getElementById('w2e-toast');
+  if(!t){
+    t = document.createElement('div');
+    t.id = 'w2e-toast';
+    t.style.position = 'fixed';
+    t.style.right = '16px';
+    t.style.bottom = '86px';
+    t.style.zIndex = 99999;
+    document.body.appendChild(t);
+  }
+  const el = document.createElement('div');
+  el.innerText = msg;
+  el.style.background = (type==='success' ? '#153f2a' : type==='error' ? '#3a1212' : '#111');
+  el.style.color = '#fff';
+  el.style.padding = '10px 14px';
+  el.style.borderRadius = '10px';
+  el.style.marginTop = '8px';
+  el.style.boxShadow = '0 6px 18px rgba(0,0,0,0.4)';
+  t.appendChild(el);
+  setTimeout(()=>{ el.style.opacity = '0'; setTimeout(()=>{ try{ t.removeChild(el); }catch(e){} },400); }, timeout);
 }
 
 function goWithdraw(){ location.href='withdraw.html'; }

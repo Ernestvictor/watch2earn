@@ -4,6 +4,34 @@ const fs = require('fs');
 const path = require('path');
 const verifyToken = require('../middleware/auth');
 const mongoNative = require('../mongodb');
+const { ObjectId } = require('mongodb');
+
+// Simple in-memory rate limiter for bonus claims (per-process)
+const CLAIM_RATE = {};
+const CLAIM_WINDOW_MS = Number(process.env.CLAIM_WINDOW_MS || 60 * 60 * 1000); // 1 hour default
+const CLAIM_MAX = Number(process.env.CLAIM_MAX || 5); // max claims per window
+
+function isRateLimited(userId) {
+  if (!userId) return false;
+  const now = Date.now();
+  CLAIM_RATE[userId] = CLAIM_RATE[userId] || [];
+  // keep only timestamps within window
+  CLAIM_RATE[userId] = CLAIM_RATE[userId].filter(ts => (now - ts) <= CLAIM_WINDOW_MS);
+  if (CLAIM_RATE[userId].length >= CLAIM_MAX) return true;
+  CLAIM_RATE[userId].push(now);
+  return false;
+}
+
+function logClaimError(obj) {
+  try {
+    const p = path.join(__dirname, '..', 'data', 'claim_errors.json');
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    let arr = [];
+    try { arr = JSON.parse(fs.readFileSync(p, 'utf8') || '[]'); } catch (e) { arr = []; }
+    arr.unshift({ ...obj, time: new Date().toISOString() });
+    fs.writeFileSync(p, JSON.stringify(arr.slice(0, 500), null, 2));
+  } catch (e) { console.warn('Failed to log claim error', e && e.message); }
+}
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const TXN_PATH = path.join(DATA_DIR, 'transactions.json');
@@ -115,6 +143,202 @@ router.post('/earn', verifyToken, (req, res) => {
   }
 
   res.json({ message: 'Ad watched successfully', amount: usdAmount, remaining: Math.max(dailyLimit - adCount - 1, 0) });
+});
+
+// POST /api/transactions/bonuses/claim - user claims a bonus
+router.post('/bonuses/claim', verifyToken, async (req, res) => {
+  try {
+    const bonusId = (req.body && (req.body.id || req.body.bonusId)) || null;
+    if (!bonusId) return res.status(400).json({ error: 'bonus id is required' });
+
+    const userId = req.user.uid || req.user.id;
+    if (!userId) return res.status(400).json({ error: 'user id missing from token' });
+
+    // Rate limit per user to prevent abuse
+    if (isRateLimited(String(userId))) {
+      logClaimError({ userId: String(userId), bonusId: String(bonusId), error: 'rate_limited' });
+      return res.status(429).json({ error: 'Rate limit exceeded' });
+    }
+
+    // Try Mongo native bonuses collection first
+    if (mongoNative && typeof mongoNative.getCollection === 'function') {
+      const bonusCol = mongoNative.getCollection('bonuses');
+      const usersCol = mongoNative.getUsersCollection ? mongoNative.getUsersCollection() : null;
+      // allow matching by string id or Mongo ObjectId
+      const orQuery = [{ id: bonusId }];
+      try { orQuery.push({ _id: new ObjectId(bonusId) }); } catch (e) { /* not an ObjectId */ }
+      const bonus = await bonusCol.findOne({ $or: orQuery });
+      if (!bonus) return res.status(404).json({ error: 'Bonus not found' });
+
+      const claimedBy = Array.isArray(bonus.claimedBy) ? bonus.claimedBy : [];
+      // Determine eligibility
+      const targetType = String(bonus.targetType || 'all');
+      const targetUserId = bonus.targetUserId || bonus.targetUser || null;
+      const targetUsers = Array.isArray(bonus.targetUsers) ? bonus.targetUsers : [];
+
+      const eligible = (targetType === 'all') || (targetUserId && String(targetUserId) === String(userId)) || targetUsers.includes(userId);
+      if (!eligible) return res.status(403).json({ error: 'You are not eligible for this bonus' });
+      if (claimedBy.includes(String(userId))) return res.status(400).json({ error: 'Bonus already claimed by you' });
+
+      // Check expiry
+      const now = new Date();
+      const expiresAt = bonus.expiresAt || bonus.expires || bonus.expiry || bonus.expires_at || null;
+      if (expiresAt) {
+        const expDate = new Date(expiresAt);
+        if (!isNaN(expDate) && expDate < now) return res.status(400).json({ error: 'Bonus expired' });
+      }
+
+      // Prevent duplicate claims (race-safe check using transactions collection)
+      const referenceId = String(bonus.id || bonus._id || bonusId);
+      try {
+        if (typeof mongoNative.getTransactionsCollection === 'function') {
+          const txCol = mongoNative.getTransactionsCollection();
+          const existing = await txCol.findOne({ userId: String(userId), referenceId });
+          if (existing) return res.status(400).json({ error: 'Bonus already claimed' });
+        } else {
+          const txs = loadTransactions();
+          if (txs.find(t => String(t.userId) === String(userId) && String(t.referenceId) === referenceId)) {
+            return res.status(400).json({ error: 'Bonus already claimed' });
+          }
+        }
+      } catch (e) {
+        // continue if duplicate-check fails — we'll still protect with claimedBy below
+      }
+
+      // Determine amount (prefer amountUsd then amount)
+      const amountUsd = Number(bonus.amountUsd ?? bonus.amount ?? 0) || 0;
+      const amountNaira = Math.round(amountUsd * 1500);
+
+      // Credit user wallet in users collection if available
+      try {
+        if (usersCol) {
+          await usersCol.updateOne({ $or: [{ firebaseUid: userId }, { id: userId }, { uid: userId }] }, { $inc: { wallet: amountNaira, balance: amountNaira } });
+        }
+      } catch (e) { /* ignore user credit error */ }
+
+      // Record transaction
+      const tx = {
+        id: Date.now().toString(),
+        userId,
+        type: 'bonus',
+        title: bonus.title || 'Claimed bonus',
+        amountUsd,
+        amountNaira,
+        referenceId,
+        date: new Date().toISOString()
+      };
+      const txs = loadTransactions();
+      txs.unshift(tx);
+      saveTransactions(txs);
+      try { await insertTxMongo(tx); } catch (e) { /* ignore */ }
+
+      // Update bonus doc claimedBy
+      try {
+        await bonusCol.updateOne({ $or: orQuery }, { $addToSet: { claimedBy: String(userId) }, $set: { updatedAt: new Date() } });
+      } catch (e) { /* ignore */ }
+
+      return res.json({ ok: true, credited: amountNaira, amountUsd, tx });
+    }
+
+    // Fallback: file-based bonuses
+    const bonusesPath = path.join(DATA_DIR, 'bonuses.json');
+    try {
+      let bonuses = JSON.parse(fs.readFileSync(bonusesPath, 'utf8') || '[]');
+      const bIdx = bonuses.findIndex(b => String(b.id) === String(bonusId));
+      if (bIdx === -1) return res.status(404).json({ error: 'Bonus not found' });
+      const bonus = bonuses[bIdx];
+      const claimedBy = Array.isArray(bonus.claimedBy) ? bonus.claimedBy : [];
+      const targetType = String(bonus.targetType || 'all');
+      const targetUserId = bonus.targetUserId || bonus.targetUser || null;
+      const targetUsers = Array.isArray(bonus.targetUsers) ? bonus.targetUsers : [];
+      const eligible = (targetType === 'all') || (targetUserId && String(targetUserId) === String(userId)) || targetUsers.includes(userId);
+      if (!eligible) return res.status(403).json({ error: 'You are not eligible for this bonus' });
+      if (claimedBy.includes(String(userId))) return res.status(400).json({ error: 'Bonus already claimed by you' });
+
+      const amountUsd = Number(bonus.amountUsd ?? bonus.amount ?? 0) || 0;
+      const amountNaira = Math.round(amountUsd * 1500);
+
+      // credit users.json
+      const usersPath = path.join(DATA_DIR, 'users.json');
+      let users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]');
+      const uIdx = users.findIndex(u => (String(u.firebaseUid) === String(userId)) || String(u.id) === String(userId) || String(u.uid) === String(userId));
+      if (uIdx >= 0) {
+        users[uIdx].wallet = (Number(users[uIdx].wallet || users[uIdx].balance || 0) + amountNaira);
+        users[uIdx].balance = users[uIdx].wallet;
+      } else {
+        // If user not found, add minimal record
+        users.unshift({ id: userId, firebaseUid: userId, wallet: amountNaira, balance: amountNaira, createdAt: new Date().toISOString() });
+      }
+      fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+
+      // record transaction in file
+      const transactions = loadTransactions();
+      const tx = { id: Date.now().toString(), userId, type: 'bonus', title: bonus.title || 'Claimed bonus', amountUsd, amountNaira, date: new Date().toISOString() };
+      transactions.unshift(tx);
+      saveTransactions(transactions);
+
+      // mark bonus claimed
+      bonuses[bIdx].claimedBy = claimedBy.concat([String(userId)]);
+      fs.writeFileSync(bonusesPath, JSON.stringify(bonuses, null, 2));
+
+      return res.json({ ok: true, credited: amountNaira, amountUsd, tx });
+    } catch (e) {
+      console.error('Bonus claim file fallback error:', e);
+      logClaimError({ userId: String(userId), bonusId: String(bonusId), error: e && e.message ? e.message : String(e) });
+      return res.status(500).json({ error: 'Failed to claim bonus' });
+    }
+  } catch (err) {
+    console.error('Claim bonus error:', err);
+    logClaimError({ userId: req.user && (req.user.uid || req.user.id) ? String(req.user.uid || req.user.id) : null, bonusId: (req.body && (req.body.id || req.body.bonusId)) || null, error: err && err.message ? err.message : String(err) });
+    return res.status(500).json({ error: 'Failed to claim bonus' });
+  }
+});
+
+// GET /api/transactions/bonuses - list bonuses available to current user
+router.get('/bonuses', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.uid || req.user.id;
+    if (!userId) return res.status(400).json({ error: 'user id missing from token' });
+
+    // Mongo first
+    if (mongoNative && typeof mongoNative.getCollection === 'function') {
+      const bonusCol = mongoNative.getCollection('bonuses');
+      const raw = await bonusCol.find({}).sort({ createdAt: -1 }).limit(100).toArray();
+      const bonuses = (raw || []).map(b => {
+        const claimedBy = Array.isArray(b.claimedBy) ? b.claimedBy.map(String) : [];
+        return {
+          id: b.id || b._id?.toString?.(),
+          title: b.title || b.description || 'Bonus',
+          amountUsd: Number(b.amountUsd ?? b.amount ?? 0) || 0,
+          targetType: b.targetType || 'all',
+          targetUserId: b.targetUserId || b.targetUser || null,
+          targetUsers: Array.isArray(b.targetUsers) ? b.targetUsers : [],
+          claimed: claimedBy.includes(String(userId)),
+          createdAt: b.createdAt || b.createdAt || null
+        };
+      });
+      return res.json({ bonuses });
+    }
+
+    // Fallback to file-based bonuses
+    const bonusesPath = path.join(DATA_DIR, 'bonuses.json');
+    let bonuses = [];
+    try { bonuses = JSON.parse(fs.readFileSync(bonusesPath, 'utf8') || '[]'); } catch (e) { bonuses = []; }
+    const mapped = (bonuses || []).map(b => ({
+      id: b.id,
+      title: b.title || b.description || 'Bonus',
+      amountUsd: Number(b.amountUsd ?? b.amount ?? 0) || 0,
+      targetType: b.targetType || 'all',
+      targetUserId: b.targetUserId || b.targetUser || null,
+      targetUsers: Array.isArray(b.targetUsers) ? b.targetUsers : [],
+      claimed: Array.isArray(b.claimedBy) ? b.claimedBy.map(String).includes(String(userId)) : false,
+      createdAt: b.createdAt || null
+    }));
+    return res.json({ bonuses: mapped });
+  } catch (err) {
+    console.error('List bonuses error:', err);
+    return res.status(500).json({ error: 'Failed to list bonuses' });
+  }
 });
 
 // POST /api/transactions/claim-strike - Claim daily strike bonus

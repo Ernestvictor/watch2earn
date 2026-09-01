@@ -118,11 +118,12 @@ tr:hover { background: #1a1a1a; }
 
 <div style="position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20">
     <a href="/admin-panel/carbinate.html" style="color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-house"></i>Home</a>
-    <a href="/admin-panel/users.html" style="color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-users"></i>Users</a>
+    <a href="/admin-panel/suspect.html"><i class="fas fa-shield-alt"></i>Suspect</a>
+    <a href="/admin-panel/approvals.html"><i class="fas fa-check-circle"></i>Approvals</a>
+    <a href="/admin-panel/fraud-detection.html"><i class="fas fa-shield-alt"></i>Fraud</a>
+    <a href="/admin-panel/promoted.html" style="color:#4CAF50;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-crown"></i>Promoted</a>
     <a href="/admin-panel/activity-logs.html" class="active" style="color:#4CAF50;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-chart-line"></i>Logs</a>
-    <a href="/admin-panel/charts.html" style="color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-chart-pie"></i>Charts</a>
-    <a href="/admin-panel/messages.html" style="color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-envelope"></i>Messages</a>
-  </div>
+  
 
 <script>
 let currentPage = 0;
@@ -131,7 +132,10 @@ const limit = 50;
 
 async function loadDiagnostics() {
   try {
-    const res = await fetch('/api/admin/diagnostics');
+    const token = localStorage.getItem('adminToken');
+    const res = await fetch('/api/admin/diagnostics', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     const data = await res.json();
     
     document.getElementById('mongoStatus').innerText = data.mongoReady ? 'Connected' : 'Offline';
@@ -155,6 +159,7 @@ async function loadActivityLogs(page = 0) {
     const userId = document.getElementById('filterUserId').value || '';
     const route = document.getElementById('filterRoute').value || '';
     const sortBy = document.getElementById('sortBy').value;
+    const token = localStorage.getItem('adminToken');
     
     const params = new URLSearchParams();
     params.append('page', page);
@@ -163,7 +168,9 @@ async function loadActivityLogs(page = 0) {
     if (route) params.append('route', route);
     params.append('sortBy', sortBy);
     
-    const res = await fetch('/api/admin/activity-logs?' + params.toString());
+    const res = await fetch('/api/admin/activity-logs?' + params.toString(), {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     const data = await res.json();
     
     totalLogs = data.total;
@@ -261,7 +268,10 @@ function resetFilters() {
 
 async function exportLogsCSV() {
   try {
-    const res = await fetch('/api/admin/activity-logs?page=0&limit=10000');
+    const token = localStorage.getItem('adminToken');
+    const res = await fetch('/api/admin/activity-logs?page=0&limit=10000', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     const data = await res.json();
     const logs = data.logs || [];
     
@@ -278,7 +288,10 @@ async function exportLogsCSV() {
 
 async function exportLogsJSON() {
   try {
-    const res = await fetch('/api/admin/activity-logs?page=0&limit=10000');
+    const token = localStorage.getItem('adminToken');
+    const res = await fetch('/api/admin/activity-logs?page=0&limit=10000', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     const data = await res.json();
     downloadFile(JSON.stringify(data.logs || [], null, 2), 'activity-logs.json', 'application/json');
   } catch (e) {

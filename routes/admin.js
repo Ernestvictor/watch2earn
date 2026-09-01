@@ -186,7 +186,19 @@ async function readUserRecords() {
 
 router.get('/inbox', verifyAdminToken, async (req, res) => {
   try {
-    const inboxMessages = readJson(MESSAGES_PATH).filter(Boolean);
+    let inboxMessages = [];
+    if (isMongooseReady()) {
+      try {
+        // Use Message model (user messages) and also admin_messages collection for admin inbox
+        const userMessages = await Message.find({}).sort({ createdAt: -1 }).limit(500).lean();
+        inboxMessages = (userMessages || []).map(m => ({ id: m._id?.toString?.() || m.id, from: m.from || m.userId || null, message: m.message || '', type: m.type || 'user_message', createdAt: m.createdAt || m.createdAt }));
+      } catch (e) {
+        inboxMessages = readJson(MESSAGES_PATH).filter(Boolean);
+      }
+    } else {
+      inboxMessages = readJson(MESSAGES_PATH).filter(Boolean);
+    }
+
     const users = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]'); } catch { return []; } })();
     const withdrawals = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'withdrawals.json'), 'utf8') || '[]'); } catch { return []; } })();
 
@@ -208,17 +220,25 @@ router.get('/inbox', verifyAdminToken, async (req, res) => {
 // GET /api/admin/approvals - return pending withdrawals and approval items
 router.get('/approvals', verifyAdminToken, async (req, res) => {
   try {
-    const withdrawalsPath = path.join(DATA_DIR, 'withdrawals.json');
-    const usersPath = path.join(DATA_DIR, 'users.json');
     let withdrawals = [];
-    try { withdrawals = JSON.parse(fs.readFileSync(withdrawalsPath, 'utf8') || '[]'); } catch (e) { withdrawals = []; }
     let users = [];
-    try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+
+    // Try MongoDB first
+    if (isMongooseReady()) {
+      withdrawals = await Withdrawal.find({}).sort({ createdAt: -1 }).lean();
+      users = await User.find({}).lean();
+    } else {
+      // Fallback to files
+      const withdrawalsPath = path.join(DATA_DIR, 'withdrawals.json');
+      const usersPath = path.join(DATA_DIR, 'users.json');
+      try { withdrawals = JSON.parse(fs.readFileSync(withdrawalsPath, 'utf8') || '[]'); } catch (e) { withdrawals = []; }
+      try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
+    }
 
     const mapped = (withdrawals || []).map(w => {
-      const user = users.find(u => (u.id && String(u.id) === String(w.userId)) || (u.firebaseUid && String(u.firebaseUid) === String(w.userId)) || (u.uid && String(u.uid) === String(w.userId)) ) || {};
+      const user = users.find(u => (u.id && String(u.id) === String(w.userId)) || (u.firebaseUid && String(u.firebaseUid) === String(w.userId)) || (u.uid && String(u.uid) === String(w.userId)) || (u._id && String(u._id) === String(w.userId))) || {};
       return {
-        id: w.id || w._id || ('W-' + (w.id || Math.random().toString(36).slice(2,8))),
+        id: w.id || w._id?.toString?.() || ('W-' + (w.id || Math.random().toString(36).slice(2,8))),
         type: 'withdrawal',
         userName: user.displayName || user.username || w.name || (user.email || '').split('@')[0] || 'User',
         userEmail: user.email || w.email || '',
@@ -326,15 +346,22 @@ router.post('/reply-message/:id', async (req, res) => {
   try {
     const id = req.params.id;
     const body = req.body || {}; 
+    if (isMongooseReady()) {
+      // Store replies in admin_messages collection
+      const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
+      const doc = await col.findOne({ id: id }) || await col.findOne({ _id: safeObjectId(id) });
+      if (!doc) return res.status(404).json({ error: 'Message not found' });
+      const replies = doc.replies || [];
+      replies.push({ reply: body.reply || '', by: 'admin', date: new Date().toISOString() });
+      await col.updateOne({ _id: doc._id }, { $set: { replies } });
+      return res.json({ ok: true, message: { ...doc, replies } });
+    }
+
     const items = readJson(MESSAGES_PATH);
     const match = items.find(m => String(m.id) === String(id));
     if (!match) return res.status(404).json({ error: 'Message not found' });
     match.replies = match.replies || [];
-    match.replies.push({
-      reply: body.reply || '',
-      by: 'admin',
-      date: new Date().toISOString()
-    });
+    match.replies.push({ reply: body.reply || '', by: 'admin', date: new Date().toISOString() });
     fs.writeFileSync(MESSAGES_PATH, JSON.stringify(items, null, 2));
     return res.json({ ok: true, message: match });
   } catch (error) {
@@ -445,7 +472,6 @@ router.get('/messages', verifyAdminToken, async (req, res) => {
 router.post('/messages', async (req, res) => {
   try {
     const body = req.body || {};
-    const items = readJson(MESSAGES_PATH);
     const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2,8);
     const entry = {
       id,
@@ -456,6 +482,7 @@ router.post('/messages', async (req, res) => {
       targetUsers: body.targetUsers || [],
       sendType: body.sendType || 'manual',
       scheduleDateTime: body.scheduleDateTime || null,
+      expiresAt: body.expiresAt || body.expires || body.expiry || body.expires_at || null,
       frequency: body.frequency || 'once',
       priority: body.priority || 'normal',
       status: body.status || (body.sendType === 'automatic' ? 'scheduled' : 'sent'),
@@ -463,6 +490,18 @@ router.post('/messages', async (req, res) => {
       from: process.env.FROM_EMAIL || process.env.SMTP_USER || 'watch2earn36@gmail.com'
     };
 
+    // Persist to MongoDB if available (admin messages collection)
+    if (isMongooseReady()) {
+      try {
+        const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
+        await col.insertOne(entry);
+      } catch (e) {
+        console.warn('Admin message Mongo insert failed:', e && e.message);
+      }
+    }
+
+    // Fallback file storage (keep existing behavior)
+    const items = readJson(MESSAGES_PATH);
     items.unshift(entry);
     writeJson(MESSAGES_PATH, items.slice(0, 500));
 
@@ -495,6 +534,12 @@ router.post('/messages', async (req, res) => {
 router.delete('/messages/:id', async (req, res) => {
   try {
     const id = req.params.id;
+    if (isMongooseReady()) {
+      try {
+        const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
+        await col.deleteOne({ $or: [{ id: id }, { _id: safeObjectId(id) }] });
+      } catch (e) { console.warn('Admin message Mongo delete failed:', e && e.message); }
+    }
     const items = readJson(MESSAGES_PATH).filter(Boolean).filter(m => String(m.id) !== String(id));
     writeJson(MESSAGES_PATH, items);
     return res.json({ ok: true });
@@ -505,8 +550,16 @@ router.delete('/messages/:id', async (req, res) => {
 router.post('/incoming-email', express.json(), async (req, res) => {
   try {
     const { from, subject, text, html } = req.body || {};
-    const items = readJson(MESSAGES_PATH);
     const entry = { id: Date.now().toString(), from: from || 'unknown', title: subject || 'Email', message: text || (html || ''), type: 'email', createdAt: new Date().toISOString() };
+
+    if (isMongooseReady()) {
+      try {
+        const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
+        await col.insertOne(entry);
+      } catch (e) { console.warn('Incoming email Mongo insert failed:', e && e.message); }
+    }
+
+    const items = readJson(MESSAGES_PATH);
     items.unshift(entry);
     writeJson(MESSAGES_PATH, items.slice(0, 500));
     // Optionally forward into SMTP inbox
@@ -714,7 +767,7 @@ router.post('/send-bonus', verifyAdminToken, async (req, res) => {
   }
 });
 
-router.put('/users/:id', async (req, res) => {
+router.put('/users/:id', verifyAdminToken, async (req, res) => {
   try {
     const id = req.params && req.params.id;
     const body = req.body || {};
@@ -733,7 +786,7 @@ router.put('/users/:id', async (req, res) => {
         const errLogPath = path.join(DATA_DIR, 'promote_errors.json');
         let errs = [];
         try { errs = JSON.parse(fs.readFileSync(errLogPath, 'utf8') || '[]'); } catch (e) { errs = []; }
-        errs.unshift({ id: id || null, body: body || null, ip: req.ip || null, time: new Date().toISOString() });
+        errs.unshift({ id: id || null, body: body || null, ip: req.ip || null, time: new Date().toISOString(), admin: (req.user && req.user.email) || null });
         fs.writeFileSync(errLogPath, JSON.stringify(errs.slice(0, 200), null, 2));
       } catch (e) { console.warn('Failed to write promote_errors log', e && e.message); }
       console.warn('Admin user lookup failed for:', { id, body });
@@ -1218,9 +1271,10 @@ router.get('/chart/earnings-summary', async (req, res) => {
 });
 
 // GET /api/admin/suspects - Get banned and suspended users (suspects)
-router.get('/suspects', async (req, res) => {
+router.get('/suspects', verifyAdminToken, async (req, res) => {
   try {
     let users = [];
+    let appeals = [];
     if (isMongooseReady()) {
       users = await User.find({
         $or: [
@@ -1239,13 +1293,129 @@ router.get('/suspects', async (req, res) => {
       }
     }
 
+    try {
+      appeals = readAppeals();
+    } catch (e) {
+      appeals = [];
+    }
+
     const banned = users.filter(u => u.isBanned || u.status === 'banned');
     const suspended = users.filter(u => u.isSuspended || u.status === 'suspended');
 
-    return res.json({ users, banned, suspended, total: users.length });
+    return res.json({ users, banned, suspended, appeals, total: users.length });
   } catch (e) {
     console.error('Suspects error:', e);
     return res.status(500).json({ error: 'Failed to load suspects' });
+  }
+});
+
+// GET /api/admin/user/:id - Get single user profile with earnings and summary
+router.get('/user/:id', verifyAdminToken, async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const user = await findUserByAdminIdentifier(id, null);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Build basic profile
+    const profile = {
+      id: user.id || user._id?.toString?.() || user.uid || user.firebaseUid || 'unknown',
+      name: user.displayName || user.username || user.firstName || user.lastName || user.email || 'Unknown',
+      email: user.email || 'N/A',
+      status: user.status || (user.isBanned ? 'banned' : user.isSuspended ? 'suspended' : 'active'),
+      wallet: user.wallet || 0,
+      balance: user.balance || 0,
+      verified: user.verified || user.promoted || false,
+      referralCode: user.referralCode || '',
+      referredBy: user.referredBy || null,
+      createdAt: user.createdAt || user.created || null
+    };
+
+    // Fetch transactions/earnings
+    let transactions = [];
+    if (isMongooseReady()) {
+      const earnings = await Earning.find({ 
+        $or: [
+          { userId: user._id },
+          { userId: String(user._id) },
+          { firebaseUid: user.firebaseUid }
+        ]
+      }).sort({ createdAt: -1 }).limit(200).lean();
+      
+      transactions = (earnings || []).map(e => ({
+        id: e._id?.toString?.() || e.id,
+        type: e.type || 'other',
+        amount: e.amount || 0,
+        amountUsd: e.amountUsd || e.amount || 0,
+        description: e.description || `${e.type} earned`,
+        date: e.createdAt || e.date,
+        createdAt: e.createdAt || e.date,
+        title: `${e.type} earning`
+      }));
+    } else {
+      // Fallback to file-based transactions
+      const transactionsPath = path.join(DATA_DIR, 'transactions.json');
+      try {
+        const allTx = JSON.parse(fs.readFileSync(transactionsPath, 'utf8') || '[]');
+        transactions = (allTx || [])
+          .filter(t => t.userId === profile.id || t.firebaseUid === user.firebaseUid)
+          .map(t => ({
+            id: t.id,
+            type: t.type || 'other',
+            amount: t.amount || 0,
+            amountUsd: t.amountUsd || t.amount || 0,
+            description: t.description || `${t.type} earned`,
+            date: t.date || t.createdAt,
+            createdAt: t.date || t.createdAt,
+            title: `${t.type} earning`
+          }))
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .slice(0, 200);
+      } catch (e) {
+        transactions = [];
+      }
+    }
+
+    // Calculate summary: group by type and sum amounts
+    const summaryMap = {
+      total: 0,
+      ads: 0,
+      referrals: 0,
+      bonus: 0,
+      game: 0,
+      survey: 0,
+      telegram: 0,
+      other: 0
+    };
+
+    transactions.forEach(tx => {
+      const amount = Number(tx.amountUsd || tx.amount || 0);
+      const type = (tx.type || 'other').toLowerCase();
+      
+      summaryMap.total += amount;
+      
+      if (type.includes('ad')) summaryMap.ads += amount;
+      else if (type.includes('referral') || type.includes('commission')) summaryMap.referrals += amount;
+      else if (type.includes('bonus')) summaryMap.bonus += amount;
+      else if (type.includes('game')) summaryMap.game += amount;
+      else if (type.includes('survey')) summaryMap.survey += amount;
+      else if (type.includes('telegram')) summaryMap.telegram += amount;
+      else summaryMap.other += amount;
+    });
+
+    return res.json({
+      ...profile,
+      transactions,
+      summary: summaryMap
+    });
+  } catch (error) {
+    console.error('Get user profile error:', error);
+    return res.status(500).json({ error: 'Failed to load user profile' });
   }
 });
 

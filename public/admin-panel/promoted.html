@@ -32,16 +32,20 @@
 
   <div style="position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20">
     <a href="/admin-panel/carbinate.html" style="color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-house"></i>Home</a>
-    <a href="/admin-panel/users.html" style="color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-users"></i>Users</a>
-    <a href="/admin-panel/withdrawals.html" style="color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-wallet"></i>Withdrawals</a>
+    <a href="/admin-panel/suspect.html"><i class="fas fa-shield-alt"></i>Suspect</a>
+    <a href="/admin-panel/approvals.html"><i class="fas fa-check-circle"></i>Approvals</a>
+    <a href="/admin-panel/fraud-detection.html" class="active"><i class="fas fa-shield-alt"></i>Fraud</a>
     <a href="/admin-panel/promoted.html" class="active" style="color:#4CAF50;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-crown"></i>Promoted</a>
-    <a href="/admin-panel/messages.html" style="color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-envelope"></i>Messages</a>
+    <a href="/admin-panel/activity-logs.html" style="color:#4CAF50;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px"><i class="fas fa-chart-line"></i>Logs</a>
   </div>
 
   <script>
     async function loadPromoted(){
       try{
-        const res = await fetch('/api/admin/users');
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/users', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         if(!res.ok) throw new Error('Failed to load users');
         const js = await res.json();
         const users = js.users || js || [];

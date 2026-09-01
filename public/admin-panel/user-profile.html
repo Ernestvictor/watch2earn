@@ -180,14 +180,14 @@
     document.getElementById('suspendBtn').addEventListener('click', () => setUserStatus('suspend'));
     document.getElementById('banBtn').addEventListener('click', () => setUserStatus('ban'));
     document.getElementById('restoreBtn').addEventListener('click', () => {
-      const action = confirm('Remove Ban/Suspend from this user?');
-      if (action) {
-        const token = localStorage.getItem('adminToken');
-        fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ action: 'unban' })
-        }).then(async res => {
+      showConfirmModal('Remove Ban/Suspend from this user?', async () => {
+        try {
+          const token = localStorage.getItem('adminToken');
+          const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ action: 'unban' })
+          });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
             alert(data.error || 'Action failed');
@@ -195,11 +195,45 @@
           }
           alert('User restored successfully');
           loadProfile();
-        }).catch(err => alert('Error: ' + err.message));
-      }
+        } catch (err) {
+          alert('Error: ' + (err && err.message));
+        }
+      });
     });
 
     loadProfile();
+  </script>
+
+  <!-- Confirm modal -->
+  <div id="confirmModal" style="display:none;position:fixed;inset:0;background:rgba(3,6,8,0.6);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:#0f1113;color:#fff;padding:20px;border-radius:10px;max-width:480px;margin:auto;border:1px solid #232326">
+      <div id="confirmModalMessage" style="margin-bottom:16px">Are you sure?</div>
+      <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
+        <button id="confirmModalCancel" style="background:#2b2b2d;color:#fff;padding:8px 12px;border-radius:8px;border:none">Cancel</button>
+        <button id="confirmModalOk" style="background:#4CAF50;color:#fff;padding:8px 12px;border-radius:8px;border:none">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Reusable confirm modal for admin pages
+    function showConfirmModal(message, onConfirm) {
+      const modal = document.getElementById('confirmModal');
+      const msg = document.getElementById('confirmModalMessage');
+      const ok = document.getElementById('confirmModalOk');
+      const cancel = document.getElementById('confirmModalCancel');
+      msg.textContent = message || 'Are you sure?';
+      modal.style.display = 'flex';
+      function cleanup() {
+        ok.removeEventListener('click', handleOk);
+        cancel.removeEventListener('click', handleCancel);
+        modal.style.display = 'none';
+      }
+      async function handleOk() { cleanup(); try { await onConfirm(); } catch(e){ console.error(e); } }
+      function handleCancel() { cleanup(); }
+      ok.addEventListener('click', handleOk);
+      cancel.addEventListener('click', handleCancel);
+    }
   </script>
 </body>
 </html>

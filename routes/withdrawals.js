@@ -216,6 +216,26 @@ router.post('/request', verifyToken, async (req, res) => {
       writeWithdrawals(allWithdrawals);
     }
 
+    // Immediately decrement user balance on request (reserve funds)
+    try {
+      if (mongoose.connection && mongoose.connection.readyState === 1) {
+        // decrement wallet/balance for the user in MongoDB
+        await User.findOneAndUpdate({ firebaseUid: userId }, { $inc: { wallet: -amountNum, balance: -amountNum } });
+      } else {
+        // file-based users.json fallback
+        try {
+          const usersPath = path.join(DATA_DIR, 'users.json');
+          const users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]');
+          const idx = users.findIndex(u => (u.firebaseUid && String(u.firebaseUid) === String(userId)) || (u.uid && String(u.uid) === String(userId)) || (u.id && String(u.id) === String(userId)));
+          if (idx >= 0) {
+            users[idx].balance = Math.max(0, (Number(users[idx].balance || users[idx].wallet || 0) - Number(amountNum)));
+            if (!users[idx].wallet) users[idx].wallet = users[idx].balance;
+            fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+          }
+        } catch (e) { console.warn('Failed to decrement file-based user balance:', e && e.message); }
+      }
+    } catch (e) { console.warn('Failed to reserve funds on withdrawal request:', e && e.message); }
+
     await createWithdrawalHistory({
       firebaseUid: userId,
       amount: amountNum,
@@ -398,6 +418,13 @@ router.post('/:id/reject', async (req, res) => {
         status: 'failed',
         metadata: { referenceId: target.id || target._id, method: target.method, rejectedAt: new Date().toISOString() }
       });
+      // Refund reserved funds to user
+      try {
+        const amt = Number(target.amount || 0);
+        if (amt > 0) {
+          await User.findOneAndUpdate({ $or: [{ firebaseUid: target.userId }, { uid: target.userId }, { id: target.userId }] }, { $inc: { wallet: amt, balance: amt } });
+        }
+      } catch (e) { console.warn('Refund on rejection (mongo) failed:', e && e.message); }
       return res.json({ success: true, id: req.params.id, status: 'Rejected' });
     }
 

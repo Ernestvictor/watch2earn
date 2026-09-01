@@ -108,7 +108,19 @@ const userSchema = new mongoose.Schema({
   bannedDate: {
     type: Date,
     default: null
-  }
+  },
+  accountDetails: [{
+    id: { type: String },
+    type: { type: String, enum: ['bank', 'crypto'] },
+    bankName: { type: String },
+    accountNumber: { type: String },
+    accountName: { type: String },
+    cryptoType: { type: String },
+    walletAddress: { type: String },
+    network: { type: String },
+    label: { type: String },
+    createdAt: { type: Date, default: Date.now }
+  }]
 }, { timestamps: true });
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema);

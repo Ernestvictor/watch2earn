@@ -3,6 +3,8 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const verifyToken = require('../middleware/auth');
+const User = require('../models/User');
+const mongoose = require('mongoose');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const ACCOUNTS_PATH = path.join(DATA_DIR, 'accounts.json');
@@ -61,6 +63,36 @@ router.post('/', verifyToken, async (req, res) => {
 
     accounts.unshift(entry);
     writeAccounts(accounts);
+
+    // Also save to MongoDB User model
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+      try {
+        await User.findOneAndUpdate(
+          { firebaseUid: userId },
+          {
+            $push: {
+              accountDetails: {
+                id: entry.id,
+                type: entry.type,
+                bankName: entry.bankName,
+                accountNumber: entry.accountNumber,
+                accountName: entry.accountName,
+                cryptoType: entry.cryptoType,
+                walletAddress: entry.walletAddress,
+                network: entry.network,
+                label: entry.label,
+                createdAt: new Date()
+              }
+            }
+          },
+          { new: true }
+        );
+      } catch (mongoErr) {
+        console.warn('Failed to save account to MongoDB:', mongoErr.message);
+        // Continue even if MongoDB fails, accounts are saved to JSON
+      }
+    }
+
     res.json({ success: true, id: entry.id, account: entry, savedCount: existing.length + 1 });
   } catch (e) {
     res.status(500).json({ error: e.message });

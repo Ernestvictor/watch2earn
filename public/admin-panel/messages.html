@@ -648,21 +648,22 @@
       renderMessages(search);
     }
 
-    async function deleteMessage(messageId) {
-      if (!confirm('Delete this message?')) return;
-      try {
-        const token = localStorage.getItem('adminToken');
-        const res = await fetch(`/api/admin/messages/${messageId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error('Delete failed');
-        alert('Message deleted!');
-        loadMessages();
-      } catch (err) {
-        console.error('Delete error:', err);
-        alert('Error deleting message: ' + err.message);
-      }
+    function deleteMessage(messageId) {
+      showConfirmModal('Delete this message?', async () => {
+        try {
+          const token = localStorage.getItem('adminToken');
+          const res = await fetch(`/api/admin/messages/${messageId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error('Delete failed');
+          alert('Message deleted!');
+          loadMessages();
+        } catch (err) {
+          console.error('Delete error:', err);
+          alert('Error deleting message: ' + err.message);
+        }
+      });
     }
 
     // ===== TRIGGER FUNCTIONS =====
@@ -740,20 +741,21 @@
       }
     }
 
-    async function deleteTrigger(triggerId) {
-      if (!confirm('Delete this trigger?')) return;
-      try {
-        const token = localStorage.getItem('adminToken');
-        const res = await fetch(`/api/admin/triggers/${triggerId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error('Failed to delete trigger');
-        alert('Trigger deleted');
-        loadActiveTriggers();
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
+    function deleteTrigger(triggerId) {
+      showConfirmModal('Delete this trigger?', async () => {
+        try {
+          const token = localStorage.getItem('adminToken');
+          const res = await fetch(`/api/admin/triggers/${triggerId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error('Failed to delete trigger');
+          alert('Trigger deleted');
+          loadActiveTriggers();
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      });
     }
 
     if (checkAuth()) {
@@ -761,6 +763,38 @@
       loadMessages();
       loadActiveTriggers();
       window.addEventListener('load', ()=>{ document.body.setAttribute('data-ready','true'); setTimeout(()=>{ const el=document.getElementById('leading'); if(el) el.style.display='none'; },300); });
+    }
+  </script>
+
+  <!-- Confirm modal -->
+  <div id="confirmModal" style="display:none;position:fixed;inset:0;background:rgba(3,6,8,0.6);z-index:9999;align-items:center;justify-content:center">
+    <div style="background:#0f1113;color:#fff;padding:20px;border-radius:10px;max-width:480px;margin:auto;border:1px solid #232326">
+      <div id="confirmModalMessage" style="margin-bottom:16px">Are you sure?</div>
+      <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
+        <button id="confirmModalCancel" style="background:#2b2b2d;color:#fff;padding:8px 12px;border-radius:8px;border:none">Cancel</button>
+        <button id="confirmModalOk" style="background:#4CAF50;color:#fff;padding:8px 12px;border-radius:8px;border:none">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Reusable confirm modal for admin pages
+    function showConfirmModal(message, onConfirm) {
+      const modal = document.getElementById('confirmModal');
+      const msg = document.getElementById('confirmModalMessage');
+      const ok = document.getElementById('confirmModalOk');
+      const cancel = document.getElementById('confirmModalCancel');
+      msg.textContent = message || 'Are you sure?';
+      modal.style.display = 'flex';
+      function cleanup() {
+        ok.removeEventListener('click', handleOk);
+        cancel.removeEventListener('click', handleCancel);
+        modal.style.display = 'none';
+      }
+      async function handleOk() { cleanup(); try { await onConfirm(); } catch(e){ console.error(e); } }
+      function handleCancel() { cleanup(); }
+      ok.addEventListener('click', handleOk);
+      cancel.addEventListener('click', handleCancel);
     }
   </script>
 </body>

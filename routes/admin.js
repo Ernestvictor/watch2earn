@@ -248,6 +248,11 @@ router.get('/approvals', verifyAdminToken, async (req, res) => {
         status: w.status || 'pending',
         requestedAt: w.requestedAt || w.createdAt || new Date().toISOString(),
         bankDetails: w.bankDetails || w.bank || null,
+        accountName: w.accountName || (w.bankDetails && w.bankDetails.accountName) || null,
+        accountNumber: w.accountNumber || (w.bankDetails && w.bankDetails.accountNumber) || null,
+        bankName: w.bankName || (w.bankDetails && w.bankDetails.bankName) || null,
+        walletAddress: w.walletAddress || (w.bankDetails && w.bankDetails.walletAddress) || null,
+        cryptoType: w.cryptoType || (w.bankDetails && w.bankDetails.cryptoType) || null,
         accountAge: user.createdAt || null,
         totalEarnings: user.totalEarned || user.balance || 0,
         previousWithdrawals: (user.withdrawals && user.withdrawals.length) || 0
@@ -291,10 +296,23 @@ router.put('/approvals/:id', verifyAdminToken, async (req, res) => {
       }
 
       if (action === 'reject' || action === 'reject_withdrawal') {
+        // Only refund if not already rejected
+        const wasPending = String(withdrawal.status || '').toLowerCase() !== 'rejected';
         withdrawal.status = 'rejected';
         withdrawal.approvedAt = new Date().toISOString();
         withdrawal.rejectionReason = reason || '';
         await withdrawal.save();
+
+        if (wasPending) {
+          // refund amount back to user wallet
+          try {
+            const amt = Number(withdrawal.amount || 0);
+            if (amt > 0) {
+              await User.findOneAndUpdate({ $or: [ { firebaseUid: withdrawal.userId }, { uid: withdrawal.userId }, { id: withdrawal.userId } ] }, { $inc: { wallet: amt, balance: amt } });
+            }
+          } catch (e) { console.warn('Refund on reject (mongo) failed:', e && e.message); }
+        }
+
         return res.json({ ok: true, item: withdrawal });
       }
     }
@@ -310,8 +328,24 @@ router.put('/approvals/:id', verifyAdminToken, async (req, res) => {
       withdrawals[idx].status = 'approved';
       withdrawals[idx].approvedAt = new Date().toISOString();
     } else {
+      const wasPending = String(withdrawals[idx].status || '').toLowerCase() !== 'rejected';
       withdrawals[idx].status = 'rejected';
       withdrawals[idx].rejectionReason = reason || '';
+      // refund in file-based users
+      if (wasPending) {
+        try {
+          const usersPath = path.join(DATA_DIR, 'users.json');
+          const users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]');
+          const targetUserId = withdrawals[idx].userId;
+          const uidx = users.findIndex(u => (u.firebaseUid && String(u.firebaseUid) === String(targetUserId)) || (u.uid && String(u.uid) === String(targetUserId)) || (u.id && String(u.id) === String(targetUserId)));
+          const amt = Number(withdrawals[idx].amount || 0);
+          if (uidx >= 0 && amt > 0) {
+            users[uidx].balance = Math.max(0, (Number(users[uidx].balance || users[uidx].wallet || 0) + amt));
+            if (!users[uidx].wallet) users[uidx].wallet = users[uidx].balance;
+            fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+          }
+        } catch (e) { console.warn('Refund on reject (file) failed:', e && e.message); }
+      }
     }
 
     fs.writeFileSync(withdrawalsPath, JSON.stringify(withdrawals, null, 2));
@@ -455,6 +489,91 @@ router.get('/users', verifyAdminToken, async (req, res) => {
 
     return res.json({ users, total, banned, bots: 0, real, healthScore: total ? Math.round((real / total) * 100) : 0, today, week, month });
   } catch (e) { res.status(500).json({ error: 'Failed to read users' }); }
+});
+
+// GET /api/admin/firebase-users - list users from Firebase Auth
+router.get('/firebase-users', verifyAdminToken, async (req, res) => {
+  try {
+    if (!firebaseAdminAuth) return res.status(500).json({ error: 'Firebase Admin not configured' });
+    let users = [];
+    let nextPageToken = undefined;
+    do {
+      const listResult = await firebaseAdminAuth.listUsers(1000, nextPageToken);
+      const pageUsers = (listResult.users || []).map(u => ({
+        uid: u.uid,
+        email: u.email || null,
+        disabled: u.disabled || false,
+        created: u.metadata && u.metadata.creationTime ? u.metadata.creationTime : null
+      }));
+      users = users.concat(pageUsers);
+      nextPageToken = listResult.pageToken;
+    } while (nextPageToken);
+
+    return res.json(users);
+  } catch (error) {
+    console.error('FIREBASE LIST USERS ERROR:', error);
+    return res.status(500).json({ error: error.message || 'Failed to list firebase users' });
+  }
+});
+
+// POST /api/admin/firebase/ban - disable a Firebase user account and mark as banned in DB (if present)
+router.post('/firebase/ban', verifyAdminToken, async (req, res) => {
+  try {
+    const uid = (req.body && req.body.uid) || (req.body && req.body.firebaseUid) || null;
+    if (!uid) return res.status(400).json({ error: 'uid is required' });
+
+    if (firebaseAdminAuth) {
+      await firebaseAdminAuth.updateUser(uid, { disabled: true });
+    }
+
+    // Also update MongoDB user record if available
+    try {
+      if (isMongooseReady()) {
+        const u = await User.findOne({ $or: [ { firebaseUid: uid }, { uid: uid }, { id: uid } ] });
+        if (u) {
+          u.isBanned = true;
+          u.isSuspended = false;
+          u.status = 'banned';
+          await u.save();
+        }
+      }
+    } catch (e) { console.warn('Failed to update MongoDB user for ban:', e && e.message); }
+
+    return res.json({ ok: true, uid, status: 'banned' });
+  } catch (error) {
+    console.error('FIREBASE BAN ERROR:', error);
+    return res.status(500).json({ error: error.message || 'Failed to ban user' });
+  }
+});
+
+// POST /api/admin/firebase/unban - re-enable a Firebase user account and mark active in DB
+router.post('/firebase/unban', verifyAdminToken, async (req, res) => {
+  try {
+    const uid = (req.body && req.body.uid) || (req.body && req.body.firebaseUid) || null;
+    if (!uid) return res.status(400).json({ error: 'uid is required' });
+
+    if (firebaseAdminAuth) {
+      await firebaseAdminAuth.updateUser(uid, { disabled: false });
+    }
+
+    // Also update MongoDB user record if available
+    try {
+      if (isMongooseReady()) {
+        const u = await User.findOne({ $or: [ { firebaseUid: uid }, { uid: uid }, { id: uid } ] });
+        if (u) {
+          u.isBanned = false;
+          u.isSuspended = false;
+          u.status = 'active';
+          await u.save();
+        }
+      }
+    } catch (e) { console.warn('Failed to update MongoDB user for unban:', e && e.message); }
+
+    return res.json({ ok: true, uid, status: 'active' });
+  } catch (error) {
+    console.error('FIREBASE UNBAN ERROR:', error);
+    return res.status(500).json({ error: error.message || 'Failed to unban user' });
+  }
 });
 
 router.get('/messages', verifyAdminToken, async (req, res) => {

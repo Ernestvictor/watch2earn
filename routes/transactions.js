@@ -95,7 +95,7 @@ function isToday(value) {
 }
 
 // POST /api/transactions/earn
-router.post('/earn', verifyToken, (req, res) => {
+router.post('/earn', verifyToken, async (req, res) => {
   const { nairaAmount, source, title, referrerId } = req.body;
   const userId = req.user.uid || req.user.id;
   const settings = loadSettings();

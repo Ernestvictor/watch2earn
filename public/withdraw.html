@@ -8,6 +8,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
   <script src="/js/app.js"></script>
+  <script src="/js/verification-test.js"></script>
    <script src="https://cdn.gamemonetize.com/sdk.js" data-game-id="7ubj0focn2ah0c9km8a4bxzskl6emjuy"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
@@ -237,33 +238,70 @@
         walletType: savedAccounts.find(a => a.id === selectedAccount)?.cryptoType || ''
       };
 
-      const res = await fetch('/api/withdrawals/request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
+      // Optimistically subtract the withdrawal amount from UI immediately
+      const prevBalance = currentBalance;
+      try {
+        currentBalance = Math.max(0, currentBalance - amount);
+        document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
+        document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+        document.getElementById('usdBal').innerText = (currentBalance / 1500).toFixed(2);
+        document.getElementById('statusMsg').innerText = 'Processing withdrawal...';
+      } catch (e) { /* ignore UI update errors */ }
+
+      // Send request to server
+      let res, data;
+      try {
+        res = await fetch('/api/withdrawals/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify(payload)
+        });
+        data = await res.json();
+      } catch (err) {
+        // Revert optimistic update
+        currentBalance = prevBalance;
+        document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
+        document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+        document.getElementById('usdBal').innerText = (currentBalance / 1500).toFixed(2);
+        document.getElementById('statusMsg').innerText = '❌ Network error. Please try again.';
+        return;
+      }
+
       if (!res.ok) {
+        // Revert optimistic update on failure
+        currentBalance = prevBalance;
+        document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
+        document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+        document.getElementById('usdBal').innerText = (currentBalance / 1500).toFixed(2);
         document.getElementById('statusMsg').innerText = '❌ ' + (data.error || 'Withdrawal request failed');
         return;
       }
+
+      // Success — inform user and refresh authoritative balance
       document.getElementById('statusMsg').innerText = `✅ Request submitted: ${method === 'bank' ? 'Bank' : 'Crypto'} • Charge ₦${data.charge} • Net ₦${data.netAmount}`;
       alert(`Withdrawal request submitted. Charge: ₦${data.charge}, Net: ₦${data.netAmount}`);
-      
-      // Fetch fresh balance from server for accuracy
+
+      // Refresh authoritative balance from server and update UI
       try {
-        const freshBal = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
-        if (freshBal.ok) {
-          const freshData = await freshBal.json();
-          const freshNaira = Number(freshData.balanceUsd || 0) * 1500;
-          document.getElementById('bal').innerText = Math.round(freshNaira).toLocaleString();
-          document.getElementById('usdBal').innerText = Number(freshData.balanceUsd || 0).toFixed(2);
-          document.getElementById('topBal').innerText = '₦' + Math.round(freshNaira).toLocaleString();
-          currentBalance = freshNaira;
+        if (window.w2e && typeof window.w2e.refreshBalance === 'function') {
+          await window.w2e.refreshBalance();
+          // window.w2e.refreshBalance updates DOM; also sync local currentBalance
+          currentBalance = (window.w2e.currentBalanceUsd || 0) * 1500;
+        } else {
+          const freshBal = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+          if (freshBal.ok) {
+            const freshData = await freshBal.json();
+            currentBalance = Number(freshData.balanceUsd || 0) * 1500;
+            document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
+            document.getElementById('usdBal').innerText = Number(freshData.balanceUsd || 0).toFixed(2);
+            document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+          }
         }
-      } catch (e) { console.warn('Failed to fetch fresh balance after withdrawal:', e); }
-      
-      // Clear form and return to home (user will see updated balance)
+      } catch (e) {
+        console.warn('Failed to fetch fresh balance after withdrawal:', e);
+      }
+
+      // Clear form and return to home
       document.getElementById(method === 'bank' ? 'bankAmount' : 'cryptoAmount').value = '';
       setTimeout(() => location.href = 'home.html', 1500);
     }

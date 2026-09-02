@@ -171,6 +171,59 @@
     try { return await user.getIdToken(); } catch(e){ return null; }
   };
 
+  // Shared balance refresh helper - updates any present balance elements across pages
+  window.w2e.currentBalanceUsd = 0;
+  window.w2e.refreshBalance = async function(opts = {}){
+    try {
+      const token = await window.w2e.getAuthToken();
+      if (!token) return null;
+      const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const balUsd = Number(data.balanceUsd || data.balance || data.totalUsd || 0) || 0;
+      const balNaira = Math.round(balUsd * (Number(data.rate || 1500) || 1500));
+      window.w2e.currentBalanceUsd = balUsd;
+
+      // update common IDs if present
+      const setTextIf = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
+      setTextIf('usd', balUsd.toFixed(2));
+      setTextIf('usdBal', balUsd.toFixed(2));
+      setTextIf('naira', balNaira.toLocaleString());
+      setTextIf('nairaTop', balNaira.toLocaleString());
+      setTextIf('topBal', '₦' + balNaira.toLocaleString());
+      setTextIf('bal', balNaira.toLocaleString());
+      setTextIf('nairaTop', balNaira.toLocaleString());
+      // some pages show 'adsEarned' or 'adsEarn' keys; update if present
+      if (data.adsEarnNaira !== undefined) setTextIf('adsEarned', '₦' + Number(data.adsEarnNaira || 0).toLocaleString());
+      if (data.adsEarnUsd !== undefined) setTextIf('adsWatched', Number(data.adCount || data.ads || 0));
+
+      return data;
+    } catch (e) {
+      console.warn('refreshBalance failed:', e && e.message);
+      return null;
+    }
+  };
+
+  // Auto-refresh balance when auth state changes and when page becomes visible
+  try {
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      firebase.auth().onAuthStateChanged(async (user) => {
+        if (!user) return;
+        // initial refresh
+        await window.w2e.refreshBalance();
+        // periodic refresh
+        if (window.__w2e_balance_interval) clearInterval(window.__w2e_balance_interval);
+        window.__w2e_balance_interval = setInterval(() => window.w2e.refreshBalance(), 5000);
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          window.w2e.refreshBalance();
+        }
+      });
+    }
+  } catch (e) { /* ignore */ }
+
   // Save a bank/crypto account via API
   window.w2e.saveAccount = async function(payload){
     const token = await window.w2e.getAuthToken();

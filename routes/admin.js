@@ -732,13 +732,63 @@ router.get('/withdrawals', async (req, res) => {
 
 router.get('/history', async (req, res) => {
   try {
+    let tx = [];
+    
+    // Try Mongo first, but also include file-based transactions
     if (isMongooseReady()) {
-      const tx = await Earning.find({}).sort({ createdAt: -1 }).limit(1000).lean();
-      return res.json(tx);
+      try {
+        const mongoTx = await Earning.find({}).sort({ createdAt: -1 }).limit(1000).lean();
+        tx = (mongoTx || []).map(t => ({
+          id: t._id?.toString?.() || t.id,
+          userId: t.userId || t.firebaseUid,
+          type: t.type || 'earning',
+          amount: t.amount || 0,
+          amountUsd: t.amountUsd || t.amount || 0,
+          date: t.createdAt || t.date,
+          createdAt: t.createdAt || t.date,
+          title: t.description || `${t.type} earned`,
+          source: t.source || 'system'
+        }));
+      } catch (e) {
+        console.warn('Mongo history fetch failed:', e && e.message);
+      }
     }
-    const tx = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transactions.json'), 'utf8') || '[]');
-    res.json(tx);
-  } catch (e) { res.status(500).json({ error: 'Failed to read history' }); }
+    
+    // Always check and merge file-based transactions
+    try {
+      const fileTx = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transactions.json'), 'utf8') || '[]');
+      const fileTxFormatted = (fileTx || []).map(t => ({
+        id: t.id,
+        userId: t.userId || t.firebaseUid,
+        type: t.type || 'other',
+        amount: t.amountNaira || t.amount || 0,
+        amountUsd: t.amountUsd || t.amount || 0,
+        date: t.date || t.createdAt,
+        createdAt: t.date || t.createdAt,
+        title: t.title || `${t.type} earned`,
+        source: t.source || 'file'
+      }));
+      
+      // Merge: keep Mongo records, add file records if not already present
+      const ids = new Set(tx.map(t => t.id));
+      fileTxFormatted.forEach(ft => {
+        if (!ids.has(ft.id)) {
+          tx.push(ft);
+          ids.add(ft.id);
+        }
+      });
+    } catch (e) {
+      console.warn('File transaction fetch failed:', e && e.message);
+    }
+    
+    // Sort merged result by date descending
+    tx.sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+    
+    return res.json(tx.slice(0, 1000));
+  } catch (e) { 
+    console.error('History fetch error:', e);
+    res.status(500).json({ error: 'Failed to read history' }); 
+  }
 });
 
 router.get('/dashboard', async (req, res) => {

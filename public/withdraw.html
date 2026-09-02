@@ -250,15 +250,22 @@
       document.getElementById('statusMsg').innerText = `✅ Request submitted: ${method === 'bank' ? 'Bank' : 'Crypto'} • Charge ₦${data.charge} • Net ₦${data.netAmount}`;
       alert(`Withdrawal request submitted. Charge: ₦${data.charge}, Net: ₦${data.netAmount}`);
       
-      // Update balance after successful withdrawal
-      currentBalance -= amount;
-      document.getElementById('bal').innerText = currentBalance.toLocaleString();
-      document.getElementById('usdBal').innerText = (currentBalance / 1500).toFixed(2);
-      document.getElementById('topBal').innerText = '₦' + currentBalance.toLocaleString();
+      // Fetch fresh balance from server for accuracy
+      try {
+        const freshBal = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+        if (freshBal.ok) {
+          const freshData = await freshBal.json();
+          const freshNaira = Number(freshData.balanceUsd || 0) * 1500;
+          document.getElementById('bal').innerText = Math.round(freshNaira).toLocaleString();
+          document.getElementById('usdBal').innerText = Number(freshData.balanceUsd || 0).toFixed(2);
+          document.getElementById('topBal').innerText = '₦' + Math.round(freshNaira).toLocaleString();
+          currentBalance = freshNaira;
+        }
+      } catch (e) { console.warn('Failed to fetch fresh balance after withdrawal:', e); }
       
-      // Clear form and reload
+      // Clear form and return to home (user will see updated balance)
       document.getElementById(method === 'bank' ? 'bankAmount' : 'cryptoAmount').value = '';
-      setTimeout(() => location.reload(), 2000);
+      setTimeout(() => location.href = 'home.html', 1500);
     }
   </script>
 <script src="/js/aclib-ad-wrapper.js"></script>

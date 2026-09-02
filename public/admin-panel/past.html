@@ -169,57 +169,5 @@
       setInterval(loadHistory, 30000); // Reload every 30 seconds
     }
   </script>
-        const token = localStorage.getItem('adminToken');
-        const res = await fetch('/api/admin/history', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          credentials: 'include'
-        });
-        
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        
-        document.getElementById('totalPaid').textContent = `$${data.totalPaid || 0}`;
-        document.getElementById('paidMonth').textContent = `$${data.paidMonth || 0}`;
-        
-        const tbody = document.querySelector('#historyTable tbody');
-        if ((data.transactions || []).length === 0) {
-          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;">No transactions yet</td></tr>';
-        } else {
-          tbody.innerHTML = data.transactions.map(t=>`
-            <tr>
-              <td>${t.date}</td><td>${t.txnId}</td><td>${t.user}</td>
-              <td>$${t.amount}</td><td>${t.method}</td><td>${t.status}</td>
-              <td>$${t.fee}</td><td>$${t.net}</td>
-              <td><button class="view" onclick="viewProof('${t.id}')">View</button></td>
-            </tr>`).join('');
-        }
-        
-        const updatesBody = document.querySelector('#updatesTable tbody');
-        updatesBody.innerHTML = (data.updates || []).map(u=>`
-          <tr><td>${u.date}</td><td>${u.type}</td><td>${u.description}</td></tr>`).join('');
-      } catch(err) {
-        console.error('History load error:', err);
-        document.querySelector('#historyTable tbody').innerHTML = `<tr><td colspan="9" style="color:#f44336;text-align:center;">Error loading history: ${err.message}</td></tr>`;
-      }
-    }
-
-    function exportData(type){
-      const token = localStorage.getItem('adminToken');
-      window.location.href=`/api/admin/history/export?format=${type}&token=${token}`;
-    }
-    
-    function viewProof(id){
-      const token = localStorage.getItem('adminToken');
-      window.location.href=`/api/admin/history/proof/${id}?token=${token}`;
-    }
-
-    if (checkAuth()) {
-      loadHistory();
-    }
-  </script>
 </body>
 </html>

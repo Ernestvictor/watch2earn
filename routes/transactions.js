@@ -4,7 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const verifyToken = require('../middleware/auth');
 const mongoNative = require('../mongodb');
+const User = require('../models/User');
 const { ObjectId } = require('mongodb');
+const mongoose = require('mongoose');
 
 // Simple in-memory rate limiter for bonus claims (per-process)
 const CLAIM_RATE = {};
@@ -393,72 +395,115 @@ router.get('/referral-earnings', verifyToken, async (req, res) => {
   res.json({ referralEarningsUsd: referralEarnings, referralEarningsNaira: Math.round(referralEarnings * 1500) });
 });
 
+// GET /api/transactions/balance - Return user's current wallet balance + earnings breakdown
 router.get('/balance', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
+  const zeroBreakdown = {
+    totalUsd: 0,
+    totalNaira: 0,
+    adsUsd: 0,
+    referralUsd: 0,
+    bonusUsd: 0,
+    gameUsd: 0,
+    surveyUsd: 0,
+    withdrawalsUsd: 0
+  };
+
+  // Try MongoDB first
   try {
-    if (typeof mongoNative.getTransactionsCollection === 'function') {
-      const col = mongoNative.getTransactionsCollection();
-      const docs = await col.find({ userId }).toArray();
+    if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+      const user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] }).lean();
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const walletNaira = Number(user.wallet || user.balance || 0);
+      const walletUsd = +(walletNaira / 1500).toFixed(6);
+
+      let docs = [];
+      try {
+        const col = mongoNative && typeof mongoNative.getTransactionsCollection === 'function' ? mongoNative.getTransactionsCollection() : null;
+        if (col) docs = await col.find({ userId: String(userId) }).toArray();
+      } catch (e) {
+        console.warn('Mongo transaction fetch for balance failed:', e?.message);
+      }
+
       const breakdown = docs.reduce((acc, t) => {
         const type = (t.type || 'other').toLowerCase();
-        acc.totalUsd += Number(t.amountUsd || 0);
-        acc.totalNaira += Number(t.amountNaira || Math.round((t.amountUsd||0) * 1500));
-        if (type.includes('ad')) acc.adsUsd += Number(t.amountUsd || 0);
-        if (type.includes('referral') || type.includes('commission')) acc.referralUsd += Number(t.amountUsd || 0);
-        if (type.includes('bonus') || type === 'signup_bonus' || type === 'consecutive_bonus') acc.bonusUsd += Number(t.amountUsd || 0);
-        if (type.includes('game')) acc.gameUsd += Number(t.amountUsd || 0);
-        if (type.includes('survey')) acc.surveyUsd += Number(t.amountUsd || 0);
-        if (type.includes('withdraw')) acc.withdrawalsUsd += Number(t.amountUsd || 0);
+        const amountUsd = Number(t.amountUsd || t.amount || 0);
+        acc.totalUsd += amountUsd;
+        acc.totalNaira += Math.round(amountUsd * 1500);
+        if (type.includes('ad')) acc.adsUsd += amountUsd;
+        if (type.includes('referral') || type.includes('commission')) acc.referralUsd += amountUsd;
+        if (type.includes('bonus') || type === 'signup_bonus') acc.bonusUsd += amountUsd;
+        if (type.includes('game')) acc.gameUsd += amountUsd;
+        if (type.includes('survey')) acc.surveyUsd += amountUsd;
+        if (type.includes('withdraw')) acc.withdrawalsUsd += amountUsd;
         return acc;
-      }, { totalUsd:0, totalNaira:0, adsUsd:0, referralUsd:0, bonusUsd:0, gameUsd:0, surveyUsd:0, withdrawalsUsd:0 });
+      }, JSON.parse(JSON.stringify(zeroBreakdown)));
 
-      const adCount = docs.filter(t => (t.type && t.type.toLowerCase().includes('ad')) && isToday(t.date)).length;
+      const adCount = docs.filter(t => t.type && String(t.type).toLowerCase().includes('ad') && isToday(t.date)).length;
 
       return res.json({
-        balanceUsd: +breakdown.totalUsd.toFixed(6),
-        balanceNaira: Math.round(breakdown.totalUsd * 1500),
+        balanceUsd: walletUsd,
+        balanceNaira: walletNaira,
         adsEarnUsd: +breakdown.adsUsd.toFixed(6),
         referralEarnUsd: +breakdown.referralUsd.toFixed(6),
         bonusEarnUsd: +breakdown.bonusUsd.toFixed(6),
         gameEarnUsd: +breakdown.gameUsd.toFixed(6),
         surveyEarnUsd: +breakdown.surveyUsd.toFixed(6),
         withdrawalsUsd: +breakdown.withdrawalsUsd.toFixed(6),
-        adCount
+        adCount,
+        rate: 1500
       });
     }
   } catch (e) {
-    console.error('Mongo balance read failed:', e && e.message);
+    console.error('Mongo balance computation failed:', e?.message);
   }
 
-  // Fallback to file storage
-  const transactions = loadTransactions().filter(t => t.userId === userId);
-  // compute breakdown by type
-  const breakdown = transactions.reduce((acc, t) => {
-    const type = (t.type || 'other').toLowerCase();
-    acc.totalUsd += Number(t.amountUsd || 0);
-    acc.totalNaira += Number(t.amountNaira || Math.round((t.amountUsd||0) * 1500));
-    if (type.includes('ad')) acc.adsUsd += Number(t.amountUsd || 0);
-    if (type.includes('referral') || type.includes('commission')) acc.referralUsd += Number(t.amountUsd || 0);
-    if (type.includes('bonus') || type === 'signup_bonus' || type === 'consecutive_bonus') acc.bonusUsd += Number(t.amountUsd || 0);
-    if (type.includes('game')) acc.gameUsd += Number(t.amountUsd || 0);
-    if (type.includes('survey')) acc.surveyUsd += Number(t.amountUsd || 0);
-    if (type.includes('withdraw')) acc.withdrawalsUsd += Number(t.amountUsd || 0);
-    return acc;
-  }, { totalUsd:0, totalNaira:0, adsUsd:0, referralUsd:0, bonusUsd:0, gameUsd:0, surveyUsd:0, withdrawalsUsd:0 });
+  // File-based fallback
+  try {
+    const allTx = loadTransactions().filter(t => String(t.userId) === String(userId) || String(t.firebaseUid || '') === String(userId));
+    const breakdown = allTx.reduce((acc, t) => {
+      const type = (t.type || 'other').toLowerCase();
+      const amountUsd = Number(t.amountUsd || t.amount || 0);
+      acc.totalUsd += amountUsd;
+      acc.totalNaira += Math.round(amountUsd * 1500);
+      if (type.includes('ad')) acc.adsUsd += amountUsd;
+      if (type.includes('referral') || type.includes('commission')) acc.referralUsd += amountUsd;
+      if (type.includes('bonus') || type === 'signup_bonus') acc.bonusUsd += amountUsd;
+      if (type.includes('game')) acc.gameUsd += amountUsd;
+      if (type.includes('survey')) acc.surveyUsd += amountUsd;
+      if (type.includes('withdraw')) acc.withdrawalsUsd += amountUsd;
+      return acc;
+    }, JSON.parse(JSON.stringify(zeroBreakdown)));
 
-  const adCount = transactions.filter(t => (t.type && t.type.toLowerCase().includes('ad')) && isToday(t.date)).length;
+    let walletNaira = 0;
+    try {
+      const usersData = JSON.parse(fs.readFileSync(USERS_PATH, 'utf8') || '[]');
+      const userRecord = usersData.find(u => String(u.id) === String(userId) || String(u.uid) === String(userId) || String(u.firebaseUid) === String(userId));
+      walletNaira = Number(userRecord?.wallet || userRecord?.balance || 0);
+    } catch (e) {
+      walletNaira = 0;
+    }
 
-  res.json({
-    balanceUsd: +breakdown.totalUsd.toFixed(6),
-    balanceNaira: Math.round(breakdown.totalUsd * 1500),
-    adsEarnUsd: +breakdown.adsUsd.toFixed(6),
-    referralEarnUsd: +breakdown.referralUsd.toFixed(6),
-    bonusEarnUsd: +breakdown.bonusUsd.toFixed(6),
-    gameEarnUsd: +breakdown.gameUsd.toFixed(6),
-    surveyEarnUsd: +breakdown.surveyUsd.toFixed(6),
-    withdrawalsUsd: +breakdown.withdrawalsUsd.toFixed(6),
-    adCount
-  });
+    const walletUsd = +(walletNaira / 1500).toFixed(6);
+    const adCount = allTx.filter(t => t.type && String(t.type).toLowerCase().includes('ad') && isToday(t.date)).length;
+
+    return res.json({
+      balanceUsd: walletUsd,
+      balanceNaira: walletNaira,
+      adsEarnUsd: +breakdown.adsUsd.toFixed(6),
+      referralEarnUsd: +breakdown.referralUsd.toFixed(6),
+      bonusEarnUsd: +breakdown.bonusUsd.toFixed(6),
+      gameEarnUsd: +breakdown.gameUsd.toFixed(6),
+      surveyEarnUsd: +breakdown.surveyUsd.toFixed(6),
+      withdrawalsUsd: +breakdown.withdrawalsUsd.toFixed(6),
+      adCount,
+      rate: 1500
+    });
+  } catch (e) {
+    console.error('File fallback balance failed:', e?.message);
+    return res.status(500).json({ error: 'Failed to compute balance' });
+  }
 });
 
 router.get('/history', verifyToken, async (req, res) => {

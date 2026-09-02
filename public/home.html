@@ -165,7 +165,12 @@ firebase.auth().onAuthStateChanged(async user => {
   await loadAnnouncement();
   await loadBonuses();
 
+  // Reload balance every 5 seconds
   setInterval(load, 5000);
+  // Also refresh when page becomes visible (user returns from another tab)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) load();
+  });
   setInterval(loadBonuses, 30000);
 });
 

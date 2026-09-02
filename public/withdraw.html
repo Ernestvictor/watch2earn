@@ -43,7 +43,7 @@
 </head>
 <body>
   <div class="top">
-    <i class="fas fa-arrow-left" onclick="location.href='home.html'" style="cursor:pointer;padding:8px"></i>
+    <i class="fas fa-arrow-left" onclick="location.href='account.html'" style="cursor:pointer;padding:8px"></i>
     <b>Withdraw - Real Site</b>
     <span style="margin-left:auto;color:#4CAF50;font-weight:800" id="topBal">₦0</span>
   </div>
@@ -153,10 +153,8 @@
         return;
       }
 
-      // try to get token (not strictly required when using helper)
       try { token = await user.getIdToken(); } catch(e){ token = null; }
 
-      // Prefer centralized helper to update DOM across pages
       let balanceData = null;
       try {
         if (window.w2e && typeof window.w2e.refreshBalance === 'function') {
@@ -164,7 +162,6 @@
         }
       } catch (e) { console.warn('w2e.refreshBalance error:', e); }
 
-      // Fallback to manual fetch if helper didn't return data
       if (!balanceData) {
         try {
           const t = token || await window.w2e.getAuthToken();
@@ -178,16 +175,24 @@
       }
 
       if (balanceData) {
-        currentBalance = Number(balanceData.balanceUsd || 0) * 1500;
-        document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
-        document.getElementById('usdBal').innerText = Number(balanceData.balanceUsd || 0).toFixed(2);
-        document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+        const rawNaira = Number(balanceData.balanceNaira ?? (Number(balanceData.balanceUsd || 0) * Number(balanceData.rate || 1500)));
+        currentBalance = Number.isFinite(rawNaira) ? rawNaira : 0;
+        const usdText = (currentBalance / 1500).toFixed(2);
+        const nairaText = Math.round(currentBalance).toLocaleString();
+        document.getElementById('bal').innerText = nairaText;
+        document.getElementById('usdBal').innerText = usdText;
+        document.getElementById('topBal').innerText = '₦' + nairaText;
       } else {
         document.getElementById('statusMsg').innerText = 'Error loading balance. Please refresh.';
       }
 
       await fetchAndRenderAccounts();
     });
+
+    function formatMoney(value) {
+      const num = Number(value || 0);
+      return isFinite(num) ? '₦' + Math.round(num).toLocaleString() : '₦0';
+    }
 
     function switchMain(mode){
       document.getElementById('tabNaira').classList.toggle('active', mode === 'naira');
@@ -245,6 +250,12 @@
       if (method === 'bank' && amount < 5500) return alert('Bank withdrawals start from ₦5,500.');
       if (method === 'crypto' && amount < 10) return alert('Crypto withdrawals start from 10 units.');
 
+      if (amount > currentBalance) {
+        const msg = `❌ Insufficient balance. You have ${formatMoney(currentBalance)}, but need ${formatMoney(amount)}.`;
+        document.getElementById('statusMsg').innerText = msg;
+        return alert(msg);
+      }
+
       const prevBalance = currentBalance;
       const updatedBalance = Math.max(0, currentBalance - amount);
       currentBalance = updatedBalance;
@@ -301,7 +312,8 @@
         if (window.w2e && typeof window.w2e.refreshBalance === 'function') {
           const fresh = await window.w2e.refreshBalance();
           if (fresh) {
-            currentBalance = Number(fresh.balanceUsd || 0) * 1500;
+            const freshNaira = Number(fresh.balanceNaira ?? (Number(fresh.balanceUsd || 0) * Number(fresh.rate || 1500)));
+            currentBalance = Number.isFinite(freshNaira) ? freshNaira : 0;
             document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
             document.getElementById('usdBal').innerText = Number(fresh.balanceUsd || 0).toFixed(2);
             document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
@@ -310,7 +322,8 @@
           const freshBal = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + authToken }, cache: 'no-store' });
           if (freshBal.ok) {
             const freshData = await freshBal.json();
-            currentBalance = Number(freshData.balanceUsd || 0) * 1500;
+            const freshNaira = Number(freshData.balanceNaira ?? (Number(freshData.balanceUsd || 0) * Number(freshData.rate || 1500)));
+            currentBalance = Number.isFinite(freshNaira) ? freshNaira : 0;
             document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
             document.getElementById('usdBal').innerText = Number(freshData.balanceUsd || 0).toFixed(2);
             document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();

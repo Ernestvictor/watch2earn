@@ -139,6 +139,38 @@
       <div id="history" class="tab-content" style="display:none;padding-top:16px">
         <h3 style="margin-bottom:16px">Message History</h3>
         <p style="color:#888;margin-bottom:16px">All messages sent to users</p>
+        
+        <!-- MESSAGE TYPE FILTER DROPDOWN -->
+        <div style="margin-bottom:16px;display:flex;gap:12px;align-items:center">
+          <label style="font-weight:600;color:#bfdbfe">Filter by Type:</label>
+          <select id="messageTypeFilter" style="padding:10px 12px;background:#1a1a1d;border:1px solid #333;border-radius:8px;color:#fff;cursor:pointer" onchange="filterMessagesByType()">
+            <option value="all">All Messages</option>
+            <option value="auto">Auto Messages</option>
+            <option value="trigger">Trigger Messages</option>
+            <option value="manual">Manual Messages</option>
+          </select>
+        </div>
+
+        <!-- MESSAGE TYPE BREAKDOWNS -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px">
+          <div class="metric" style="background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.3)">
+            <small style="color:#86efac">Auto Messages</small>
+            <strong id="autoCount" style="font-size:20px;color:#4CAF50">0</strong>
+          </div>
+          <div class="metric" style="background:rgba(33,150,243,0.1);border:1px solid rgba(33,150,243,0.3)">
+            <small style="color:#93c5fd">Trigger Messages</small>
+            <strong id="triggerCount" style="font-size:20px;color:#2196F3">0</strong>
+          </div>
+          <div class="metric" style="background:rgba(255,152,0,0.1);border:1px solid rgba(255,152,0,0.3)">
+            <small style="color:#fed7aa">Manual Messages</small>
+            <strong id="manualCount" style="font-size:20px;color:#FF9800">0</strong>
+          </div>
+          <div class="metric" style="background:rgba(124,124,124,0.1);border:1px solid rgba(124,124,124,0.3)">
+            <small style="color:#d1d5db">Total</small>
+            <strong id="totalCount" style="font-size:20px;color:#9ca3af">0</strong>
+          </div>
+        </div>
+
         <table style="width:100%;border-collapse:collapse;margin-top:12px">
           <thead>
             <tr style="border-bottom:2px solid #232326">
@@ -147,6 +179,7 @@
               <th style="text-align:left;padding:12px;color:#4CAF50">Recipients</th>
               <th style="text-align:left;padding:12px;color:#4CAF50">Type</th>
               <th style="text-align:left;padding:12px;color:#4CAF50">Status</th>
+              <th style="text-align:left;padding:12px;color:#4CAF50">Actions</th>
             </tr>
           </thead>
           <tbody id="historyTable"></tbody>
@@ -597,10 +630,12 @@
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         allMessages = await res.json();
-        renderMessages();
+        updateMessageCounts();
+        filterMessagesByType();
       } catch (err) {
         console.error('Load messages error:', err);
-        document.getElementById('messageList').innerHTML = `<div style="color:#f44336;">Error loading messages: ${err.message}</div>`;
+        const tbody = document.getElementById('historyTable');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#f44336;padding:20px">Error loading messages: ${err.message}</td></tr>`;
       }
     }
 
@@ -639,6 +674,59 @@
               <button class="delete" onclick="deleteMessage('${m.id}')" style="padding:4px 8px;font-size:11px"><i class="fas fa-trash"></i> Delete</button>
             </div>
           </div>
+        `;
+      }).join('');
+    }
+
+    function updateMessageCounts() {
+      const autoCount = allMessages.filter(m => m.templateType === 'auto' || (m.sendType === 'automatic' && m.templateType === 'template')).length;
+      const triggerCount = allMessages.filter(m => m.templateType === 'trigger' || (m.frequency && m.frequency !== 'once')).length;
+      const manualCount = allMessages.filter(m => m.templateType === 'custom' && m.sendType === 'manual').length;
+      const total = allMessages.length;
+
+      document.getElementById('autoCount').textContent = autoCount;
+      document.getElementById('triggerCount').textContent = triggerCount;
+      document.getElementById('manualCount').textContent = manualCount;
+      document.getElementById('totalCount').textContent = total;
+    }
+
+    function filterMessagesByType() {
+      const typeFilter = document.getElementById('messageTypeFilter').value;
+      let filtered = allMessages;
+
+      if (typeFilter === 'auto') {
+        filtered = allMessages.filter(m => m.templateType === 'auto' || (m.sendType === 'automatic' && m.templateType === 'template'));
+      } else if (typeFilter === 'trigger') {
+        filtered = allMessages.filter(m => m.templateType === 'trigger' || (m.frequency && m.frequency !== 'once'));
+      } else if (typeFilter === 'manual') {
+        filtered = allMessages.filter(m => m.templateType === 'custom' && m.sendType === 'manual');
+      }
+
+      const tbody = document.getElementById('historyTable');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:#777">No messages of this type</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(m => {
+        const status = m.status || 'sent';
+        const statusBadge = status === 'scheduled' ? `<span style="background:rgba(33,150,243,0.3);color:#93c5fd;padding:4px 8px;border-radius:4px;font-size:11px">SCHEDULED</span>` :
+                           status === 'sent' ? `<span style="background:rgba(76,175,80,0.3);color:#86efac;padding:4px 8px;border-radius:4px;font-size:11px">SENT</span>` :
+                           `<span style="background:rgba(255,152,0,0.3);color:#fed7aa;padding:4px 8px;border-radius:4px;font-size:11px">PENDING</span>`;
+        const targetInfo = m.targetType === 'all' ? 'All Users' : `${(m.targetUsers || []).length} Users`;
+        const typeLabel = m.templateType === 'auto' ? 'Auto' : m.templateType === 'trigger' ? 'Trigger' : 'Manual';
+
+        return `
+          <tr style="border-bottom:1px solid #232326;hover:background:rgba(255,255,255,0.02)">
+            <td style="padding:12px">${new Date(m.createdAt).toLocaleString()}</td>
+            <td style="padding:12px"><strong>${m.title || 'Untitled'}</strong></td>
+            <td style="padding:12px"><small>${targetInfo}</small></td>
+            <td style="padding:12px"><span style="background:rgba(124,124,124,0.2);color:#d1d5db;padding:3px 6px;border-radius:4px;font-size:11px">${typeLabel}</span></td>
+            <td style="padding:12px">${statusBadge}</td>
+            <td style="padding:12px">
+              <button onclick="deleteMessage('${m.id}')" style="background:#f44336;color:#fff;padding:4px 8px;border:none;border-radius:4px;cursor:pointer;font-size:10px"><i class="fas fa-trash"></i> Delete</button>
+            </td>
+          </tr>
         `;
       }).join('');
     }

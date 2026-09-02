@@ -176,30 +176,74 @@
   window.w2e.refreshBalance = async function(opts = {}){
     try {
       const token = await window.w2e.getAuthToken();
-      if (!token) return null;
+      if (!token) {
+        console.warn('refreshBalance: No auth token');
+        return null;
+      }
       const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        console.warn('refreshBalance: API returned', res.status);
+        return null;
+      }
       const data = await res.json();
+      
+      // Parse balance values
       const balUsd = Number(data.balanceUsd || data.balance || data.totalUsd || 0) || 0;
       const balNaira = Math.round(balUsd * (Number(data.rate || 1500) || 1500));
+      const adsEarnUsd = Number(data.adsEarnUsd || 0) || 0;
+      const gameEarnUsd = Number(data.gameEarnUsd || 0) || 0;
+      const surveyEarnUsd = Number(data.surveyEarnUsd || 0) || 0;
+      const referralEarnUsd = Number(data.referralEarnUsd || 0) || 0;
+      const bonusEarnUsd = Number(data.bonusEarnUsd || 0) || 0;
+      const adCount = Number(data.adCount || 0) || 0;
+      
       window.w2e.currentBalanceUsd = balUsd;
+      console.log('Balance refreshed:', { balUsd, balNaira, adsEarnUsd });
 
-      // update common IDs if present
-      const setTextIf = (id, txt) => { const el = document.getElementById(id); if (el) el.innerText = txt; };
+      // Helper to safely update element text
+      const setTextIf = (id, txt) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.innerText = txt;
+          el.textContent = txt;
+        }
+      };
+
+      // Main balance display (multiple ID variants)
       setTextIf('usd', balUsd.toFixed(2));
       setTextIf('usdBal', balUsd.toFixed(2));
+      setTextIf('mainBal', balUsd.toFixed(2));
+      setTextIf('totalBalance', '₦' + balNaira.toLocaleString());
+      
+      // Naira variants
       setTextIf('naira', balNaira.toLocaleString());
       setTextIf('nairaTop', balNaira.toLocaleString());
       setTextIf('topBal', '₦' + balNaira.toLocaleString());
       setTextIf('bal', balNaira.toLocaleString());
-      setTextIf('nairaTop', balNaira.toLocaleString());
-      // some pages show 'adsEarned' or 'adsEarn' keys; update if present
-      if (data.adsEarnNaira !== undefined) setTextIf('adsEarned', '₦' + Number(data.adsEarnNaira || 0).toLocaleString());
-      if (data.adsEarnUsd !== undefined) setTextIf('adsWatched', Number(data.adCount || data.ads || 0));
+      setTextIf('mainNaira', balNaira.toLocaleString());
+
+      // Earnings breakdown (by source)
+      const adsNaira = Math.round(adsEarnUsd * 1500);
+      const gameNaira = Math.round(gameEarnUsd * 1500);
+      const surveyNaira = Math.round(surveyEarnUsd * 1500);
+      const refNaira = Math.round(referralEarnUsd * 1500);
+      
+      setTextIf('adsEarned', '₦' + adsNaira.toLocaleString());
+      setTextIf('adsEarn', '$' + adsEarnUsd.toFixed(2));
+      setTextIf('gamesEarned', '₦' + gameNaira.toLocaleString());
+      setTextIf('gameEarn', '$' + gameEarnUsd.toFixed(2));
+      setTextIf('surveysEarned', '₦' + surveyNaira.toLocaleString());
+      setTextIf('surveyEarn', '$' + surveyEarnUsd.toFixed(2));
+      setTextIf('referralEarned', '₦' + refNaira.toLocaleString());
+      setTextIf('refEarn', '$' + referralEarnUsd.toFixed(2));
+      
+      // Ad count
+      setTextIf('adsWatched', adCount);
+      setTextIf('adCount', adCount);
 
       return data;
     } catch (e) {
-      console.warn('refreshBalance failed:', e && e.message);
+      console.error('refreshBalance error:', e && e.message);
       return null;
     }
   };
@@ -208,21 +252,47 @@
   try {
     if (typeof firebase !== 'undefined' && firebase.auth) {
       firebase.auth().onAuthStateChanged(async (user) => {
-        if (!user) return;
+        if (!user) {
+          console.log('No user authenticated');
+          return;
+        }
+        console.log('User authenticated:', user.uid);
         // initial refresh
         await window.w2e.refreshBalance();
-        // periodic refresh
+        // periodic refresh every 5 seconds
         if (window.__w2e_balance_interval) clearInterval(window.__w2e_balance_interval);
         window.__w2e_balance_interval = setInterval(() => window.w2e.refreshBalance(), 5000);
       });
 
+      // Also refresh when page becomes visible (user returns from another tab)
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
+          console.log('Page became visible, refreshing balance');
           window.w2e.refreshBalance();
         }
       });
+
+      // Ensure balance loads on page load (call immediately if user already auth'd)
+      window.addEventListener('DOMContentLoaded', async () => {
+        const user = firebase.auth().currentUser;
+        if (user) {
+          console.log('Page loaded with auth, refreshing balance');
+          await window.w2e.refreshBalance();
+        }
+      });
+
+      // Also call on window load
+      window.addEventListener('load', async () => {
+        const user = firebase.auth().currentUser;
+        if (user) {
+          console.log('Window load event, refreshing balance');
+          await window.w2e.refreshBalance();
+        }
+      });
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) { 
+    console.error('Balance auto-refresh setup failed:', e);
+  }
 
   // Save a bank/crypto account via API
   window.w2e.saveAccount = async function(payload){

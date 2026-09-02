@@ -152,19 +152,40 @@
         location.href = 'login.html';
         return;
       }
-      token = await user.getIdToken();
+
+      // try to get token (not strictly required when using helper)
+      try { token = await user.getIdToken(); } catch(e){ token = null; }
+
+      // Prefer centralized helper to update DOM across pages
+      let balanceData = null;
       try {
-        const balanceResponse = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
-        if (!balanceResponse.ok) throw new Error('Unable to load live balance');
-        const balanceData = await balanceResponse.json();
+        if (window.w2e && typeof window.w2e.refreshBalance === 'function') {
+          balanceData = await window.w2e.refreshBalance();
+        }
+      } catch (e) { console.warn('w2e.refreshBalance error:', e); }
+
+      // Fallback to manual fetch if helper didn't return data
+      if (!balanceData) {
+        try {
+          const t = token || await window.w2e.getAuthToken();
+          if (t) {
+            const balanceResponse = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + t }, cache: 'no-store' });
+            if (balanceResponse.ok) balanceData = await balanceResponse.json();
+          }
+        } catch (err) {
+          console.error('Error loading balance (fallback):', err);
+        }
+      }
+
+      if (balanceData) {
         currentBalance = Number(balanceData.balanceUsd || 0) * 1500;
         document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
         document.getElementById('usdBal').innerText = Number(balanceData.balanceUsd || 0).toFixed(2);
         document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
-      } catch (err) {
-        console.error('Error loading balance:', err);
+      } else {
         document.getElementById('statusMsg').innerText = 'Error loading balance. Please refresh.';
       }
+
       await fetchAndRenderAccounts();
     });
 
@@ -216,7 +237,8 @@
     }
 
     async function requestWithdraw(method){
-      if (!token) return alert('Please sign in again.');
+      const authToken = token || await window.w2e.getAuthToken();
+      if (!authToken) return alert('Please sign in again.');
       const amount = Number(method === 'bank' ? document.getElementById('bankAmount').value : document.getElementById('cryptoAmount').value);
       const selectedAccount = method === 'bank' ? document.getElementById('bankAccountSelect').value : document.getElementById('cryptoAccountSelect').value;
       if (!selectedAccount) return alert('Please save and select an account first.');
@@ -250,7 +272,7 @@
       try {
         res = await fetch('/api/withdrawals/request', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
           body: JSON.stringify(payload)
         });
         data = await res.json();
@@ -276,13 +298,23 @@
       alert(`Withdrawal request submitted. Charge: ₦${data.charge}, Net: ₦${data.netAmount}`);
 
       try {
-        const freshBal = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
-        if (freshBal.ok) {
-          const freshData = await freshBal.json();
-          currentBalance = Number(freshData.balanceUsd || 0) * 1500;
-          document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
-          document.getElementById('usdBal').innerText = Number(freshData.balanceUsd || 0).toFixed(2);
-          document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+        if (window.w2e && typeof window.w2e.refreshBalance === 'function') {
+          const fresh = await window.w2e.refreshBalance();
+          if (fresh) {
+            currentBalance = Number(fresh.balanceUsd || 0) * 1500;
+            document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
+            document.getElementById('usdBal').innerText = Number(fresh.balanceUsd || 0).toFixed(2);
+            document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+          }
+        } else {
+          const freshBal = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + authToken }, cache: 'no-store' });
+          if (freshBal.ok) {
+            const freshData = await freshBal.json();
+            currentBalance = Number(freshData.balanceUsd || 0) * 1500;
+            document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
+            document.getElementById('usdBal').innerText = Number(freshData.balanceUsd || 0).toFixed(2);
+            document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+          }
         }
       } catch (e) {
         console.warn('Failed to fetch fresh balance after withdrawal:', e);

@@ -125,6 +125,30 @@ router.post('/earn', verifyToken, (req, res) => {
   saveTransactions(transactions);
   insertTxMongo(newTx).catch(() => {});
 
+  // Update user wallet in MongoDB
+  try {
+    const col = mongoNative && typeof mongoNative.getUsersCollection === 'function' ? mongoNative.getUsersCollection() : null;
+    if (col) {
+      await col.updateOne(
+        { $or: [{ firebaseUid: userId }, { id: userId }, { uid: userId }] },
+        { $inc: { wallet: Number(nairaAmount || 0), balance: Number(nairaAmount || 0) } }
+      );
+    }
+  } catch (e) { console.warn('MongoDB wallet update failed:', e?.message); }
+
+  // Update user wallet in file storage
+  try {
+    const usersData = JSON.parse(fs.readFileSync(USERS_PATH, 'utf8') || '[]');
+    const userIdx = usersData.findIndex(u => String(u.id) === String(userId) || String(u.firebaseUid) === String(userId) || String(u.uid) === String(userId));
+    if (userIdx >= 0) {
+      usersData[userIdx].wallet = (Number(usersData[userIdx].wallet || usersData[userIdx].balance || 0) + Number(nairaAmount || 0));
+      usersData[userIdx].balance = usersData[userIdx].wallet;
+    } else {
+      usersData.push({ id: userId, firebaseUid: userId, wallet: Number(nairaAmount || 0), balance: Number(nairaAmount || 0), createdAt: new Date().toISOString() });
+    }
+    fs.writeFileSync(USERS_PATH, JSON.stringify(usersData, null, 2));
+  } catch (e) { console.warn('File wallet update failed:', e?.message); }
+
   // If there's a referrer, add 10% referral bonus to referrer
   if (referrerId) {
     const referralBonus = usdAmount * 0.1; // 10% referral earnings
@@ -142,6 +166,29 @@ router.post('/earn', verifyToken, (req, res) => {
     transactions.unshift(referralTx);
     saveTransactions(transactions);
     insertTxMongo(referralTx).catch(() => {});
+
+    // Credit referrer wallet
+    const referralNaira = Math.round(referralBonus * 1500);
+    try {
+      const col = mongoNative && typeof mongoNative.getUsersCollection === 'function' ? mongoNative.getUsersCollection() : null;
+      if (col) {
+        await col.updateOne(
+          { $or: [{ firebaseUid: referrerId }, { id: referrerId }, { uid: referrerId }] },
+          { $inc: { wallet: referralNaira, balance: referralNaira } }
+        );
+      }
+    } catch (e) { console.warn('Referrer wallet update failed:', e?.message); }
+    try {
+      const usersData = JSON.parse(fs.readFileSync(USERS_PATH, 'utf8') || '[]');
+      const refIdx = usersData.findIndex(u => String(u.id) === String(referrerId) || String(u.firebaseUid) === String(referrerId) || String(u.uid) === String(referrerId));
+      if (refIdx >= 0) {
+        usersData[refIdx].wallet = (Number(usersData[refIdx].wallet || usersData[refIdx].balance || 0) + referralNaira);
+        usersData[refIdx].balance = usersData[refIdx].wallet;
+      } else {
+        usersData.push({ id: referrerId, firebaseUid: referrerId, wallet: referralNaira, balance: referralNaira, createdAt: new Date().toISOString() });
+      }
+      fs.writeFileSync(USERS_PATH, JSON.stringify(usersData, null, 2));
+    } catch (e) { console.warn('Referrer file wallet update failed:', e?.message); }
   }
 
   res.json({ message: 'Ad watched successfully', amount: usdAmount, remaining: Math.max(dailyLimit - adCount - 1, 0) });

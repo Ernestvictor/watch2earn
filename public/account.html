@@ -150,23 +150,28 @@ firebase.auth().onAuthStateChanged(async user => {
   document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
 
   try {
-    const data = await window.w2e.refreshBalance();
-    try { console.debug('[W2E ACCOUNT] refreshBalance returned', data); } catch(e){}
-    if (data) {
-      const usd = Number(data.balanceUsd || 0);
-      const naira = Math.round(usd * 1500);
-      document.getElementById('mainBal').innerText = usd.toFixed(2);
-      document.getElementById('mainNaira').innerText = naira.toLocaleString();
-      document.getElementById('adsEarn').innerText = (Number(data.adsEarnUsd || 0)).toFixed(2);
-      document.getElementById('gameEarn').innerText = (Number(data.gameEarnUsd || 0)).toFixed(2);
-      document.getElementById('surveyEarn').innerText = (Number(data.surveyEarnUsd || 0)).toFixed(2);
-      document.getElementById('refEarn').innerText = (Number(data.referralEarnUsd || 0)).toFixed(2);
-      const refRes = await fetch('/api/referrals/summary', { headers: { Authorization: 'Bearer ' + (await user.getIdToken()) } });
-      if (refRes.ok) {
+    const token = await user.getIdToken();
+    const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
+    if(!res.ok) throw new Error('Balance fetch failed');
+    const data = await res.json();
+    const usd = Number(data.balanceUsd || 0);
+    const naira = Math.round(usd * 1500);
+    document.getElementById('mainBal').innerText = usd.toFixed(2);
+    document.getElementById('mainNaira').innerText = naira.toLocaleString();
+    document.getElementById('adsEarn').innerText = (Number(data.adsEarnUsd || 0)).toFixed(2);
+    document.getElementById('gameEarn').innerText = (Number(data.gameEarnUsd || 0)).toFixed(2);
+    document.getElementById('surveyEarn').innerText = (Number(data.surveyEarnUsd || 0)).toFixed(2);
+    document.getElementById('refEarn').innerText = (Number(data.referralEarnUsd || 0)).toFixed(2);
+
+    try {
+      const refRes = await fetch('/api/referrals/summary', { headers: { Authorization: 'Bearer ' + token } });
+      if(refRes.ok) {
         const refData = await refRes.json();
         document.getElementById('invitedCount').innerText = refData.countInvited || 0;
         document.getElementById('refEarnStat').innerText = '$' + (refData.totalReferralUsd || 0).toFixed(4);
       }
+    } catch (e) {
+      console.warn('Referral summary failed:', e);
     }
   } catch (e) {
     console.warn('Live balance request failed', e);

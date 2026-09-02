@@ -184,6 +184,7 @@ async function load(){
 
   try{
     const data = await window.w2e.refreshBalance();
+    try { console.debug('[W2E HOME] refreshBalance returned', data); } catch(e){}
     if(data){
       bal = Number(data.balanceUsd || 0);
       adCount = Number(data.adCount || 0);

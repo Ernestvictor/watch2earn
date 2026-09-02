@@ -151,6 +151,7 @@ firebase.auth().onAuthStateChanged(async user => {
 
   try {
     const data = await window.w2e.refreshBalance();
+    try { console.debug('[W2E ACCOUNT] refreshBalance returned', data); } catch(e){}
     if (data) {
       const usd = Number(data.balanceUsd || 0);
       const naira = Math.round(usd * 1500);

@@ -174,6 +174,7 @@
   // Shared balance refresh helper - updates any present balance elements across pages
   window.w2e.currentBalanceUsd = 0;
   window.w2e.applyBalanceToDom = function(data = {}){
+    try { console.debug('[W2E] applyBalanceToDom called with', data); } catch (e) {}
     const rawBalance = Number(data.balanceUsd ?? data.balance ?? data.totalUsd ?? data.walletUsd ?? data.amountUsd ?? 0) || 0;
     const rate = Number(data.rate || 1500) || 1500;
     const balUsd = Number(rawBalance.toFixed(6)) || 0;
@@ -248,6 +249,7 @@
   window.w2e.refreshBalance = async function(opts = {}){
     try {
       const token = await window.w2e.getAuthToken();
+      try { console.debug('[W2E] refreshBalance tokenPresent=', !!token); } catch (e) {}
       if (!token) {
         console.warn('refreshBalance: No auth token');
         return null;
@@ -258,6 +260,7 @@
         return null;
       }
       const data = await res.json();
+      try { console.debug('[W2E] refreshBalance response', data); } catch (e) {}
       window.w2e.applyBalanceToDom(data);
       return data;
     } catch (e) {

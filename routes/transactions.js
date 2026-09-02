@@ -398,6 +398,8 @@ router.get('/referral-earnings', verifyToken, async (req, res) => {
 // GET /api/transactions/balance - Return user's current wallet balance + earnings breakdown
 router.get('/balance', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
+  console.log('[BALANCE] userId:', userId, '| MongoDB ready:', mongoose?.connection?.readyState === 1);
+  
   const zeroBreakdown = {
     totalUsd: 0,
     totalNaira: 0,
@@ -412,56 +414,71 @@ router.get('/balance', verifyToken, async (req, res) => {
   // Try MongoDB first
   try {
     if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+      console.log('[BALANCE] Querying MongoDB for user...');
       const user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] }).lean();
-      if (!user) return res.status(404).json({ error: 'User not found' });
+      
+      if (!user) {
+        console.log('[BALANCE] User not found in MongoDB, trying file fallback');
+      } else {
+        console.log('[BALANCE] ✓ User found | wallet:', user.wallet, 'balance:', user.balance);
 
-      const walletNaira = Number(user.wallet || user.balance || 0);
-      const walletUsd = +(walletNaira / 1500).toFixed(6);
+        const walletNaira = Number(user.wallet || user.balance || 0);
+        const walletUsd = +(walletNaira / 1500).toFixed(6);
 
-      let docs = [];
-      try {
-        const col = mongoNative && typeof mongoNative.getTransactionsCollection === 'function' ? mongoNative.getTransactionsCollection() : null;
-        if (col) docs = await col.find({ userId: String(userId) }).toArray();
-      } catch (e) {
-        console.warn('Mongo transaction fetch for balance failed:', e?.message);
+        let docs = [];
+        try {
+          const col = mongoNative && typeof mongoNative.getTransactionsCollection === 'function' ? mongoNative.getTransactionsCollection() : null;
+          if (col) docs = await col.find({ userId: String(userId) }).toArray();
+          console.log('[BALANCE] Found', docs.length, 'transactions');
+        } catch (e) {
+          console.warn('[BALANCE] Transaction fetch failed:', e?.message);
+        }
+
+        const breakdown = docs.reduce((acc, t) => {
+          const type = (t.type || 'other').toLowerCase();
+          const amountUsd = Number(t.amountUsd || t.amount || 0);
+          acc.totalUsd += amountUsd;
+          acc.totalNaira += Math.round(amountUsd * 1500);
+          if (type.includes('ad')) acc.adsUsd += amountUsd;
+          if (type.includes('referral') || type.includes('commission')) acc.referralUsd += amountUsd;
+          if (type.includes('bonus') || type === 'signup_bonus') acc.bonusUsd += amountUsd;
+          if (type.includes('game')) acc.gameUsd += amountUsd;
+          if (type.includes('survey')) acc.surveyUsd += amountUsd;
+          if (type.includes('withdraw')) acc.withdrawalsUsd += amountUsd;
+          return acc;
+        }, JSON.parse(JSON.stringify(zeroBreakdown)));
+
+        const adCount = docs.filter(t => t.type && String(t.type).toLowerCase().includes('ad') && isToday(t.date)).length;
+
+        const response = {
+          balanceUsd: walletUsd,
+          balanceNaira: walletNaira,
+          adsEarnUsd: +breakdown.adsUsd.toFixed(6),
+          referralEarnUsd: +breakdown.referralUsd.toFixed(6),
+          bonusEarnUsd: +breakdown.bonusUsd.toFixed(6),
+          gameEarnUsd: +breakdown.gameUsd.toFixed(6),
+          surveyEarnUsd: +breakdown.surveyUsd.toFixed(6),
+          withdrawalsUsd: +breakdown.withdrawalsUsd.toFixed(6),
+          adCount,
+          rate: 1500,
+          source: 'mongodb'
+        };
+        console.log('[BALANCE] ✓ Returning from MongoDB:', response);
+        return res.json(response);
       }
-
-      const breakdown = docs.reduce((acc, t) => {
-        const type = (t.type || 'other').toLowerCase();
-        const amountUsd = Number(t.amountUsd || t.amount || 0);
-        acc.totalUsd += amountUsd;
-        acc.totalNaira += Math.round(amountUsd * 1500);
-        if (type.includes('ad')) acc.adsUsd += amountUsd;
-        if (type.includes('referral') || type.includes('commission')) acc.referralUsd += amountUsd;
-        if (type.includes('bonus') || type === 'signup_bonus') acc.bonusUsd += amountUsd;
-        if (type.includes('game')) acc.gameUsd += amountUsd;
-        if (type.includes('survey')) acc.surveyUsd += amountUsd;
-        if (type.includes('withdraw')) acc.withdrawalsUsd += amountUsd;
-        return acc;
-      }, JSON.parse(JSON.stringify(zeroBreakdown)));
-
-      const adCount = docs.filter(t => t.type && String(t.type).toLowerCase().includes('ad') && isToday(t.date)).length;
-
-      return res.json({
-        balanceUsd: walletUsd,
-        balanceNaira: walletNaira,
-        adsEarnUsd: +breakdown.adsUsd.toFixed(6),
-        referralEarnUsd: +breakdown.referralUsd.toFixed(6),
-        bonusEarnUsd: +breakdown.bonusUsd.toFixed(6),
-        gameEarnUsd: +breakdown.gameUsd.toFixed(6),
-        surveyEarnUsd: +breakdown.surveyUsd.toFixed(6),
-        withdrawalsUsd: +breakdown.withdrawalsUsd.toFixed(6),
-        adCount,
-        rate: 1500
-      });
+    } else {
+      console.log('[BALANCE] MongoDB not ready, using file fallback');
     }
   } catch (e) {
-    console.error('Mongo balance computation failed:', e?.message);
+    console.error('[BALANCE] MongoDB error:', e?.message);
   }
 
   // File-based fallback
+  console.log('[BALANCE] Using file-based fallback');
   try {
     const allTx = loadTransactions().filter(t => String(t.userId) === String(userId) || String(t.firebaseUid || '') === String(userId));
+    console.log('[BALANCE] Found', allTx.length, 'transactions in file');
+
     const breakdown = allTx.reduce((acc, t) => {
       const type = (t.type || 'other').toLowerCase();
       const amountUsd = Number(t.amountUsd || t.amount || 0);
@@ -480,15 +497,22 @@ router.get('/balance', verifyToken, async (req, res) => {
     try {
       const usersData = JSON.parse(fs.readFileSync(USERS_PATH, 'utf8') || '[]');
       const userRecord = usersData.find(u => String(u.id) === String(userId) || String(u.uid) === String(userId) || String(u.firebaseUid) === String(userId));
-      walletNaira = Number(userRecord?.wallet || userRecord?.balance || 0);
+      if (userRecord) {
+        walletNaira = Number(userRecord.wallet || userRecord.balance || 0);
+        console.log('[BALANCE] Wallet from file:', walletNaira);
+      } else {
+        console.log('[BALANCE] User record not found in users file');
+        walletNaira = 0;
+      }
     } catch (e) {
+      console.warn('[BALANCE] File wallet read error:', e?.message);
       walletNaira = 0;
     }
 
     const walletUsd = +(walletNaira / 1500).toFixed(6);
     const adCount = allTx.filter(t => t.type && String(t.type).toLowerCase().includes('ad') && isToday(t.date)).length;
 
-    return res.json({
+    const response = {
       balanceUsd: walletUsd,
       balanceNaira: walletNaira,
       adsEarnUsd: +breakdown.adsUsd.toFixed(6),
@@ -498,11 +522,14 @@ router.get('/balance', verifyToken, async (req, res) => {
       surveyEarnUsd: +breakdown.surveyUsd.toFixed(6),
       withdrawalsUsd: +breakdown.withdrawalsUsd.toFixed(6),
       adCount,
-      rate: 1500
-    });
+      rate: 1500,
+      source: 'file'
+    };
+    console.log('[BALANCE] ✓ Returning from file:', response);
+    return res.json(response);
   } catch (e) {
-    console.error('File fallback balance failed:', e?.message);
-    return res.status(500).json({ error: 'Failed to compute balance' });
+    console.error('[BALANCE] File fallback error:', e?.message);
+    return res.status(500).json({ error: 'Failed to compute balance', details: e?.message });
   }
 });
 

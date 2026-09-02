@@ -183,12 +183,14 @@ async function load(){
   let adCount = 0;
 
   try{
-    const headers = await window.w2e.getAuthHeaders();
-    const res = await fetch('/api/transactions/balance', { headers });
-    if(res.ok){
-      const data = await res.json();
+    const data = await window.w2e.refreshBalance();
+    if(data){
       bal = Number(data.balanceUsd || 0);
       adCount = Number(data.adCount || 0);
+      document.getElementById('usd').innerText = bal.toFixed(2);
+      document.getElementById('naira').innerText = Math.round(bal * 1500).toLocaleString();
+      document.getElementById('nairaTop').innerText = Math.round(bal * 1500).toLocaleString();
+      document.getElementById('adsWatched').innerText = adCount;
     }
   }catch(e){
     console.warn('Failed to fetch live balance', e);

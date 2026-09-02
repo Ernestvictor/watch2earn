@@ -173,6 +173,78 @@
 
   // Shared balance refresh helper - updates any present balance elements across pages
   window.w2e.currentBalanceUsd = 0;
+  window.w2e.applyBalanceToDom = function(data = {}){
+    const rawBalance = Number(data.balanceUsd ?? data.balance ?? data.totalUsd ?? data.walletUsd ?? data.amountUsd ?? 0) || 0;
+    const rate = Number(data.rate || 1500) || 1500;
+    const balUsd = Number(rawBalance.toFixed(6)) || 0;
+    const balNaira = Math.round(balUsd * rate);
+
+    const setTextIf = (id, txt) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.innerText = txt;
+      el.textContent = txt;
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.value = txt;
+    };
+
+    const usdText = balUsd.toFixed(2);
+    const nairaText = balNaira.toLocaleString();
+
+    [
+      'usd', 'usdBal', 'mainBal', 'totalBalance', 'balanceUsd', 'walletUsd', 'walletBalance', 'balance',
+      'currentBalance', 'accountBalance', 'userBalance'
+    ].forEach(id => setTextIf(id, usdText));
+
+    [
+      'naira', 'nairaTop', 'topBal', 'bal', 'mainNaira', 'balanceNaira', 'walletNaira', 'totalNaira'
+    ].forEach(id => setTextIf(id, nairaText));
+
+    ['usdValue', 'balanceAmount'].forEach(id => setTextIf(id, '$' + usdText));
+    ['nairaValue', 'balanceNairaDisplay'].forEach(id => setTextIf(id, '₦' + nairaText));
+
+    const adsEarnUsd = Number(data.adsEarnUsd ?? data.adsUsd ?? 0) || 0;
+    const gameEarnUsd = Number(data.gameEarnUsd ?? data.gameUsd ?? 0) || 0;
+    const surveyEarnUsd = Number(data.surveyEarnUsd ?? data.surveyUsd ?? 0) || 0;
+    const referralEarnUsd = Number(data.referralEarnUsd ?? data.referralUsd ?? 0) || 0;
+    const bonusEarnUsd = Number(data.bonusEarnUsd ?? data.bonusUsd ?? 0) || 0;
+    const adCount = Number(data.adCount || 0) || 0;
+
+    const adsNaira = Math.round(adsEarnUsd * rate);
+    const gameNaira = Math.round(gameEarnUsd * rate);
+    const surveyNaira = Math.round(surveyEarnUsd * rate);
+    const refNaira = Math.round(referralEarnUsd * rate);
+
+    setTextIf('adsEarned', '₦' + adsNaira.toLocaleString());
+    setTextIf('adsEarn', '$' + adsEarnUsd.toFixed(2));
+    setTextIf('gamesEarned', '₦' + gameNaira.toLocaleString());
+    setTextIf('gameEarn', '$' + gameEarnUsd.toFixed(2));
+    setTextIf('surveysEarned', '₦' + surveyNaira.toLocaleString());
+    setTextIf('surveyEarn', '$' + surveyEarnUsd.toFixed(2));
+    setTextIf('referralEarned', '₦' + refNaira.toLocaleString());
+    setTextIf('refEarn', '$' + referralEarnUsd.toFixed(2));
+    setTextIf('adsWatched', String(adCount));
+    setTextIf('adCount', String(adCount));
+
+    const refStat = document.getElementById('refEarnStat');
+    if (refStat && Number(referralEarnUsd) > 0) {
+      const value = '$' + Number(referralEarnUsd).toFixed(4);
+      refStat.innerText = value;
+      refStat.textContent = value;
+    }
+
+    if (bonusEarnUsd > 0) {
+      const bonusNode = document.getElementById('bonusValue');
+      if (bonusNode) {
+        const value = '$' + Number(bonusEarnUsd).toFixed(2);
+        bonusNode.innerText = value;
+        bonusNode.textContent = value;
+      }
+    }
+
+    window.w2e.currentBalanceUsd = balUsd;
+    return data;
+  };
+
   window.w2e.refreshBalance = async function(opts = {}){
     try {
       const token = await window.w2e.getAuthToken();
@@ -186,61 +258,7 @@
         return null;
       }
       const data = await res.json();
-      
-      // Parse balance values
-      const balUsd = Number(data.balanceUsd || data.balance || data.totalUsd || 0) || 0;
-      const balNaira = Math.round(balUsd * (Number(data.rate || 1500) || 1500));
-      const adsEarnUsd = Number(data.adsEarnUsd || 0) || 0;
-      const gameEarnUsd = Number(data.gameEarnUsd || 0) || 0;
-      const surveyEarnUsd = Number(data.surveyEarnUsd || 0) || 0;
-      const referralEarnUsd = Number(data.referralEarnUsd || 0) || 0;
-      const bonusEarnUsd = Number(data.bonusEarnUsd || 0) || 0;
-      const adCount = Number(data.adCount || 0) || 0;
-      
-      window.w2e.currentBalanceUsd = balUsd;
-      console.log('Balance refreshed:', { balUsd, balNaira, adsEarnUsd });
-
-      // Helper to safely update element text
-      const setTextIf = (id, txt) => {
-        const el = document.getElementById(id);
-        if (el) {
-          el.innerText = txt;
-          el.textContent = txt;
-        }
-      };
-
-      // Main balance display (multiple ID variants)
-      setTextIf('usd', balUsd.toFixed(2));
-      setTextIf('usdBal', balUsd.toFixed(2));
-      setTextIf('mainBal', balUsd.toFixed(2));
-      setTextIf('totalBalance', '₦' + balNaira.toLocaleString());
-      
-      // Naira variants
-      setTextIf('naira', balNaira.toLocaleString());
-      setTextIf('nairaTop', balNaira.toLocaleString());
-      setTextIf('topBal', '₦' + balNaira.toLocaleString());
-      setTextIf('bal', balNaira.toLocaleString());
-      setTextIf('mainNaira', balNaira.toLocaleString());
-
-      // Earnings breakdown (by source)
-      const adsNaira = Math.round(adsEarnUsd * 1500);
-      const gameNaira = Math.round(gameEarnUsd * 1500);
-      const surveyNaira = Math.round(surveyEarnUsd * 1500);
-      const refNaira = Math.round(referralEarnUsd * 1500);
-      
-      setTextIf('adsEarned', '₦' + adsNaira.toLocaleString());
-      setTextIf('adsEarn', '$' + adsEarnUsd.toFixed(2));
-      setTextIf('gamesEarned', '₦' + gameNaira.toLocaleString());
-      setTextIf('gameEarn', '$' + gameEarnUsd.toFixed(2));
-      setTextIf('surveysEarned', '₦' + surveyNaira.toLocaleString());
-      setTextIf('surveyEarn', '$' + surveyEarnUsd.toFixed(2));
-      setTextIf('referralEarned', '₦' + refNaira.toLocaleString());
-      setTextIf('refEarn', '$' + referralEarnUsd.toFixed(2));
-      
-      // Ad count
-      setTextIf('adsWatched', adCount);
-      setTextIf('adCount', adCount);
-
+      window.w2e.applyBalanceToDom(data);
       return data;
     } catch (e) {
       console.error('refreshBalance error:', e && e.message);

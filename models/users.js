@@ -24,7 +24,9 @@ const userSchema = new mongoose.Schema({
   wallet: { 
     type: Number, 
     default: 0,
-    min: 0
+    min: 0,
+    get: function(value) { return value || 0; },
+    set: function(value) { return Math.max(0, Number(value || 0)); }
   },
   coins: {
     type: Number,
@@ -34,7 +36,9 @@ const userSchema = new mongoose.Schema({
   balance: { 
     type: Number,
     default: 0,
-    min: 0
+    min: 0,
+    get: function(value) { return value || 0; },
+    set: function(value) { return Math.max(0, Number(value || 0)); }
   },
   totalEarned: {
     type: Number,
@@ -122,6 +126,27 @@ const userSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
   }]
 }, { timestamps: true });
+
+// Ensure wallet and balance are always in sync
+userSchema.pre('save', function(next) {
+  // Keep balance and wallet synchronized
+  if (this.wallet !== this.balance) {
+    this.balance = this.wallet;
+  }
+  next();
+});
+
+userSchema.pre('findOneAndUpdate', function(next) {
+  // If wallet is being updated, also update balance
+  const update = this.getUpdate();
+  if (update.$inc && update.$inc.wallet) {
+    update.$inc.balance = update.$inc.wallet;
+  }
+  if (update.$set && update.$set.wallet) {
+    update.$set.balance = update.$set.wallet;
+  }
+  next();
+});
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema);
 

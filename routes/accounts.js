@@ -1,28 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
 const verifyToken = require('../middleware/auth');
 const User = require('../models/User');
 const mongoose = require('mongoose');
-
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const ACCOUNTS_PATH = path.join(DATA_DIR, 'accounts.json');
-
-function ensureFiles() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(ACCOUNTS_PATH)) fs.writeFileSync(ACCOUNTS_PATH, '[]');
-}
-
-function readAccounts() {
-  ensureFiles();
-  try { return JSON.parse(fs.readFileSync(ACCOUNTS_PATH, 'utf8')); } catch (e) { return []; }
-}
-
-function writeAccounts(accounts) {
-  ensureFiles();
-  fs.writeFileSync(ACCOUNTS_PATH, JSON.stringify(accounts, null, 2));
-}
 
 // Add a bank account or crypto wallet for the logged-in user
 router.post('/', verifyToken, async (req, res) => {
@@ -34,23 +14,6 @@ router.post('/', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'type must be bank or crypto' });
     }
 
-    const accounts = readAccounts();
-    const existing = accounts.filter(a => a.userId === userId && a.type === type);
-
-    const entry = {
-      id: Date.now().toString(),
-      userId,
-      type,
-      bankName: bankName || null,
-      accountNumber: accountNumber || null,
-      accountName: accountName || null,
-      cryptoType: cryptoType || null,
-      walletAddress: walletAddress || null,
-      network: network || null,
-      label: label || (type === 'bank' ? (bankName || 'Bank account') : (cryptoType || 'Crypto wallet')),
-      createdAt: new Date().toISOString()
-    };
-
     if (type === 'bank') {
       if (!accountName || !accountNumber || !bankName) {
         return res.status(400).json({ error: 'Bank name, account number, and account name are required' });
@@ -61,40 +24,40 @@ router.post('/', verifyToken, async (req, res) => {
       }
     }
 
-    accounts.unshift(entry);
-    writeAccounts(accounts);
-
-    // Also save to MongoDB User model
-    if (mongoose.connection && mongoose.connection.readyState === 1) {
-      try {
-        await User.findOneAndUpdate(
-          { firebaseUid: userId },
-          {
-            $push: {
-              accountDetails: {
-                id: entry.id,
-                type: entry.type,
-                bankName: entry.bankName,
-                accountNumber: entry.accountNumber,
-                accountName: entry.accountName,
-                cryptoType: entry.cryptoType,
-                walletAddress: entry.walletAddress,
-                network: entry.network,
-                label: entry.label,
-                createdAt: new Date()
-              }
-            }
-          },
-          { new: true }
-        );
-      } catch (mongoErr) {
-        console.warn('Failed to save account to MongoDB:', mongoErr.message);
-        // Continue even if MongoDB fails, accounts are saved to JSON
-      }
+    if (!mongoose.connection || mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'MongoDB is required. Database is unavailable.' });
     }
 
-    res.json({ success: true, id: entry.id, account: entry, savedCount: existing.length + 1 });
+    // Save account to MongoDB User model
+    const user = await User.findOneAndUpdate(
+      { firebaseUid: userId },
+      {
+        $push: {
+          accountDetails: {
+            id: Date.now().toString(),
+            type: type,
+            bankName: bankName || null,
+            accountNumber: accountNumber || null,
+            accountName: accountName || null,
+            cryptoType: cryptoType || null,
+            walletAddress: walletAddress || null,
+            network: network || null,
+            label: label || (type === 'bank' ? (bankName || 'Bank account') : (cryptoType || 'Crypto wallet')),
+            createdAt: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const newAccount = user.accountDetails[user.accountDetails.length - 1];
+    res.json({ success: true, id: newAccount.id, account: newAccount });
   } catch (e) {
+    console.error('Add account error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -103,9 +66,22 @@ router.post('/', verifyToken, async (req, res) => {
 router.get('/', verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid;
-    const accounts = readAccounts().filter(a => a.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    if (!mongoose.connection || mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'MongoDB is required. Database is unavailable.' });
+    }
+
+    const user = await User.findOne({ firebaseUid: userId }).lean();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const accounts = (user.accountDetails || [])
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
     res.json(accounts);
   } catch (e) {
+    console.error('List accounts error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -114,10 +90,25 @@ router.get('/', verifyToken, async (req, res) => {
 router.delete('/:id', verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid;
-    const accounts = readAccounts().filter(a => !(a.userId === userId && a.id === req.params.id));
-    writeAccounts(accounts);
-    res.json({ success: true });
+    const accountId = req.params.id;
+
+    if (!mongoose.connection || mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'MongoDB is required. Database is unavailable.' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { firebaseUid: userId },
+      { $pull: { accountDetails: { id: accountId } } },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ success: true, message: 'Account deleted' });
   } catch (e) {
+    console.error('Delete account error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -126,11 +117,25 @@ router.delete('/:id', verifyToken, async (req, res) => {
 router.get('/:id', verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid;
-    const accounts = readAccounts();
-    const account = accounts.find(a => a.userId === userId && a.id === req.params.id);
-    if (!account) return res.status(404).json({ error: 'Not found' });
+    const accountId = req.params.id;
+
+    if (!mongoose.connection || mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'MongoDB is required. Database is unavailable.' });
+    }
+
+    const user = await User.findOne({ firebaseUid: userId }).lean();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const account = (user.accountDetails || []).find(a => a.id === accountId);
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
     res.json(account);
   } catch (e) {
+    console.error('Get account error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });

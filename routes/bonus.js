@@ -6,33 +6,12 @@ const User = require('../models/User');
 const Earning = require('../models/earning');
 const Message = require('../models/messeges');
 const History = require('../models/history');
-const fs = require('fs');
-const path = require('path');
 const mongoNative = require('../mongodb');
-
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const BONUSES_PATH = path.join(DATA_DIR, 'bonuses.json');
 
 function isMongooseReady() {
   try {
     return mongoose && mongoose.connection && mongoose.connection.readyState === 1;
   } catch (e) { return false; }
-}
-
-function ensureBonusFile() {
-  if (!fs.existsSync(BONUSES_PATH)) {
-    fs.writeFileSync(BONUSES_PATH, '[]');
-  }
-}
-
-function readBonuses() {
-  ensureBonusFile();
-  try { return JSON.parse(fs.readFileSync(BONUSES_PATH, 'utf8') || '[]'); } catch (e) { return []; }
-}
-
-function writeBonuses(items) {
-  ensureBonusFile();
-  fs.writeFileSync(BONUSES_PATH, JSON.stringify(items, null, 2));
 }
 
 async function createRewardLog({ user, firebaseUid, type, sourceId, amount, description, metadata = {} }) {
@@ -76,22 +55,18 @@ router.get('/available', verifyToken, async (req, res) => {
     const firebaseUid = req.user.uid || req.user.id;
     let bonuses = [];
 
-    if (isMongooseReady()) {
-      try {
-        const bonusCol = mongoNative.getCollection('bonuses');
-        // Get bonuses that haven't been claimed yet and are for this user (or for 'all')
-        bonuses = await bonusCol.find({
-          $or: [
-            { targetUserId: firebaseUid, claimed: false },
-            { targetType: 'all', claimed: { $ne: true } }
-          ]
-        }).toArray();
-      } catch (e) {
-        // Fall back to file if Mongo fails
-        bonuses = readBonuses().filter(b => !b.claimed && (b.targetUserId === firebaseUid || b.targetType === 'all'));
-      }
-    } else {
-      bonuses = readBonuses().filter(b => !b.claimed && (b.targetUserId === firebaseUid || b.targetType === 'all'));
+    if (!isMongooseReady()) return res.status(503).json({ error: 'MongoDB is required for bonuses' });
+    try {
+      const bonusCol = mongoNative.getCollection('bonuses');
+      bonuses = await bonusCol.find({
+        $or: [
+          { targetUserId: firebaseUid, claimed: false },
+          { targetType: 'all', claimed: { $ne: true } }
+        ]
+      }).toArray();
+    } catch (e) {
+      console.error('Failed to fetch bonuses from mongo:', e && e.message);
+      return res.status(500).json({ error: 'Failed to fetch bonuses' });
     }
 
     // Enrich with claimed status
@@ -117,159 +92,99 @@ router.post('/claim/:id', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Bonus ID is required' });
     }
 
+    if (!isMongooseReady()) return res.status(503).json({ error: 'MongoDB is required for claiming bonuses' });
+
     let bonus = null;
-    let user = null;
-    let userCollection = null;
-
-    // Try MongoDB first
-    if (isMongooseReady()) {
-      try {
-        const bonusCol = mongoNative.getCollection('bonuses');
-        bonus = await bonusCol.findOne({ $or: [{ id: bonusId }, { _id: bonusId }] });
-        userCollection = mongoNative.getUsersCollection();
-      } catch (e) {
-        console.warn('Mongo bonus lookup failed, falling back to file:', e.message);
-      }
+    try {
+      const bonusCol = mongoNative.getCollection('bonuses');
+      bonus = await bonusCol.findOne({ $or: [{ id: bonusId }, { _id: bonusId }] });
+    } catch (e) {
+      console.error('Failed to lookup bonus in mongo:', e && e.message);
+      return res.status(500).json({ error: 'Failed to lookup bonus' });
     }
 
-    // Fallback to file-based bonuses
-    if (!bonus) {
-      const allBonuses = readBonuses();
-      bonus = allBonuses.find(b => b.id === bonusId);
-    }
-
-    if (!bonus) {
-      return res.status(404).json({ error: 'Bonus not found' });
-    }
+    if (!bonus) return res.status(404).json({ error: 'Bonus not found' });
 
     if (bonus.claimed) {
       return res.status(400).json({ error: 'This bonus has already been claimed' });
     }
 
-    // Check if bonus is for this user (or for all)
     if (bonus.targetType === 'specific' && bonus.targetUserId !== firebaseUid) {
       return res.status(403).json({ error: 'This bonus is not for you' });
     }
 
-    // Get user from Mongoose
-    if (isMongooseReady()) {
-      user = await User.findOne({ firebaseUid });
-    } else {
-      // File-based user lookup
-      const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
-      user = users.find(u => (u.firebaseUid || u.uid || '').toString() === firebaseUid.toString());
-      if (user && !user._id) user._id = user.id || user.uid;
-    }
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    // Fetch user using Mongoose (not file fallback)
+    let user = await User.findOne({ $or: [{ firebaseUid }, { uid: firebaseUid }, { id: firebaseUid }, { _id: firebaseUid }] });
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
     const amountUsd = Number(bonus.amountUsd || bonus.amount || 0);
     if (amountUsd <= 0) {
       return res.status(400).json({ error: 'Invalid bonus amount' });
     }
 
-    // Update user balance in Mongoose
-    if (isMongooseReady()) {
-      user.wallet = Number(user.wallet || 0) + amountUsd;
-      user.totalEarned = Number(user.totalEarned || 0) + amountUsd;
-      await user.save();
+    // Use environment variable for USD to Naira conversion rate, default to 1500
+    const exchangeRate = Number(process.env.USD_TO_NAIRA_RATE || 1500);
+    const amountNaira = Math.round(amountUsd * exchangeRate);
 
-      // Create earning record
-      await Earning.create({
-        userId: user._id,
-        firebaseUid,
-        amount: amountUsd,
-        type: 'bonus',
-        description: bonus.description || 'Admin bonus'
-      });
+    // Update user wallet using MongoDB with atomic operation - ensures balance is saved
+    user = await User.findOneAndUpdate(
+      { _id: user._id },
+      {
+        $inc: { wallet: amountNaira, balance: amountNaira, totalEarned: amountNaira }
+      },
+      { new: true }
+    );
+    if (!user) return res.status(500).json({ error: 'Failed to update balance' });
 
-      // Create history/notification
-      await History.create({
-        userId: user._id,
-        firebaseUid,
-        type: 'bonus',
-        amount: amountUsd,
-        description: bonus.description || 'Admin bonus claimed',
-        referenceId: bonusId,
-        status: 'success',
-        metadata: { bonusId, claimedAt: new Date().toISOString() }
-      });
+    // Create logs for bonus claim
+    await Earning.create({
+      userId: user._id,
+      firebaseUid,
+      amount: amountNaira,
+      type: 'bonus',
+      description: bonus.description || 'Admin bonus'
+    });
 
-      // Create notification message
-      await Message.create({
-        userId: user._id,
-        firebaseUid,
-        message: bonus.description || `You claimed a bonus of $${amountUsd.toFixed(2)}!`,
-        type: 'earning',
-        read: false
-      });
+    await History.create({
+      userId: user._id,
+      firebaseUid,
+      type: 'bonus',
+      amount: amountNaira,
+      description: bonus.description || 'Admin bonus claimed',
+      referenceId: bonusId,
+      status: 'success',
+      metadata: { bonusId, claimedAt: new Date().toISOString() }
+    });
 
-      // Mark bonus as claimed in MongoDB
-      try {
-        const bonusCol = mongoNative.getCollection('bonuses');
-        await bonusCol.updateOne(
-          { $or: [{ id: bonusId }, { _id: bonusId }] },
-          { $set: { claimed: true, claimedBy: firebaseUid, claimedAt: new Date().toISOString() } }
-        );
-      } catch (e) {
-        console.warn('Failed to update bonus in Mongo:', e.message);
-      }
-    }
+    await Message.create({
+      userId: user._id,
+      firebaseUid,
+      message: bonus.description || `You claimed a bonus of ₦${amountNaira.toLocaleString()}!`,
+      type: 'earning',
+      read: false
+    });
 
-    // Update file-based data in parallel
+    // Mark bonus as claimed in MongoDB bonuses collection (MUST AWAIT to ensure it's marked before response)
     try {
-      const allBonuses = readBonuses();
-      const idx = allBonuses.findIndex(b => b.id === bonusId);
-      if (idx >= 0) {
-        allBonuses[idx].claimed = true;
-        allBonuses[idx].claimedBy = firebaseUid;
-        allBonuses[idx].claimedAt = new Date().toISOString();
-        writeBonuses(allBonuses);
+      const bonusCol = mongoNative.getCollection('bonuses');
+      const updateResult = await bonusCol.updateOne(
+        { $or: [{ id: bonusId }, { _id: bonusId }] },
+        { $set: { claimed: true, claimedBy: firebaseUid, claimedAt: new Date().toISOString() }, $currentDate: { updatedAt: true } }
+      );
+      if (updateResult.matchedCount === 0) {
+        console.warn('Bonus marked as claimed but update may have failed:', bonusId);
       }
     } catch (e) {
-      console.warn('Failed to update bonus file:', e.message);
-    }
-
-    // Update file-based user balance (if not using Mongoose)
-    if (!isMongooseReady()) {
-      try {
-        const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
-        const userIdx = users.findIndex(u => (u.firebaseUid || u.uid || '').toString() === firebaseUid.toString());
-        if (userIdx >= 0) {
-          users[userIdx].wallet = Number(users[userIdx].wallet || 0) + amountUsd;
-          users[userIdx].totalEarned = Number(users[userIdx].totalEarned || 0) + amountUsd;
-          fs.writeFileSync(path.join(DATA_DIR, 'users.json'), JSON.stringify(users, null, 2));
-        }
-      } catch (e) {
-        console.warn('Failed to update user wallet in file:', e.message);
-      }
-
-      // Record transaction
-      try {
-        const txs = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transactions.json'), 'utf8') || '[]');
-        txs.unshift({
-          id: 'bonus_' + Date.now(),
-          userId: firebaseUid,
-          firebaseUid,
-          type: 'bonus',
-          amount: amountUsd,
-          amountUsd,
-          description: bonus.description || 'Admin bonus',
-          date: new Date().toISOString()
-        });
-        fs.writeFileSync(path.join(DATA_DIR, 'transactions.json'), JSON.stringify(txs, null, 2));
-      } catch (e) {
-        console.warn('Failed to record transaction:', e.message);
-      }
+      console.error('Failed to mark bonus as claimed in MongoDB:', e && e.message);
+      // Don't fail the response, the wallet was already updated
     }
 
     res.json({
       success: true,
       message: `Bonus claimed successfully!`,
       amount: amountUsd,
-      newWallet: Number(user.wallet || 0) + amountUsd,
+      amountNaira,
+      newWallet: Number(user.wallet || 0),
       bonus: bonus.description
     });
   } catch (error) {
@@ -286,7 +201,8 @@ router.post('/claim-bonus', async (req, res) => {
     const user = await User.findOne({ firebaseUid }).session(session);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const BONUS_AMOUNT = 50;
+    // Use environment variable, default to 50 if not set
+    const BONUS_AMOUNT = Number(process.env.DAILY_BONUS_AMOUNT || 50);
     const now = new Date();
     if (user.lastBonusClaim && (now - user.lastBonusClaim) < 24 * 60 * 60 * 1000) {
       return res.status(400).json({ error: 'Already claimed today' });

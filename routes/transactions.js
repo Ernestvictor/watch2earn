@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const verifyToken = require('../middleware/auth');
 const mongoNative = require('../mongodb');
+const { getRate } = require('../config/exchange');
 const User = require('../models/User');
 const { ObjectId } = require('mongodb');
 const mongoose = require('mongoose');
@@ -88,6 +89,70 @@ function saveUsers(items) {
 // alias expected by other modules
 function writeUsers(items){ return saveUsers(items); }
 
+async function findUserByAnyId(userId, email = null) {
+  const filters = [];
+  const candidates = [userId, email].filter(Boolean).map(String);
+  for (const value of candidates) {
+    filters.push({ firebaseUid: value }, { uid: value }, { id: value }, { email: value });
+  }
+  if (!filters.length) return null;
+
+  try {
+    if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+      return await User.findOne({ $or: filters }).lean();
+    }
+  } catch (e) {
+    console.warn('findUserByAnyId failed:', e && e.message);
+  }
+  return null;
+}
+
+async function creditLiveUserWallet(userId, amountNaira, options = {}) {
+  const amount = Number(amountNaira || 0);
+  if (!userId || !Number.isFinite(amount) || amount === 0) return null;
+
+  const email = options.email || null;
+  const filter = { $or: [{ firebaseUid: String(userId) }, { uid: String(userId) }, { id: String(userId) }, { email: String(userId) }] };
+  if (email) {
+    filter.$or.push({ email: String(email) });
+  }
+
+  try {
+    const record = await User.findOneAndUpdate(
+      filter,
+      {
+        $inc: { wallet: amount, balance: amount, totalEarned: amount },
+        $set: { updatedAt: new Date() },
+        $setOnInsert: {
+          firebaseUid: String(userId),
+          email: String(email || `${String(userId).replace(/[@.]/g, '_')}@local.user`),
+          displayName: String(userId),
+          wallet: 0,
+          balance: 0,
+          totalEarned: 0,
+          status: 'active'
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
+    return record;
+  } catch (e) {
+    console.warn('creditLiveUserWallet failed:', e && e.message);
+    return null;
+  }
+}
+
+async function creditUserWallet(userId, amountNaira) {
+  if (!userId || !Number.isFinite(Number(amountNaira)) || Number(amountNaira) === 0) return null;
+  return creditLiveUserWallet(userId, Number(amountNaira), { email: null });
+}
+
+function findCurrentBalanceForUser(userId) {
+  if (!userId) return 0;
+  const user = User && typeof User.findOne === 'function' ? User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }) : null;
+  return user ? Number(user.wallet || user.balance || 0) : 0;
+}
+
 function isToday(value) {
   const date = new Date(value);
   const today = new Date();
@@ -108,7 +173,8 @@ router.post('/earn', verifyToken, async (req, res) => {
     return res.status(403).json({ error: `Daily ad limit reached (${dailyLimit}/day, resets at 12:00 AM)` });
   }
 
-  const usdAmount = Number(nairaAmount || 0) / 1500;
+  let usdAmount;
+  try { usdAmount = Number(nairaAmount || 0) / getRate(); } catch (e) { console.error('Exchange rate error:', e.message); return res.status(500).json({ error: 'Server misconfiguration: exchange rate' }); }
   const newTx = {
     id: Date.now().toString(),
     userId,
@@ -125,32 +191,15 @@ router.post('/earn', verifyToken, async (req, res) => {
   saveTransactions(transactions);
   insertTxMongo(newTx).catch(() => {});
 
-  // Update user wallet in MongoDB
+  // Update user wallet in MongoDB only
   try {
-    const col = mongoNative && typeof mongoNative.getUsersCollection === 'function' ? mongoNative.getUsersCollection() : null;
-    if (col) {
-      await col.updateOne(
-        { $or: [{ firebaseUid: userId }, { id: userId }, { uid: userId }] },
-        { $inc: { wallet: Number(nairaAmount || 0), balance: Number(nairaAmount || 0) } }
-      );
-    }
+    await creditLiveUserWallet(userId, Number(nairaAmount || 0), { email: req.user.email, source: 'ad' });
   } catch (e) { console.warn('MongoDB wallet update failed:', e?.message); }
-
-  // Update user wallet in file storage
-  try {
-    const usersData = JSON.parse(fs.readFileSync(USERS_PATH, 'utf8') || '[]');
-    const userIdx = usersData.findIndex(u => String(u.id) === String(userId) || String(u.firebaseUid) === String(userId) || String(u.uid) === String(userId));
-    if (userIdx >= 0) {
-      usersData[userIdx].wallet = (Number(usersData[userIdx].wallet || usersData[userIdx].balance || 0) + Number(nairaAmount || 0));
-      usersData[userIdx].balance = usersData[userIdx].wallet;
-    } else {
-      usersData.push({ id: userId, firebaseUid: userId, wallet: Number(nairaAmount || 0), balance: Number(nairaAmount || 0), createdAt: new Date().toISOString() });
-    }
-    fs.writeFileSync(USERS_PATH, JSON.stringify(usersData, null, 2));
-  } catch (e) { console.warn('File wallet update failed:', e?.message); }
 
   // If there's a referrer, add 10% referral bonus to referrer
   if (referrerId) {
+    let exchangeRate;
+    try { exchangeRate = getRate(); } catch (e) { console.error('Exchange rate error:', e.message); return res.status(500).json({ error: 'Server misconfiguration: exchange rate' }); }
     const referralBonus = usdAmount * 0.1; // 10% referral earnings
     const referralTx = {
       id: Date.now().toString() + '_ref',
@@ -159,7 +208,7 @@ router.post('/earn', verifyToken, async (req, res) => {
       source: 'referral',
       title: `Referral bonus from ${userId.slice(0, 8)}...`,
       amountUsd: referralBonus,
-      amountNaira: Math.round(referralBonus * 1500),
+      amountNaira: Math.round(referralBonus * exchangeRate),
       date: new Date().toISOString(),
       referredUserId: userId
     };
@@ -167,28 +216,10 @@ router.post('/earn', verifyToken, async (req, res) => {
     saveTransactions(transactions);
     insertTxMongo(referralTx).catch(() => {});
 
-    // Credit referrer wallet
-    const referralNaira = Math.round(referralBonus * 1500);
+    const referralNaira = Math.round(referralBonus * exchangeRate);
     try {
-      const col = mongoNative && typeof mongoNative.getUsersCollection === 'function' ? mongoNative.getUsersCollection() : null;
-      if (col) {
-        await col.updateOne(
-          { $or: [{ firebaseUid: referrerId }, { id: referrerId }, { uid: referrerId }] },
-          { $inc: { wallet: referralNaira, balance: referralNaira } }
-        );
-      }
+      await creditLiveUserWallet(referrerId, referralNaira, { email: null, source: 'referral' });
     } catch (e) { console.warn('Referrer wallet update failed:', e?.message); }
-    try {
-      const usersData = JSON.parse(fs.readFileSync(USERS_PATH, 'utf8') || '[]');
-      const refIdx = usersData.findIndex(u => String(u.id) === String(referrerId) || String(u.firebaseUid) === String(referrerId) || String(u.uid) === String(referrerId));
-      if (refIdx >= 0) {
-        usersData[refIdx].wallet = (Number(usersData[refIdx].wallet || usersData[refIdx].balance || 0) + referralNaira);
-        usersData[refIdx].balance = usersData[refIdx].wallet;
-      } else {
-        usersData.push({ id: referrerId, firebaseUid: referrerId, wallet: referralNaira, balance: referralNaira, createdAt: new Date().toISOString() });
-      }
-      fs.writeFileSync(USERS_PATH, JSON.stringify(usersData, null, 2));
-    } catch (e) { console.warn('Referrer file wallet update failed:', e?.message); }
   }
 
   res.json({ message: 'Ad watched successfully', amount: usdAmount, remaining: Math.max(dailyLimit - adCount - 1, 0) });
@@ -209,136 +240,75 @@ router.post('/bonuses/claim', verifyToken, async (req, res) => {
       return res.status(429).json({ error: 'Rate limit exceeded' });
     }
 
-    // Try Mongo native bonuses collection first
-    if (mongoNative && typeof mongoNative.getCollection === 'function') {
-      const bonusCol = mongoNative.getCollection('bonuses');
-      const usersCol = mongoNative.getUsersCollection ? mongoNative.getUsersCollection() : null;
-      // allow matching by string id or Mongo ObjectId
-      const orQuery = [{ id: bonusId }];
-      try { orQuery.push({ _id: new ObjectId(bonusId) }); } catch (e) { /* not an ObjectId */ }
-      const bonus = await bonusCol.findOne({ $or: orQuery });
-      if (!bonus) return res.status(404).json({ error: 'Bonus not found' });
+    // Use MongoDB only (no file fallback)
+    const bonusCol = mongoNative.getCollection('bonuses');
+    const orQuery = [{ id: bonusId }];
+    try { orQuery.push({ _id: new ObjectId(bonusId) }); } catch (e) { /* not an ObjectId */ }
+    const bonus = await bonusCol.findOne({ $or: orQuery });
+    if (!bonus) return res.status(404).json({ error: 'Bonus not found' });
 
-      const claimedBy = Array.isArray(bonus.claimedBy) ? bonus.claimedBy : [];
-      // Determine eligibility
-      const targetType = String(bonus.targetType || 'all');
-      const targetUserId = bonus.targetUserId || bonus.targetUser || null;
-      const targetUsers = Array.isArray(bonus.targetUsers) ? bonus.targetUsers : [];
+    const claimedBy = Array.isArray(bonus.claimedBy) ? bonus.claimedBy.map(String) : [];
+    // Determine eligibility
+    const targetType = String(bonus.targetType || 'all');
+    const targetUserId = bonus.targetUserId || bonus.targetUser || null;
+    const targetUsers = Array.isArray(bonus.targetUsers) ? bonus.targetUsers : [];
 
-      const eligible = (targetType === 'all') || (targetUserId && String(targetUserId) === String(userId)) || targetUsers.includes(userId);
-      if (!eligible) return res.status(403).json({ error: 'You are not eligible for this bonus' });
-      if (claimedBy.includes(String(userId))) return res.status(400).json({ error: 'Bonus already claimed by you' });
+    const eligible = (targetType === 'all') || (targetUserId && String(targetUserId) === String(userId)) || targetUsers.includes(userId);
+    if (!eligible) return res.status(403).json({ error: 'You are not eligible for this bonus' });
+    if (claimedBy.includes(String(userId))) return res.status(400).json({ error: 'Bonus already claimed by you' });
 
-      // Check expiry
-      const now = new Date();
-      const expiresAt = bonus.expiresAt || bonus.expires || bonus.expiry || bonus.expires_at || null;
-      if (expiresAt) {
-        const expDate = new Date(expiresAt);
-        if (!isNaN(expDate) && expDate < now) return res.status(400).json({ error: 'Bonus expired' });
-      }
-
-      // Prevent duplicate claims (race-safe check using transactions collection)
-      const referenceId = String(bonus.id || bonus._id || bonusId);
-      try {
-        if (typeof mongoNative.getTransactionsCollection === 'function') {
-          const txCol = mongoNative.getTransactionsCollection();
-          const existing = await txCol.findOne({ userId: String(userId), referenceId });
-          if (existing) return res.status(400).json({ error: 'Bonus already claimed' });
-        } else {
-          const txs = loadTransactions();
-          if (txs.find(t => String(t.userId) === String(userId) && String(t.referenceId) === referenceId)) {
-            return res.status(400).json({ error: 'Bonus already claimed' });
-          }
-        }
-      } catch (e) {
-        // continue if duplicate-check fails — we'll still protect with claimedBy below
-      }
-
-      // Determine amount (prefer amountUsd then amount)
-      const amountUsd = Number(bonus.amountUsd ?? bonus.amount ?? 0) || 0;
-      const amountNaira = Math.round(amountUsd * 1500);
-
-      // Credit user wallet in users collection if available
-      try {
-        if (usersCol) {
-          await usersCol.updateOne({ $or: [{ firebaseUid: userId }, { id: userId }, { uid: userId }] }, { $inc: { wallet: amountNaira, balance: amountNaira } });
-        }
-      } catch (e) { /* ignore user credit error */ }
-
-      // Record transaction
-      const tx = {
-        id: Date.now().toString(),
-        userId,
-        type: 'bonus',
-        title: bonus.title || 'Claimed bonus',
-        amountUsd,
-        amountNaira,
-        referenceId,
-        date: new Date().toISOString()
-      };
-      const txs = loadTransactions();
-      txs.unshift(tx);
-      saveTransactions(txs);
-      try { await insertTxMongo(tx); } catch (e) { /* ignore */ }
-
-      // Update bonus doc claimedBy
-      try {
-        await bonusCol.updateOne({ $or: orQuery }, { $addToSet: { claimedBy: String(userId) }, $set: { updatedAt: new Date() } });
-      } catch (e) { /* ignore */ }
-
-      return res.json({ ok: true, credited: amountNaira, amountUsd, tx });
+    // Check expiry
+    const now = new Date();
+    const expiresAt = bonus.expiresAt || bonus.expires || bonus.expiry || bonus.expires_at || null;
+    if (expiresAt) {
+      const expDate = new Date(expiresAt);
+      if (!isNaN(expDate) && expDate < now) return res.status(400).json({ error: 'Bonus expired' });
     }
 
-    // Fallback: file-based bonuses
-    const bonusesPath = path.join(DATA_DIR, 'bonuses.json');
+    // Prevent duplicate claims (race-safe check using transactions collection)
+    const referenceId = String(bonus.id || bonus._id || bonusId);
     try {
-      let bonuses = JSON.parse(fs.readFileSync(bonusesPath, 'utf8') || '[]');
-      const bIdx = bonuses.findIndex(b => String(b.id) === String(bonusId));
-      if (bIdx === -1) return res.status(404).json({ error: 'Bonus not found' });
-      const bonus = bonuses[bIdx];
-      const claimedBy = Array.isArray(bonus.claimedBy) ? bonus.claimedBy : [];
-      const targetType = String(bonus.targetType || 'all');
-      const targetUserId = bonus.targetUserId || bonus.targetUser || null;
-      const targetUsers = Array.isArray(bonus.targetUsers) ? bonus.targetUsers : [];
-      const eligible = (targetType === 'all') || (targetUserId && String(targetUserId) === String(userId)) || targetUsers.includes(userId);
-      if (!eligible) return res.status(403).json({ error: 'You are not eligible for this bonus' });
-      if (claimedBy.includes(String(userId))) return res.status(400).json({ error: 'Bonus already claimed by you' });
-
-      const amountUsd = Number(bonus.amountUsd ?? bonus.amount ?? 0) || 0;
-      const amountNaira = Math.round(amountUsd * 1500);
-
-      // credit users.json
-      const usersPath = path.join(DATA_DIR, 'users.json');
-      let users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]');
-      const uIdx = users.findIndex(u => (String(u.firebaseUid) === String(userId)) || String(u.id) === String(userId) || String(u.uid) === String(userId));
-      if (uIdx >= 0) {
-        users[uIdx].wallet = (Number(users[uIdx].wallet || users[uIdx].balance || 0) + amountNaira);
-        users[uIdx].balance = users[uIdx].wallet;
-      } else {
-        // If user not found, add minimal record
-        users.unshift({ id: userId, firebaseUid: userId, wallet: amountNaira, balance: amountNaira, createdAt: new Date().toISOString() });
-      }
-      fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-
-      // record transaction in file
-      const transactions = loadTransactions();
-      const tx = { id: Date.now().toString(), userId, type: 'bonus', title: bonus.title || 'Claimed bonus', amountUsd, amountNaira, date: new Date().toISOString() };
-      transactions.unshift(tx);
-      saveTransactions(transactions);
-
-      // mark bonus claimed
-      bonuses[bIdx].claimedBy = claimedBy.concat([String(userId)]);
-      fs.writeFileSync(bonusesPath, JSON.stringify(bonuses, null, 2));
-
-      return res.json({ ok: true, credited: amountNaira, amountUsd, tx });
+      const txCol = mongoNative.getTransactionsCollection();
+      const existing = await txCol.findOne({ userId: String(userId), referenceId });
+      if (existing) return res.status(400).json({ error: 'Bonus already claimed' });
     } catch (e) {
-      console.error('Bonus claim file fallback error:', e);
-      logClaimError({ userId: String(userId), bonusId: String(bonusId), error: e && e.message ? e.message : String(e) });
-      return res.status(500).json({ error: 'Failed to claim bonus' });
+      console.warn('Duplicate-check failed:', e.message);
     }
-  } catch (err) {
-    console.error('Claim bonus error:', err);
-    logClaimError({ userId: req.user && (req.user.uid || req.user.id) ? String(req.user.uid || req.user.id) : null, bonusId: (req.body && (req.body.id || req.body.bonusId)) || null, error: err && err.message ? err.message : String(err) });
+
+    // Determine amount (prefer amountUsd then amount)
+    const amountUsd = Number(bonus.amountUsd ?? bonus.amount ?? 0) || 0;
+    if (amountUsd <= 0) {
+      return res.status(400).json({ error: 'Invalid bonus amount' });
+    }
+    const exchangeRate = Number(process.env.USD_TO_NAIRA_RATE || 1500);
+    const amountNaira = Math.round(amountUsd * exchangeRate);
+
+    // Credit user wallet using helper (upsert + atomic $inc) — MongoDB only
+    const credited = await creditLiveUserWallet(userId, amountNaira, { email: req.user && req.user.email ? req.user.email : null, source: 'bonus_claim' });
+    if (!credited) return res.status(500).json({ error: 'Failed to credit user wallet (MongoDB unavailable)' });
+
+    // Record transaction in MongoDB only
+    const tx = {
+      id: Date.now().toString(),
+      userId,
+      type: 'bonus',
+      title: bonus.title || 'Claimed bonus',
+      amountUsd,
+      amountNaira,
+      referenceId,
+      date: new Date().toISOString()
+    };
+    await insertTxMongo(tx);
+
+    // Update bonus doc claimedBy
+    try {
+      await bonusCol.updateOne({ $or: orQuery }, { $addToSet: { claimedBy: String(userId) }, $set: { updatedAt: new Date() } });
+    } catch (e) { console.warn('Failed to update bonus claimedBy:', e.message); }
+
+    return res.json({ ok: true, credited: amountNaira, amountUsd, tx });
+  } catch (error) {
+    console.error('Bonus claim error:', error);
+    logClaimError({ error: error && error.message ? error.message : String(error) });
     return res.status(500).json({ error: 'Failed to claim bonus' });
   }
 });
@@ -426,8 +396,9 @@ router.get('/referral-earnings', verifyToken, async (req, res) => {
     if (typeof mongoNative.getTransactionsCollection === 'function') {
       const col = mongoNative.getTransactionsCollection();
       const docs = await col.find({ userId }).toArray();
+      const exchangeRate = Number(process.env.USD_TO_NAIRA_RATE || 1500);
       const referralEarnings = docs.filter(t => t.type === 'referral').reduce((s, t) => s + (Number(t.amountUsd || 0)), 0);
-      return res.json({ referralEarningsUsd: referralEarnings, referralEarningsNaira: Math.round(referralEarnings * 1500) });
+      return res.json({ referralEarningsUsd: referralEarnings, referralEarningsNaira: Math.round(referralEarnings * exchangeRate) });
     }
   } catch (e) {
     console.error('Mongo referral-earnings read failed:', e && e.message);
@@ -435,11 +406,12 @@ router.get('/referral-earnings', verifyToken, async (req, res) => {
 
   // Fallback to file storage
   const transactions = loadTransactions();
+  const exchangeRate = Number(process.env.USD_TO_NAIRA_RATE || 1500);
   const referralEarnings = transactions
     .filter(t => t.userId === userId && t.type === 'referral')
     .reduce((sum, t) => sum + (t.amountUsd || 0), 0);
 
-  res.json({ referralEarningsUsd: referralEarnings, referralEarningsNaira: Math.round(referralEarnings * 1500) });
+  res.json({ referralEarningsUsd: referralEarnings, referralEarningsNaira: Math.round(referralEarnings * exchangeRate) });
 });
 
 // GET /api/transactions/balance - Return user's current wallet balance + earnings breakdown
@@ -469,8 +441,9 @@ router.get('/balance', verifyToken, async (req, res) => {
       } else {
         console.log('[BALANCE] ✓ User found | wallet:', user.wallet, 'balance:', user.balance);
 
+        const exchangeRate = Number(process.env.USD_TO_NAIRA_RATE || 1500);
         const walletNaira = Number(user.wallet || user.balance || 0);
-        const walletUsd = +(walletNaira / 1500).toFixed(6);
+        const walletUsd = +(walletNaira / exchangeRate).toFixed(6);
 
         let docs = [];
         try {

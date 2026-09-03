@@ -1,9 +1,0 @@
-[
-  {
-    "id": "test-uid-123",
-    "uid": "test-uid-123",
-    "email": "testuser@example.com",
-    "displayName": "Test User",
-    "balance": 0
-  }
-]

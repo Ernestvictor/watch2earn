@@ -5,6 +5,7 @@ const verifyToken = require('../middleware/auth');
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
+const { getRate } = require('../config/exchange');
 
 // Mongoose models
 const User = require('../models/User');
@@ -12,56 +13,59 @@ const Earning = require('../models/earning');
 const Message = require('../models/messeges');
 
 // -------------------- PROFILE --------------------
-// GET user profile — compute live balances from data/transactions.json when available
+// GET user profile — read live balances from MongoDB User model
 router.get('/profile', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
-  const DATA_DIR = path.join(__dirname, '..', 'data');
-  const TXN_PATH = path.join(DATA_DIR, 'transactions.json');
 
   try {
-    // try to compute from local transactions file first
-    let txs = [];
-    try {
-      if (fs.existsSync(TXN_PATH)) {
-        txs = JSON.parse(fs.readFileSync(TXN_PATH, 'utf8') || '[]');
-      }
-    } catch (e) {
-      txs = [];
+    // Fetch user from MongoDB
+    const user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    const myTx = txs.filter(t => t.userId === userId);
-    const totalUsd = myTx.reduce((s, t) => s + Number(t.amountUsd || 0), 0);
-    const adsUsd = myTx.filter(t => (t.type || '').toLowerCase().includes('ad')).reduce((s, t) => s + Number(t.amountUsd || 0), 0);
-    const gameUsd = myTx.filter(t => (t.type || '').toLowerCase().includes('game')).reduce((s, t) => s + Number(t.amountUsd || 0), 0);
-    const surveyUsd = myTx.filter(t => (t.type || '').toLowerCase().includes('survey')).reduce((s, t) => s + Number(t.amountUsd || 0), 0);
-    const refUsd = myTx.filter(t => (t.type || '').toLowerCase().includes('referral') || (t.type || '').toLowerCase().includes('commission')).reduce((s, t) => s + Number(t.amountUsd || 0), 0);
+    // Get earnings by type from MongoDB Earning collection
+    const allEarnings = await Earning.find({ $or: [{ firebaseUid: userId }, { userId: user._id }] });
+    
+    const adsEarnings = allEarnings
+      .filter(e => (e.type || '').toLowerCase().includes('ad'))
+      .reduce((s, e) => s + Number(e.amount || 0), 0);
+    
+    const gameEarnings = allEarnings
+      .filter(e => (e.type || '').toLowerCase().includes('game'))
+      .reduce((s, e) => s + Number(e.amount || 0), 0);
+    
+    const surveyEarnings = allEarnings
+      .filter(e => (e.type || '').toLowerCase().includes('survey'))
+      .reduce((s, e) => s + Number(e.amount || 0), 0);
+    
+    const referralEarnings = allEarnings
+      .filter(e => (e.type || '').toLowerCase().includes('referral') || (e.type || '').toLowerCase().includes('commission'))
+      .reduce((s, e) => s + Number(e.amount || 0), 0);
 
-    // invited count and announcement — try firestore but it's optional
-    let displayName = req.user.name || 'User';
-    let email = req.user.email || '';
-    let invitedCount = 0;
-    let announcement = '';
-    try {
-      const userDoc = await db.collection('users').doc(userId).get();
-      const u = userDoc.exists ? userDoc.data() : null;
-      displayName = u?.displayName || displayName;
-      email = u?.email || email;
-      invitedCount = u?.invitedCount || 0;
-      announcement = u?.announcement || '';
-    } catch (e) {
-      // ignore firestore errors — we'll still return computed values
-    }
+    // Exchange rate for USD conversion (from centralized config)
+    let exchangeRate;
+    try { exchangeRate = getRate(); } catch (e) { console.error('Exchange rate error:', e.message); return res.status(500).json({ error: 'Server misconfiguration: exchange rate' }); }
+    
+    // Use wallet as the live balance
+    const balanceNaira = Number(user.wallet || user.balance || 0);
+    const balanceUsd = (balanceNaira / exchangeRate).toFixed(6);
+    
+    const adsEarnUsd = (adsEarnings / exchangeRate).toFixed(6);
+    const gameEarnUsd = (gameEarnings / exchangeRate).toFixed(6);
+    const surveyEarnUsd = (surveyEarnings / exchangeRate).toFixed(6);
+    const refEarnUsd = (referralEarnings / exchangeRate).toFixed(6);
 
     return res.json({
-      balanceUsd: +totalUsd.toFixed(6),
-      adsEarn: +adsUsd.toFixed(6),
-      gameEarn: +gameUsd.toFixed(6),
-      surveyEarn: +surveyUsd.toFixed(6),
-      refEarn: +refUsd.toFixed(6),
-      invitedCount: invitedCount || 0,
-      announcement,
-      displayName,
-      email
+      balanceNaira,
+      balanceUsd: +balanceUsd,
+      adsEarn: +adsEarnUsd,
+      gameEarn: +gameEarnUsd,
+      surveyEarn: +surveyEarnUsd,
+      refEarn: +refEarnUsd,
+      invitedCount: user.invitedCount || 0,
+      displayName: user.displayName || user.username || 'User',
+      email: user.email
     });
 
   } catch (err) {

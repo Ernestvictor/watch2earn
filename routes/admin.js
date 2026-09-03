@@ -910,15 +910,28 @@ router.get('/leaderboard', async (req, res) => {
   }
 });
 
-router.get('/bonuses', (req, res) => {
+router.get('/bonuses', async (req, res) => {
   try {
-    const bonuses = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'bonuses.json'), 'utf8') || '[]');
+    if (!isMongooseReady()) {
+      return res.status(503).json({ error: 'MongoDB is required. Database is unavailable.' });
+    }
+
+    // Use MongoDB only - no JSON fallback
+    const bonusCol = mongoNative.getCollection('bonuses');
+    const bonuses = await bonusCol.find({}).sort({ createdAt: -1 }).toArray();
     res.json(bonuses);
-  } catch (e) { res.status(500).json({ error: 'Failed to read bonuses' }); }
+  } catch (e) {
+    console.error('Failed to read bonuses:', e);
+    res.status(500).json({ error: 'Failed to read bonuses' });
+  }
 });
 
 router.post('/send-bonus', verifyAdminToken, async (req, res) => {
   try {
+    if (!isMongooseReady()) {
+      return res.status(503).json({ error: 'MongoDB is required. Database is unavailable.' });
+    }
+
     const b = req.body || {};
     const amountUsd = Number(b.amountUsd ?? b.amount ?? 0);
     const targetType = String(b.targetType || 'all').trim() || 'all';
@@ -945,18 +958,13 @@ router.post('/send-bonus', verifyAdminToken, async (req, res) => {
       status: 'pending'
     };
 
-    const bonusesPath = path.join(DATA_DIR, 'bonuses.json');
-    const bonuses = JSON.parse(fs.readFileSync(bonusesPath, 'utf8') || '[]');
-    bonuses.unshift(entry);
-    fs.writeFileSync(bonusesPath, JSON.stringify(bonuses, null, 2));
-
+    // Use MongoDB only - no JSON fallback
     try {
-      if (mongoNative && typeof mongoNative.getCollection === 'function') {
-        const bonusCol = mongoNative.getCollection('bonuses');
-        await bonusCol.insertOne(entry);
-      }
+      const bonusCol = mongoNative.getCollection('bonuses');
+      await bonusCol.insertOne(entry);
     } catch (e) {
-      console.warn('Admin bonus Mongo sync skipped:', e && e.message);
+      console.error('Failed to save bonus to MongoDB:', e && e.message);
+      return res.status(500).json({ error: 'Failed to save bonus to database' });
     }
 
     res.json({ ok: true, bonus: entry, count: targetType === 'specific' ? 1 : 'all' });

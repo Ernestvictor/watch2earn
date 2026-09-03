@@ -21,13 +21,6 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
-  wallet: { 
-    type: Number, 
-    default: 0,
-    min: 0,
-    get: function(value) { return value || 0; },
-    set: function(value) { return Math.max(0, Number(value || 0)); }
-  },
   coins: {
     type: Number,
     default: 0,
@@ -36,9 +29,7 @@ const userSchema = new mongoose.Schema({
   balance: { 
     type: Number,
     default: 0,
-    min: 0,
-    get: function(value) { return value || 0; },
-    set: function(value) { return Math.max(0, Number(value || 0)); }
+    min: 0
   },
   totalEarned: {
     type: Number,

@@ -2,7 +2,8 @@
 
 Note: Due to some last quick changes on v4, detail of v4.5.3 & v4.5.4 are not updated here. v4.5.4x is the last tag of v4 in github repository. I'm extremely sorry for the confusion
 
-
+**5.11.1 / 2026-08-27**
+- fix: validator; Replace regex with a single-pass scanner for attribute tokens, eliminating quadratic behavior on long whitespace runs.
 
 **5.11.0 / 2026-08-16**
 - feat: support for endIndex in node metadata (#850) [By [Pavel Dranichnikov](https://github.com/Wain-PC)]

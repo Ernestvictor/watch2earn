@@ -137,7 +137,7 @@ router.post('/request', verifyToken, async (req, res) => {
     try {
       const updatedUser = await User.findOneAndUpdate(
         { $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] },
-        { $inc: { wallet: -amountNum, balance: -amountNum } },
+        { $inc: { balance: -amountNum } },
         { new: true }
       );
       
@@ -317,7 +317,7 @@ router.post('/:id/reject', async (req, res) => {
       if (amt > 0) {
         await User.findOneAndUpdate(
           { $or: [{ firebaseUid: target.userId }, { uid: target.userId }, { id: target.userId }] },
-          { $inc: { wallet: amt, balance: amt } }
+          { $inc: { balance: amt } }
         );
       }
     } catch (e) { 

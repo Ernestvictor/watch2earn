@@ -127,26 +127,17 @@ const userSchema = new mongoose.Schema({
   }]
 }, { timestamps: true });
 
-// Ensure wallet and balance are always in sync
-userSchema.pre('save', function(next) {
-  // Keep balance and wallet synchronized
-  if (this.wallet !== this.balance) {
-    this.balance = this.wallet;
-  }
-  next();
-});
+// Make `balance` the canonical field. Provide a `wallet` virtual for backward compatibility.
+userSchema.virtual('wallet')
+  .get(function() {
+    return this.balance || 0;
+  })
+  .set(function(v) {
+    this.balance = Math.max(0, Number(v || 0));
+  });
 
-userSchema.pre('findOneAndUpdate', function(next) {
-  // If wallet is being updated, also update balance
-  const update = this.getUpdate();
-  if (update.$inc && update.$inc.wallet) {
-    update.$inc.balance = update.$inc.wallet;
-  }
-  if (update.$set && update.$set.wallet) {
-    update.$set.balance = update.$set.wallet;
-  }
-  next();
-});
+userSchema.set('toJSON', { virtuals: true });
+userSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema);
 

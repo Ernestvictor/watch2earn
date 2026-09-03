@@ -1,24 +1,40 @@
 require('dotenv').config();
+
+// ✅ STARTUP VALIDATION: Fail fast if critical env vars are missing
+const requiredEnvVars = [
+  'MONGODB_URI',
+  'JWT_SECRET',
+  'COOKIE_SECRET',
+  'FIREBASE_PROJECT_ID'
+];
+
+const missingEnv = requiredEnvVars.filter(env => !process.env[env]);
+if (missingEnv.length > 0) {
+  console.error('❌ FATAL: Missing required environment variables:');
+  missingEnv.forEach(env => console.error(`   - ${env}`));
+  console.error('\nPlease set these in your .env file or deployment environment.');
+  process.exit(1);
+}
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
-const db = require('./db'); // PostgreSQL connection
 const mongoose = require('mongoose');
 const app = express();
 
 app.use(express.json());
 app.use(cookieParser(process.env.COOKIE_SECRET));
 
+// ✅ Connect to MongoDB (required)
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
-if (mongoUri) {
-  mongoose.set('strictQuery', false);
-  mongoose.connect(mongoUri)
-    .then(() => { console.log('✅ Connected to MongoDB'); })
-    .catch(err => { console.error('❌ MongoDB connection error:', err); });
-} else {
-  console.warn('⚠️ MONGODB_URI / MONGO_URI is not set. MongoDB features will not work until you add it to Render or .env');
-}
+mongoose.set('strictQuery', false);
+mongoose.connect(mongoUri)
+  .then(() => { console.log('✅ Connected to MongoDB'); })
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err);
+    process.exit(1);
+  });
 
 // Native MongoDB helper (for earnings + transactions)
 const mongoNative = require('./mongodb');
@@ -38,7 +54,7 @@ mongoNative.connectDB().then(() => {
 
 const { auth: firebaseAuth } = require('./config/firebaseAdmin');
 const authMiddleware = require('./middleware/auth');
-const User = require('./models/User');
+const User = require('./models/users');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -51,26 +67,6 @@ const bonusRoutes = require('./routes/bonus');
 const adsRoutes = require('./routes/ads');
 const earningRoutes = require('./routes/earning');
 const cpxRoutes = require('./routes/cpx');
-
-const DATA_DIR = path.join(__dirname, 'data');
-const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
-const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
-
-function ensureDataFiles() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(MESSAGES_PATH)) fs.writeFileSync(MESSAGES_PATH, '[]');
-  if (!fs.existsSync(SETTINGS_PATH)) fs.writeFileSync(SETTINGS_PATH, JSON.stringify({ dailyAdLimit: 5, bonusAdCount: 0, lastAnnouncement: '' }, null, 2));
-}
-
-function readMessages() {
-  ensureDataFiles();
-  try { return JSON.parse(fs.readFileSync(MESSAGES_PATH, 'utf8')); } catch (e) { return []; }
-}
-
-function readSettings() {
-  ensureDataFiles();
-  try { return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')); } catch (e) { return { dailyAdLimit: 5, bonusAdCount: 0, lastAnnouncement: '' }; }
-}
 
 // ✅ Serve static frontend files (HTML, CSS, JS)
 app.use(express.static(path.join(__dirname, 'public')));
@@ -120,19 +116,34 @@ app.get('/carbinate', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin-panel', 'carbinate.html'));
 });
 
-// ✅ Message inbox endpoint used by public/messege.html
-app.get('/api/messages', (req, res) => {
-  res.json(readMessages());
+// ✅ Message inbox endpoint (MongoDB only)
+app.get('/api/messages', async (req, res) => {
+  try {
+    const messagesCollection = mongoNative.getCollection('admin_messages');
+    const messages = await messagesCollection.find({}).sort({ createdAt: -1 }).limit(50).toArray();
+    res.json(messages || []);
+  } catch (err) {
+    console.error('Error fetching messages:', err);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
 });
 
-app.get('/api/user/announcements', (req, res) => {
-  const messages = readMessages();
-  const settings = readSettings();
-  const latest = messages[0] || { message: settings.lastAnnouncement || 'Welcome back to Watch2Earn!' };
-  res.json({
-    messages,
-    announcement: latest.message || settings.lastAnnouncement || 'Welcome back to Watch2Earn!'
-  });
+app.get('/api/user/announcements', async (req, res) => {
+  try {
+    const messagesCollection = mongoNative.getCollection('admin_messages');
+    const messages = await messagesCollection.find({}).sort({ createdAt: -1 }).limit(50).toArray();
+    const latest = messages[0] || { message: 'Welcome back to Watch2Earn!' };
+    res.json({
+      messages,
+      announcement: latest.message || 'Welcome back to Watch2Earn!'
+    });
+  } catch (err) {
+    console.error('Error fetching announcements:', err);
+    res.json({
+      messages: [],
+      announcement: 'Welcome back to Watch2Earn!'
+    });
+  }
 });
 
 // Serve ads.json from project root so the frontend can fetch live ads
@@ -150,7 +161,7 @@ app.get('/api/ads', (req, res) => {
 // /api/balance handled later (supports token-based native Mongo lookup)
 
 
-// GET /api/ad-check - Check if user should see aclib ad (100 seconds interval)
+// GET /api/ad-check - Check if user should see aclib ad (100 seconds interval) - MongoDB only
 app.get('/api/ad-check', async (req, res) => {
   const email = req.query.email || (req.user && req.user.email) || null;
   
@@ -161,64 +172,30 @@ app.get('/api/ad-check', async (req, res) => {
   try {
     const now = new Date();
     const AD_INTERVAL_MS = 100 * 1000; // 100 seconds
+    const normalizedEmail = email.toLowerCase();
 
-    // Check MongoDB if connected
-    if (mongoose.connection && mongoose.connection.readyState === 1) {
-      const user = await User.findOne({ email: email.toLowerCase() });
-      
-      let shouldShow = false;
-      if (!user || !user.lastAdShowTime) {
-        shouldShow = true; // First time
-      } else {
-        const timeSinceLastAd = now - new Date(user.lastAdShowTime);
-        shouldShow = timeSinceLastAd >= AD_INTERVAL_MS;
-      }
-
-      if (shouldShow) {
-        await User.findOneAndUpdate(
-          { email: email.toLowerCase() },
-          { lastAdShowTime: now },
-          { upsert: true, new: true }
-        );
-      }
-
-      return res.json({
-        shouldShow,
-        sessionId: 'ad_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-        email: email.toLowerCase()
-      });
-    }
-
-    // Fallback to JSON file storage
-    const usersPath = path.join(DATA_DIR, 'users.json');
-    let users = [];
-    try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch (e) { users = []; }
-
-    const normalized = email.toLowerCase();
-    let user = users.find(u => (u.email || '').toLowerCase() === normalized);
+    const user = await User.findOne({ email: normalizedEmail });
     
     let shouldShow = false;
-    if (!user) {
-      user = { id: 'u_' + Date.now(), uid: 'u_' + Date.now(), email: normalized, displayName: '', balance: 0, lastAdShowTime: now.toISOString() };
-      users.push(user);
-      shouldShow = true;
+    if (!user || !user.lastAdShowTime) {
+      shouldShow = true; // First time
     } else {
-      const lastShowTime = user.lastAdShowTime ? new Date(user.lastAdShowTime) : new Date(0);
-      const timeSinceLastAd = now - lastShowTime;
+      const timeSinceLastAd = now - new Date(user.lastAdShowTime);
       shouldShow = timeSinceLastAd >= AD_INTERVAL_MS;
-      if (shouldShow) {
-        user.lastAdShowTime = now.toISOString();
-      }
     }
 
     if (shouldShow) {
-      fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+      await User.findOneAndUpdate(
+        { email: normalizedEmail },
+        { lastAdShowTime: now },
+        { upsert: true, new: true }
+      );
     }
 
     return res.json({
       shouldShow,
       sessionId: 'ad_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-      email: normalized
+      email: normalizedEmail
     });
   } catch (err) {
     console.error('Error in /api/ad-check:', err);
@@ -300,74 +277,37 @@ app.get('/claim', authMiddleware, async (req, res) => {
     const rewardUsd = Number(process.env.TELEGRAM_CLAIM_REWARD_USD || 0.1);
     const rewardNaira = Math.round(rewardUsd * 1500);
 
-    let user = null;
-    if (mongoose.connection && mongoose.connection.readyState === 1) {
-      user = await User.findOne({
-        $or: [
-          { firebaseUid },
-          { uid: firebaseUid },
-          { id: firebaseUid },
-          ...(email ? [{ email }] : [])
-        ]
+    let user = await User.findOne({
+      $or: [
+        { firebaseUid },
+        { uid: firebaseUid },
+        { id: firebaseUid },
+        ...(email ? [{ email }] : [])
+      ]
+    });
+
+    if (!user) {
+      user = await User.create({
+        firebaseUid,
+        email: email || `${firebaseUid}@telegram.local`,
+        username: req.user.name || req.user.email || 'Telegram User',
+        displayName: req.user.name || req.user.email || 'Telegram User',
+        balance: rewardUsd,
+        totalEarned: rewardUsd,
+        coins: rewardNaira,
+        status: 'active'
       });
-
-      if (!user) {
-        user = await User.create({
-          firebaseUid,
-          email: email || `${firebaseUid}@telegram.local`,
-          username: req.user.name || req.user.email || 'Telegram User',
-          displayName: req.user.name || req.user.email || 'Telegram User',
-          balance: rewardUsd,
-          totalEarned: rewardUsd,
-          coins: rewardNaira,
-          status: 'active'
-        });
-      } else {
-        user.balance = Number(user.balance || 0) + rewardUsd;
-        user.totalEarned = Number(user.totalEarned || 0) + rewardUsd;
-        user.coins = Number(user.coins || 0) + rewardNaira;
-        if (email && !user.email) user.email = email;
-        await user.save();
-      }
     } else {
-      const usersPath = path.join(DATA_DIR, 'users.json');
-      let users = []; try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
-
-      user = users.find(u =>
-        (u.firebaseUid && String(u.firebaseUid) === String(firebaseUid)) ||
-        (u.uid && String(u.uid) === String(firebaseUid)) ||
-        (u.id && String(u.id) === String(firebaseUid)) ||
-        (email && (u.email || '').toLowerCase() === email)
-      );
-
-      if (!user) {
-        user = {
-          id: firebaseUid,
-          uid: firebaseUid,
-          firebaseUid,
-          email: email || `${firebaseUid}@telegram.local`,
-          displayName: req.user.name || req.user.email || 'Telegram User',
-          username: req.user.name || req.user.email || 'Telegram User',
-          balance: rewardUsd,
-          totalEarned: rewardUsd,
-          coins: rewardNaira,
-          status: 'active',
-          createdAt: new Date().toISOString()
-        };
-        users.unshift(user);
-      } else {
-        user.balance = Number(user.balance || 0) + rewardUsd;
-        user.totalEarned = Number(user.totalEarned || 0) + rewardUsd;
-        user.coins = Number(user.coins || 0) + rewardNaira;
-        if (email && !user.email) user.email = email;
-      }
-      fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+      user.balance = Number(user.balance || 0) + rewardUsd;
+      user.totalEarned = Number(user.totalEarned || 0) + rewardUsd;
+      user.coins = Number(user.coins || 0) + rewardNaira;
+      if (email && !user.email) user.email = email;
+      await user.save();
     }
 
-    const transactionsPath = path.join(DATA_DIR, 'transactions.json');
-    let transactions = []; try { transactions = JSON.parse(fs.readFileSync(transactionsPath, 'utf8') || '[]'); } catch (e) { transactions = []; }
-    transactions.unshift({
-      id: `telegram_${Date.now()}`,
+    // Records transaction in MongoDB
+    const transactionsColl = mongoNative.getTransactionsCollection();
+    await transactionsColl.insertOne({
       userId: firebaseUid,
       email: email || null,
       type: 'telegram_bonus',
@@ -375,13 +315,10 @@ app.get('/claim', authMiddleware, async (req, res) => {
       title: 'Telegram Channel Bonus',
       amountUsd: rewardUsd,
       amountNaira: rewardNaira,
-      date: new Date().toISOString()
+      createdAt: new Date()
     });
-    fs.writeFileSync(transactionsPath, JSON.stringify(transactions, null, 2));
 
-    return res.json({
-      ok: true
-    });
+    return res.json({ ok: true });
   } catch (error) {
     console.error('Error claiming Telegram reward:', error);
     return res.status(500).json({ error: 'Internal server error' });
@@ -400,67 +337,47 @@ app.get('/postback/cpx', async (req, res) => {
   }
 
   if (status === '1') {
-    // Completed - credit earnings
+    // Completed - credit earnings (MongoDB only)
     const amountUsd = parseFloat(amount_usd || 0);
     const amountNaira = Math.round(amountUsd * 1500);
-
-    const transactions = loadTransactions();
-    const newTx = {
-      id: trans_id,
-      userId: user_id,
-      type: 'survey',
-      source: 'cpx',
-      title: 'CPX Survey Completed',
-      amountUsd: amountUsd,
-      amountNaira: amountNaira,
-      date: new Date().toISOString(),
-      cpxTransId: trans_id
-    };
-
-    transactions.unshift(newTx);
-    saveTransactions(transactions);
-
-    // Track this trans_id
-    tracking.push({
-      trans_id: trans_id,
-      user_id: user_id,
-      amount_usd: amountUsd,
-      status: 'completed',
-      date: new Date().toISOString()
-    });
-    saveCpxTracking(tracking);
-
-    console.log(`✅ Credited ₦${amountNaira} ($${amountUsd}) to user ${user_id} for CPX survey`);
-  } else if (status === '2') {
-    // Reversed - remove earnings
-    const amountUsd = parseFloat(amount_usd || 0);
-    const amountNaira = Math.round(amountUsd * 1500);
-
-    const transactions = loadTransactions();
-    const reversal = {
-      id: trans_id + '_reversed',
-      userId: user_id,
-      type: 'survey_reversal',
-      source: 'cpx',
-      title: 'CPX Survey Reversed',
-      amountUsd: -amountUsd,
-      amountNaira: -amountNaira,
-      date: new Date().toISOString(),
-      cpxTransId: trans_id
-    };
-
-    transactions.unshift(reversal);
-    saveTransactions(transactions);
-
-    // Track reversal
-    const idx = tracking.findIndex(t => t.trans_id === trans_id);
-    if (idx !== -1) {
-      tracking[idx].status = 'reversed';
-      tracking[idx].reversedAt = new Date().toISOString();
+    try {
+      const txColl = mongoNative.getTransactionsCollection();
+      await txColl.insertOne({
+        id: trans_id,
+        userId: user_id,
+        type: 'survey',
+        source: 'cpx',
+        title: 'CPX Survey Completed',
+        amountUsd: amountUsd,
+        amountNaira: amountNaira,
+        createdAt: new Date(),
+        cpxTransId: trans_id
+      });
+      console.log(`✅ Credited ₦${amountNaira} ($${amountUsd}) to user ${user_id} for CPX survey`);
+    } catch (err) {
+      console.error('CPX transaction failed:', err.message);
     }
-    saveCpxTracking(tracking);
-
-    console.log(`⚠️ Reversed ₦${amountNaira} ($${amountUsd}) from user ${user_id}`);
+  } else if (status === '2') {
+    // Reversed - remove earnings (MongoDB only)
+    const amountUsd = parseFloat(amount_usd || 0);
+    const amountNaira = Math.round(amountUsd * 1500);
+    try {
+      const txColl = mongoNative.getTransactionsCollection();
+      await txColl.insertOne({
+        id: trans_id + '_reversed',
+        userId: user_id,
+        type: 'survey_reversal',
+        source: 'cpx',
+        title: 'CPX Survey Reversed',
+        amountUsd: -amountUsd,
+        amountNaira: -amountNaira,
+        createdAt: new Date(),
+        cpxTransId: trans_id
+      });
+      console.log(`⚠️ Reversed ₦${amountNaira} ($${amountUsd}) from user ${user_id}`);
+    } catch (err) {
+      console.error('CPX reversal failed:', err.message);
+    }
   }
 
   // MUST return 'OK' or CPX will retry
@@ -507,50 +424,35 @@ app.get('/postback/cpagrip', async (req, res) => {
   }
 });
 
-// POST /cpagrip-postback - receive lightweight tracking beacons from client
-app.post('/cpagrip-postback', express.json(), (req, res) => {
+// POST /cpagrip-postback - receive lightweight tracking beacons from client (MongoDB only)
+app.post('/cpagrip-postback', express.json(), async (req, res) => {
   try {
     const payload = req.body || {};
     const userId = payload.userId || payload.user_id || null;
     const email = payload.email || null;
     const extUrl = payload.extUrl || null;
 
-    // Save/update user email in data/users.json
-    try {
-      const usersPath = path.join(DATA_DIR, 'users.json');
-      let users = [];
-      try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8')); } catch (e) { users = []; }
-
-      let user = null;
-      if (userId) user = users.find(u => u.id === userId || u.uid === userId);
-      if (!user && email) user = users.find(u => (u.email || '').toLowerCase() === (email || '').toLowerCase());
-
-      if (user) {
-        if (email && !user.email) {
-          user.email = email;
-          fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-          console.log('Updated user email for', userId || email);
-        }
-      } else if (userId || email) {
-        const newUser = { id: userId || ('u_' + Date.now()), uid: userId || ('u_' + Date.now()), email: email || '', displayName: '' };
-        users.push(newUser);
-        fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-        console.log('Created new user record from cpagrip beacon', newUser.id);
-      }
-    } catch (e) {
-      console.error('Failed to update users.json from cpagrip beacon', e);
+    // Save/update user email in MongoDB
+    if (email || userId) {
+      const usersColl = mongoNative.getUsersCollection();
+      await usersColl.updateOne(
+        email ? { email: email.toLowerCase() } : { _id: userId },
+        { $set: { ...(email && { email: email.toLowerCase() }), lastSeenAt: new Date() } },
+        { upsert: true }
+      );
     }
 
-    // Optionally, record a lightweight tracking transaction
-    try {
-      const txPath = path.join(DATA_DIR, 'transactions.json');
-      let txs = [];
-      try { txs = JSON.parse(fs.readFileSync(txPath, 'utf8')); } catch (e) { txs = []; }
-      const tx = { id: 'cpagrip_' + Date.now(), userId: userId || null, type: 'cpagrip_click', source: 'cpagrip', meta: { extUrl }, date: new Date().toISOString() };
-      txs.unshift(tx);
-      fs.writeFileSync(txPath, JSON.stringify(txs, null, 2));
-    } catch (e) {
-      console.error('Failed to write cpagrip transaction', e);
+    // Record lightweight tracking transaction in MongoDB
+    if (userId || email) {
+      const txColl = mongoNative.getTransactionsCollection();
+      await txColl.insertOne({
+        userId: userId || null,
+        email: email ? email.toLowerCase() : null,
+        type: 'cpagrip_click',
+        source: 'cpagrip',
+        meta: { extUrl },
+        createdAt: new Date()
+      });
     }
 
     res.json({ ok: true });
@@ -560,10 +462,10 @@ app.post('/cpagrip-postback', express.json(), (req, res) => {
   }
 });
 
-// CREDIT USER FOR WATCHING AD - 5 PER DAY LIMIT + COOKIE CHECK
+// CREDIT USER FOR WATCHING AD - 5 PER DAY LIMIT + COOKIE CHECK (MongoDB only)
 app.post('/api/credit-ad', async (req, res) => {
   const { email } = req.body;
-  const userCookie = req.signedCookies && req.signedCookies.adWatch; // signed cookie check
+  const userCookie = req.signedCookies && req.signedCookies.adWatch;
   const userIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
   if (!email) return res.status(400).json({ error: 'Email required' });
@@ -582,64 +484,36 @@ app.post('/api/credit-ad', async (req, res) => {
       }
     }
 
-    // Find user in Mongo if available
-    let user = null;
-    if (mongoose.connection && mongoose.connection.readyState === 1) {
-      user = await User.findOne({ email: (email || '').toLowerCase() });
-    } else {
-      // fallback to JSON file users
-      const usersPath = path.join(DATA_DIR, 'users.json');
-      try { const users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); user = users.find(u => (u.email || '').toLowerCase() === (email || '').toLowerCase()); } catch (e) { user = null; }
-    }
+    // 2. Find user in MongoDB
+    const normalizedEmail = (email || '').toLowerCase();
+    let user = await User.findOne({ email: normalizedEmail });
 
-    // 2. 1min cooldown (use 30min threshold from original code)
+    // 3. 30min cooldown between ads
     if (user && user.lastAd && new Date(user.lastAd) > thirtyMinAgo) {
-      return res.status(429).json({ error: 'Wait 1 minutes between ads' });
+      return res.status(429).json({ error: 'Wait 30 minutes between ads' });
     }
 
-    // 3. DAILY RESET
+    // 4. DAILY RESET
     let adsWatchedToday = user?.adsWatchedToday || 0;
     let lastReset = user?.lastReset ? new Date(user.lastReset) : new Date(0);
     if (lastReset < today) adsWatchedToday = 0;
 
-    // 4. 5 PER DAY EMAIL LIMIT
+    // 5. 5 PER DAY EMAIL LIMIT
     if (adsWatchedToday >= 5) {
       return res.status(429).json({ error: 'Daily limit of 5 ads reached' });
     }
 
-    // 5. CREDIT USER (store balance in cents to avoid float issues)
-    let result = null;
-    if (mongoose.connection && mongoose.connection.readyState === 1) {
-      result = await User.findOneAndUpdate(
-        { email: (email || '').toLowerCase() },
-        {
-          $inc: { balance: 1, adsWatchedToday: 1 }, // 1 cent
-          $set: { lastAd: now.toISOString(), lastReset: today.toISOString().split('T')[0], lastIP: userIP }
-        },
-        { upsert: true, returnDocument: 'after' }
-      );
-    } else {
-      // update JSON fallback
-      const usersPath = path.join(DATA_DIR, 'users.json');
-      let users = [];
-      try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
-      const normalized = (email || '').toLowerCase();
-      let u = users.find(u => (u.email || '').toLowerCase() === normalized);
-      if (!u) {
-        u = { id: 'u_' + Date.now(), uid: 'u_' + Date.now(), email: normalized, displayName: '', balance: 1, adsWatchedToday: 1, lastAd: now.toISOString(), lastReset: today.toISOString().split('T')[0], lastIP: userIP };
-        users.push(u);
-      } else {
-        u.balance = (u.balance || 0) + 1;
-        u.adsWatchedToday = (u.adsWatchedToday || 0) + 1;
-        u.lastAd = now.toISOString();
-        u.lastReset = today.toISOString().split('T')[0];
-        u.lastIP = userIP;
-      }
-      fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
-      result = { value: u };
-    }
+    // 6. CREDIT USER
+    const result = await User.findOneAndUpdate(
+      { email: normalizedEmail },
+      {
+        $inc: { balance: 0.01, adsWatchedToday: 1 },
+        $set: { lastAd: now, lastReset: today, lastIP: userIP }
+      },
+      { upsert: true, returnDocument: 'after' }
+    );
 
-    // 6. SET COOKIE: 24hr expiry
+    // 7. SET COOKIE: 24hr expiry
     let newCookieCount = 1;
     if (userCookie) {
       try {
@@ -653,7 +527,7 @@ app.post('/api/credit-ad', async (req, res) => {
       count: newCookieCount,
       date: today.toISOString().split('T')[0]
     }), {
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 24 * 60 * 60 * 1000,
       httpOnly: true,
       sameSite: 'Lax',
       secure: true,
@@ -662,8 +536,8 @@ app.post('/api/credit-ad', async (req, res) => {
 
     res.json({
       success: true,
-      newBalance: ((result.value && result.value.balance) || 0) / 100,
-      adsLeft: 5 - ((result.value && result.value.adsWatchedToday) || 0),
+      newBalance: (result?.balance || 0),
+      adsLeft: 5 - ((result?.adsWatchedToday) || 0),
       cookieAdsLeft: 5 - newCookieCount
     });
   } catch (err) {
@@ -672,48 +546,48 @@ app.post('/api/credit-ad', async (req, res) => {
   }
 });
 
-// Auto-tag ad gate throttle: show once every 100 seconds per user/email
+// Auto-tag ad gate throttle: show once every 100 seconds per user/email (MongoDB only)
 const AUTO_TAG_INTERVAL_MS = 100000;
-const AUTO_TAG_PATH = path.join(DATA_DIR, 'auto-tag.json');
 
-function readAutoTagState() {
+app.get('/api/auto-tag/status', async (req, res) => {
   try {
-    const raw = fs.readFileSync(AUTO_TAG_PATH, 'utf8');
-    return JSON.parse(raw || '{}');
-  } catch (e) {
-    return {};
+    const email = (req.headers['x-user-email'] || req.body?.email || '').toString().trim().toLowerCase();
+    const key = email || ((req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').toString().split(',')[0].trim());
+    
+    if (!key) {
+      return res.json({ show: true });
+    }
+
+    const autoTagCollection = mongoNative.getCollection('auto_tag_throttle');
+    const record = await autoTagCollection.findOne({ key });
+    const now = Date.now();
+    const lastShown = record?.lastShown || 0;
+
+    res.json({
+      show: !lastShown || (now - lastShown >= AUTO_TAG_INTERVAL_MS)
+    });
+  } catch (err) {
+    console.error('Error in /api/auto-tag/status:', err);
+    res.json({ show: true }); // Fail open
   }
-}
-
-function writeAutoTagState(state) {
-  fs.writeFileSync(AUTO_TAG_PATH, JSON.stringify(state, null, 2));
-}
-
-function getAutoTagKey(req) {
-  const email = (req.headers['x-user-email'] || req.body?.email || '').toString().trim().toLowerCase();
-  if (email) return `email:${email}`;
-  const forwarded = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').toString();
-  const ip = forwarded.split(',')[0].trim() || 'unknown';
-  return `ip:${ip}`;
-}
-
-app.get('/api/auto-tag/status', (req, res) => {
-  const key = getAutoTagKey(req);
-  const now = Date.now();
-  const state = readAutoTagState();
-  const lastShown = Number(state[key] || 0);
-
-  res.json({
-    show: !lastShown || (now - lastShown >= AUTO_TAG_INTERVAL_MS)
-  });
 });
 
-app.post('/api/auto-tag/mark-shown', (req, res) => {
-  const key = getAutoTagKey(req);
-  const state = readAutoTagState();
-  state[key] = Date.now();
-  writeAutoTagState(state);
-  res.json({ ok: true });
+app.post('/api/auto-tag/mark-shown', async (req, res) => {
+  try {
+    const email = (req.headers['x-user-email'] || req.body?.email || '').toString().trim().toLowerCase();
+    const key = email || ((req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').toString().split(',')[0].trim());
+    
+    if (!key) {
+      return res.json({ ok: false });
+    }
+
+    const autoTagCollection = mongoNative.getCollection('auto_tag_throttle');
+    await autoTagCollection.updateOne({ key }, { $set: { lastShown: Date.now() } }, { upsert: true });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error in /api/auto-tag/mark-shown:', err);
+    res.status(500).json({ error: 'server error' });
+  }
 });
 
 // ✅ Middleware

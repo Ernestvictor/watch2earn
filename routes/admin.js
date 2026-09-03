@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-const User = require('../models/User');
+const User = require('../models/users');
 const Earning = require('../models/earning');
 const Message = require('../models/messeges');
 const Withdrawal = require('../models/withdrawal');
@@ -38,21 +38,26 @@ function safeObjectId(value) {
   return mongoose.Types.ObjectId.isValid(str) ? new mongoose.Types.ObjectId(str) : null;
 }
 
-function ensureDataFiles() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(TRANSACTIONS_PATH)) fs.writeFileSync(TRANSACTIONS_PATH, '[]');
-  if (!fs.existsSync(MESSAGES_PATH)) fs.writeFileSync(MESSAGES_PATH, '[]');
-  if (!fs.existsSync(PROMOTIONS_PATH)) fs.writeFileSync(PROMOTIONS_PATH, '[]');
+// Promotions are stored in MongoDB collection `promotions`.
+async function readPromotions() {
+  if (mongoNative && typeof mongoNative.getCollection === 'function') {
+    const col = mongoNative.getCollection('promotions');
+    return await col.find({}).sort({ createdAt: -1 }).toArray();
+  }
+  if (isMongooseReady()) {
+    try { const col = mongoose.connection.collection('promotions'); return await col.find({}).sort({ createdAt: -1 }).toArray(); } catch (e) { return []; }
+  }
+  throw new Error('MongoDB required: promotions storage migrated to MongoDB only');
 }
 
-function readPromotions() {
-  ensureDataFiles();
-  try { return JSON.parse(fs.readFileSync(PROMOTIONS_PATH, 'utf8') || '[]'); } catch (e) { return []; }
-}
-
-function writePromotions(items) {
-  ensureDataFiles();
-  fs.writeFileSync(PROMOTIONS_PATH, JSON.stringify(items, null, 2));
+async function writePromotions(items) {
+  if (!isMongooseReady() && !(mongoNative && typeof mongoNative.getCollection === 'function')) {
+    throw new Error('MongoDB required: promotions storage migrated to MongoDB only');
+  }
+  const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('promotions') : mongoose.connection.collection('promotions');
+  // replace collection with new items (simple approach)
+  await col.deleteMany({});
+  if (Array.isArray(items) && items.length) await col.insertMany(items.map(i => ({ ...i, createdAt: i.createdAt || new Date() })));
 }
 
 async function recordPromotionLog({ userId, email, code, status, method, adminEmail }) {
@@ -81,13 +86,11 @@ async function recordPromotionLog({ userId, email, code, status, method, adminEm
 }
 
 function readJson(file) {
-  ensureDataFiles();
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  throw new Error('File-based JSON storage is deprecated. Use MongoDB collections instead.');
 }
 
 function writeJson(file, data) {
-  ensureDataFiles();
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  throw new Error('File-based JSON storage is deprecated. Use MongoDB collections instead.');
 }
 
 function isMongooseReady() {
@@ -95,6 +98,12 @@ function isMongooseReady() {
     return mongoose && mongoose.connection && mongoose.connection.readyState === 1;
   } catch (e) { return false; }
 }
+
+// Enforce MongoDB-only for admin routes — no file fallbacks.
+router.use((req, res, next) => {
+  if (isMongooseReady() || (mongoNative && typeof mongoNative.getCollection === 'function')) return next();
+  return res.status(503).json({ error: 'MongoDB required for admin routes' });
+});
 
 function resolveUserFindQuery(id, email) {
   const cleanId = typeof id === 'string' ? id.trim() : id;
@@ -179,9 +188,7 @@ async function readUserRecords() {
   if (isMongooseReady()) {
     return await User.find({}).lean();
   }
-
-  const usersPath = path.join(DATA_DIR, 'users.json');
-  try { return JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { return []; }
+  throw new Error('MongoDB required: user records migrated to MongoDB only');
 }
 
 router.get('/inbox', verifyAdminToken, async (req, res) => {
@@ -192,15 +199,22 @@ router.get('/inbox', verifyAdminToken, async (req, res) => {
         // Use Message model (user messages) and also admin_messages collection for admin inbox
         const userMessages = await Message.find({}).sort({ createdAt: -1 }).limit(500).lean();
         inboxMessages = (userMessages || []).map(m => ({ id: m._id?.toString?.() || m.id, from: m.from || m.userId || null, message: m.message || '', type: m.type || 'user_message', createdAt: m.createdAt || m.createdAt }));
+        try {
+          const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
+          const adminMsgs = await col.find({}).sort({ createdAt: -1 }).limit(500).toArray();
+          inboxMessages = inboxMessages.concat((adminMsgs || []).map(m => ({ id: m._id?.toString?.() || m.id, from: m.from || m.userId || null, message: m.message || '', type: m.type || 'admin_message', createdAt: m.createdAt }))).slice(0,500);
+        } catch (e) { /* silent */ }
       } catch (e) {
-        inboxMessages = readJson(MESSAGES_PATH).filter(Boolean);
+          console.error('Inbox fetch error (mongo):', e && e.message);
+          return res.status(503).json({ error: 'MongoDB required for admin inbox' });
+        }
+      } else {
+        return res.status(503).json({ error: 'MongoDB required for admin inbox' });
       }
-    } else {
-      inboxMessages = readJson(MESSAGES_PATH).filter(Boolean);
-    }
 
-    const users = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]'); } catch { return []; } })();
-    const withdrawals = (() => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'withdrawals.json'), 'utf8') || '[]'); } catch { return []; } })();
+    if (!isMongooseReady()) return res.status(503).json({ error: 'MongoDB required for admin inbox' });
+    const users = await User.find({}).sort({ createdAt: -1 }).limit(50).lean();
+    const withdrawals = await Withdrawal.find({}).sort({ createdAt: -1 }).limit(50).lean();
 
     const help = inboxMessages.filter(m => m.type === 'help' || m.type === 'system' || m.type === 'user_message' || !m.type);
     const alerts = inboxMessages.filter(m => m.type === 'alert' || m.type === 'warning');
@@ -364,12 +378,18 @@ router.post('/inbox/update-status', async (req, res) => {
     const status = String(body.status || '').trim();
     if (!id || !status) return res.status(400).json({ error: 'id and status required' });
 
-    const items = readJson(MESSAGES_PATH);
-    const idx = items.findIndex(m => String(m.id) === id || String(m._id) === id);
-    if (idx === -1) return res.status(404).json({ error: 'Message not found' });
-    items[idx].status = status;
-    fs.writeFileSync(MESSAGES_PATH, JSON.stringify(items, null, 2));
-    return res.json({ ok: true, item: items[idx] });
+    if (isMongooseReady()) {
+      try {
+        const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
+        const filter = { $or: [ { id }, { _id: safeObjectId(id) } ] };
+        const doc = await col.findOne(filter);
+        if (!doc) return res.status(404).json({ error: 'Message not found' });
+        await col.updateOne(filter, { $set: { status } });
+        const updated = await col.findOne(filter);
+        return res.json({ ok: true, item: updated });
+      } catch (e) { console.warn('Mongo update-status failed:', e && e.message); }
+    }
+    return res.status(503).json({ error: 'MongoDB required to update message status' });
   } catch (error) {
     console.error('Update inbox status error:', error);
     return res.status(500).json({ error: 'Failed to update status' });
@@ -390,14 +410,7 @@ router.post('/reply-message/:id', async (req, res) => {
       await col.updateOne({ _id: doc._id }, { $set: { replies } });
       return res.json({ ok: true, message: { ...doc, replies } });
     }
-
-    const items = readJson(MESSAGES_PATH);
-    const match = items.find(m => String(m.id) === String(id));
-    if (!match) return res.status(404).json({ error: 'Message not found' });
-    match.replies = match.replies || [];
-    match.replies.push({ reply: body.reply || '', by: 'admin', date: new Date().toISOString() });
-    fs.writeFileSync(MESSAGES_PATH, JSON.stringify(items, null, 2));
-    return res.json({ ok: true, message: match });
+    return res.status(503).json({ error: 'MongoDB required to reply to messages' });
   } catch (error) {
     console.error('Reply-message error:', error);
     return res.status(500).json({ error: 'Failed to reply' });
@@ -653,15 +666,15 @@ router.post('/messages', async (req, res) => {
 router.delete('/messages/:id', async (req, res) => {
   try {
     const id = req.params.id;
-    if (isMongooseReady()) {
-      try {
-        const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
-        await col.deleteOne({ $or: [{ id: id }, { _id: safeObjectId(id) }] });
-      } catch (e) { console.warn('Admin message Mongo delete failed:', e && e.message); }
+    if (!isMongooseReady()) return res.status(503).json({ error: 'MongoDB required to delete admin messages' });
+    try {
+      const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
+      await col.deleteOne({ $or: [{ id: id }, { _id: safeObjectId(id) }] });
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error('Admin message delete failed:', e && e.message);
+      return res.status(500).json({ error: 'Failed to delete message' });
     }
-    const items = readJson(MESSAGES_PATH).filter(Boolean).filter(m => String(m.id) !== String(id));
-    writeJson(MESSAGES_PATH, items);
-    return res.json({ ok: true });
   } catch (e) { console.error('Delete message error:', e); return res.status(500).json({ error: 'Failed to delete message' }); }
 });
 
@@ -671,61 +684,62 @@ router.post('/incoming-email', express.json(), async (req, res) => {
     const { from, subject, text, html } = req.body || {};
     const entry = { id: Date.now().toString(), from: from || 'unknown', title: subject || 'Email', message: text || (html || ''), type: 'email', createdAt: new Date().toISOString() };
 
-    if (isMongooseReady()) {
-      try {
-        const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
-        await col.insertOne(entry);
-      } catch (e) { console.warn('Incoming email Mongo insert failed:', e && e.message); }
-    }
-
-    const items = readJson(MESSAGES_PATH);
-    items.unshift(entry);
-    writeJson(MESSAGES_PATH, items.slice(0, 500));
-    // Optionally forward into SMTP inbox
-    await forwardInboxEmail({ from, subject, text, html });
-    return res.json({ ok: true, entry });
+    if (!isMongooseReady()) return res.status(503).json({ error: 'MongoDB required to store incoming emails' });
+    try {
+      const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
+      await col.insertOne(entry);
+      // Optionally forward into SMTP inbox
+      await forwardInboxEmail({ from, subject, text, html });
+      return res.json({ ok: true, entry });
+    } catch (e) { console.error('Incoming email error (mongo):', e && e.message); return res.status(500).json({ error: 'Failed to process incoming email' }); }
   } catch (e) { console.error('Incoming email error:', e); return res.status(500).json({ error: 'Failed to process incoming email' }); }
 });
 
-// Appeals: users submit appeals when suspended
-const APPEALS_PATH = path.join(DATA_DIR, 'appeals.json');
-function readAppeals() { try { if (!fs.existsSync(APPEALS_PATH)) fs.writeFileSync(APPEALS_PATH, '[]'); return JSON.parse(fs.readFileSync(APPEALS_PATH,'utf8')||'[]'); } catch(e){ return []; } }
-function writeAppeals(arr){ fs.writeFileSync(APPEALS_PATH, JSON.stringify(arr, null, 2)); }
+// Appeals: store in MongoDB `Appeal` collection and mirror to admin messages for backward compatibility
+const Appeal = require('../models/appeal');
 
 router.post('/appeals', async (req, res) => {
   try {
     const body = req.body || {};
-    const appeals = readAppeals();
-    const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2,6);
-    const entry = { id, userId: body.userId || null, email: body.email || null, description: body.description || '', status: 'under_review', createdAt: new Date().toISOString() };
-    appeals.unshift(entry);
-    writeAppeals(appeals);
-    // Also add to messages.json so admin sees it in inbox
-    const messages = readJson(MESSAGES_PATH);
-    messages.unshift({ id: 'appeal-' + id, userId: entry.userId, message: entry.description, type: 'appeal', createdAt: entry.createdAt });
-    writeJson(MESSAGES_PATH, messages);
+    const entry = await Appeal.create({ userId: body.userId || null, firebaseUid: body.firebaseUid || null, email: body.email || null, message: body.description || body.message || '', status: 'under_review' });
+
+    // Add to admin messages collection (and file for compatibility)
+    try {
+      const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
+      const msg = { id: 'appeal-' + (entry._id?.toString?.() || Date.now().toString()), userId: entry.userId, message: entry.message, type: 'appeal', createdAt: entry.createdAt };
+      await col.insertOne(msg);
+      const messages = readJson(MESSAGES_PATH);
+      messages.unshift(msg);
+      writeJson(MESSAGES_PATH, messages.slice(0, 500));
+    } catch (e) {
+      console.warn('Failed to mirror appeal to admin messages:', e && e.message);
+    }
+
     return res.json({ ok: true, appeal: entry });
   } catch (e) { console.error('Appeal error:', e); return res.status(500).json({ error: 'Failed to submit appeal' }); }
 });
 
-router.get('/appeals', async (req, res) => { try { return res.json(readAppeals()); } catch (e) { return res.status(500).json({ error: 'Failed to read appeals' }); } });
+router.get('/appeals', async (req, res) => {
+  try {
+    const items = await Appeal.find({}).sort({ createdAt: -1 }).limit(1000).lean();
+    return res.json(items);
+  } catch (e) { console.error('Read appeals failed:', e); return res.status(500).json({ error: 'Failed to read appeals' }); }
+});
 
 router.put('/appeals/:id', async (req, res) => {
   try {
     const id = req.params.id;
     const body = req.body || {};
-    const appeals = readAppeals();
-    const idx = appeals.findIndex(a => String(a.id) === String(id));
-    if (idx === -1) return res.status(404).json({ error: 'Appeal not found' });
-    appeals[idx] = { ...appeals[idx], ...body, updatedAt: new Date().toISOString() };
-    writeAppeals(appeals);
-    return res.json({ ok: true, appeal: appeals[idx] });
+    const updated = await Appeal.findOneAndUpdate({ _id: id }, { $set: body }, { new: true });
+    if (!updated) return res.status(404).json({ error: 'Appeal not found' });
+    return res.json({ ok: true, appeal: updated });
   } catch (e) { console.error('Update appeal error:', e); return res.status(500).json({ error: 'Failed to update appeal' }); }
 });
 
 router.get('/withdrawals', async (req, res) => {
   try {
-    const data = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'withdrawals.json'), 'utf8') || '[]');
+    if (!isMongooseReady()) return res.status(503).json({ error: 'MongoDB required' });
+    const data = await Withdrawal.find({}).sort({ createdAt: -1 }).limit(1000).lean();
     res.json(data);
   } catch (e) { res.status(500).json({ error: 'Failed to read withdrawals' }); }
 });
@@ -754,37 +768,20 @@ router.get('/history', async (req, res) => {
       }
     }
     
-    // Always check and merge file-based transactions
+    if (!isMongooseReady()) return res.status(503).json({ error: 'MongoDB required' });
+
+    // If native transactions collection is available, include those too
     try {
-      const fileTx = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transactions.json'), 'utf8') || '[]');
-      const fileTxFormatted = (fileTx || []).map(t => ({
-        id: t.id,
-        userId: t.userId || t.firebaseUid,
-        type: t.type || 'other',
-        amount: t.amountNaira || t.amount || 0,
-        amountUsd: t.amountUsd || t.amount || 0,
-        date: t.date || t.createdAt,
-        createdAt: t.date || t.createdAt,
-        title: t.title || `${t.type} earned`,
-        source: t.source || 'file'
-      }));
-      
-      // Merge: keep Mongo records, add file records if not already present
-      const ids = new Set(tx.map(t => t.id));
-      fileTxFormatted.forEach(ft => {
-        if (!ids.has(ft.id)) {
-          tx.push(ft);
-          ids.add(ft.id);
-        }
-      });
+      const txCol = (mongoNative && typeof mongoNative.getTransactionsCollection === 'function') ? mongoNative.getTransactionsCollection() : null;
+      let nativeTx = [];
+      if (txCol) nativeTx = await txCol.find({}).sort({ date: -1 }).limit(2000).toArray();
+      const merged = tx.concat((nativeTx || []).map(t => ({ id: t._id?.toString?.() || t.id, userId: t.userId || t.firebaseUid, type: t.type || 'txn', amount: t.amountNaira || t.amount || 0, amountUsd: t.amountUsd || 0, date: t.date || t.createdAt, createdAt: t.date || t.createdAt, title: t.title || t.description || '', source: t.source || 'mongo' })));
+      merged.sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+      return res.json(merged.slice(0, 1000));
     } catch (e) {
-      console.warn('File transaction fetch failed:', e && e.message);
+      console.error('Failed to merge transactions:', e && e.message);
+      return res.json(tx.slice(0, 1000));
     }
-    
-    // Sort merged result by date descending
-    tx.sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
-    
-    return res.json(tx.slice(0, 1000));
   } catch (e) { 
     console.error('History fetch error:', e);
     res.status(500).json({ error: 'Failed to read history' }); 
@@ -822,20 +819,7 @@ router.get('/dashboard', async (req, res) => {
       return res.json({ totalBalance, profit, userProfit, users: totalUsers, withdrawals: pendingWithdrawals, revenue: userProfit, activity });
     }
 
-    // Fallback to file-based metrics
-    const users = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'users.json'), 'utf8') || '[]');
-    const tx = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'transactions.json'), 'utf8') || '[]');
-    const wd = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'withdrawals.json'), 'utf8') || '[]');
-
-    const totalUsers = users.length;
-    const totalBalance = users.reduce((s,u) => s + Number(u.wallet || u.balance || 0), 0);
-    const userProfit = tx.reduce((s,t) => s + Number(t.amount || t.amountUsd || 0), 0);
-    const withdrawnSum = wd.filter(w => w.status && String(w.status).toLowerCase().includes('approv')).reduce((s,w) => s + Number(w.amount||0), 0);
-    const profit = Math.max(0, userProfit - withdrawnSum);
-    const pendingWithdrawals = wd.filter(w => String(w.status || '').toLowerCase().includes('pend')).length;
-    const recentActivity = tx.slice(0,8).map(t => `${t.type || 'txn'}: ${t.amount || t.amountUsd || 0}`);
-
-    return res.json({ totalBalance, profit, userProfit, users: totalUsers, withdrawals: pendingWithdrawals, revenue: userProfit, activity: recentActivity });
+    return res.status(503).json({ error: 'MongoDB required for dashboard metrics' });
   } catch (e) { res.status(500).json({ error: 'Failed to compute dashboard' }); }
 });
 

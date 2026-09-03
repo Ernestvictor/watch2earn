@@ -1,235 +1,211 @@
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
 const mongoose = require('mongoose');
-const User = require('../models/User');
+const User = require('../models/users');
 const Earning = require('../models/earning');
 const History = require('../models/history');
 const Message = require('../models/messeges');
+const mongoNative = require('../mongodb');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const verifyToken = require('../middleware/auth');
-
-const ADS_PATH = path.join(__dirname, '..', 'ads.json');
-const TXN_PATH = path.join(__dirname, '..', 'data', 'transactions.json');
-const USERS_PATH = path.join(__dirname, '..', 'data', 'users.json');
-const DATA_DIR = path.join(__dirname, '..', 'data');
-
-function ensureAdsFile(){
-  try{ fs.mkdirSync(path.dirname(ADS_PATH), { recursive: true }); }catch(e){}
-  if(!fs.existsSync(ADS_PATH)) fs.writeFileSync(ADS_PATH, '[]');
-}
-
-function ensureFiles() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(TXN_PATH)) fs.writeFileSync(TXN_PATH, '[]');
-  if (!fs.existsSync(USERS_PATH)) fs.writeFileSync(USERS_PATH, '[]');
-}
-
-function loadTransactions() {
-  ensureFiles();
-  try { return JSON.parse(fs.readFileSync(TXN_PATH, 'utf8')); } catch (e) { return []; }
-}
-
-function saveTransactions(items) {
-  ensureFiles();
-  fs.writeFileSync(TXN_PATH, JSON.stringify(items, null, 2));
-}
-
-function loadUsers() {
-  ensureFiles();
-  try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf8')); } catch (e) { return []; }
-}
-
-function saveUsers(items) {
-  ensureFiles();
-  fs.writeFileSync(USERS_PATH, JSON.stringify(items, null, 2));
-}
-
-function isToday(value) {
-  const date = new Date(value);
-  const today = new Date();
-  return date.toDateString() === today.toDateString();
-}
 
 function isMongooseReady() {
   try { return mongoose && mongoose.connection && mongoose.connection.readyState === 1; } catch (e) { return false; }
 }
 
-// public: list ads
-router.get('/', (req,res)=>{
-  ensureAdsFile();
-  try{ const data = JSON.parse(fs.readFileSync(ADS_PATH,'utf8')||'[]'); res.json(data); }
-  catch(e){ res.json([]); }
+// public: list ads from MongoDB
+router.get('/', async (req, res) => {
+  try {
+    const adsCollection = mongoNative.getCollection('ads');
+    const ads = await adsCollection.find({}).sort({ createdAt: -1 }).toArray();
+    res.json(ads || []);
+  } catch (err) {
+    console.error('Error fetching ads:', err);
+    res.json([]);
+  }
 });
 
-// admin: create ad
-router.post('/', auth, (req,res)=>{
-  ensureAdsFile();
-  const { id, title, seconds, type } = req.body;
-  const ads = JSON.parse(fs.readFileSync(ADS_PATH,'utf8')||'[]');
-  const ad = { id: id || ('ad_' + Date.now()), title: title || 'Untitled', seconds: Number(seconds) || 15, type: type || 'ad' };
-  ads.unshift(ad);
-  fs.writeFileSync(ADS_PATH, JSON.stringify(ads, null, 2));
-  res.json(ad);
+// admin: create ad in MongoDB
+router.post('/', auth, async (req, res) => {
+  try {
+    const { id, title, seconds, type } = req.body;
+    const adsCollection = mongoNative.getCollection('ads');
+    const ad = { 
+      id: id || ('ad_' + Date.now()), 
+      title: title || 'Untitled', 
+      seconds: Number(seconds) || 15, 
+      type: type || 'ad',
+      createdAt: new Date()
+    };
+    const result = await adsCollection.insertOne(ad);
+    res.json({ ...ad, _id: result.insertedId });
+  } catch (err) {
+    console.error('Error creating ad:', err);
+    res.status(500).json({ error: 'Failed to create ad' });
+  }
 });
 
-// admin: update ad
-router.put('/:id', auth, (req,res)=>{
-  ensureAdsFile();
-  const ads = JSON.parse(fs.readFileSync(ADS_PATH,'utf8')||'[]');
-  const idx = ads.findIndex(a=>a.id === req.params.id);
-  if(idx === -1) return res.status(404).send('Not found');
-  const updated = Object.assign(ads[idx], req.body);
-  ads[idx] = updated;
-  fs.writeFileSync(ADS_PATH, JSON.stringify(ads, null, 2));
-  res.json(updated);
+// admin: update ad in MongoDB
+router.put('/:id', auth, async (req, res) => {
+  try {
+    const adsCollection = mongoNative.getCollection('ads');
+    const result = await adsCollection.findOneAndUpdate(
+      { id: req.params.id },
+      { $set: { ...req.body, updatedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+    if (!result.value) return res.status(404).json({ error: 'Ad not found' });
+    res.json(result.value);
+  } catch (err) {
+    console.error('Error updating ad:', err);
+    res.status(500).json({ error: 'Failed to update ad' });
+  }
 });
 
-// admin: delete ad
-router.delete('/:id', auth, (req,res)=>{
-  ensureAdsFile();
-  let ads = JSON.parse(fs.readFileSync(ADS_PATH,'utf8')||'[]');
-  const before = ads.length;
-  ads = ads.filter(a=>a.id !== req.params.id);
-  fs.writeFileSync(ADS_PATH, JSON.stringify(ads, null, 2));
-  res.json({ deleted: before - ads.length });
+// admin: delete ad from MongoDB
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const adsCollection = mongoNative.getCollection('ads');
+    const result = await adsCollection.deleteOne({ id: req.params.id });
+    res.json({ deleted: result.deletedCount });
+  } catch (err) {
+    console.error('Error deleting ad:', err);
+    res.status(500).json({ error: 'Failed to delete ad' });
+  }
 });
 
-// POST /api/ads/watch - Watch an ad and earn money based on duration
-// Body: { adDuration: number (seconds) }
-router.post('/watch', verifyToken, (req, res) => {
-  const { adDuration, adId } = req.body;
-  const userId = req.user.uid || req.user.id;
-  
-  if (!adDuration || typeof adDuration !== 'number') {
-    return res.status(400).json({ error: 'Invalid ad duration' });
-  }
+// POST /api/ads/watch - Watch an ad and earn money based on duration (MongoDB only)
+router.post('/watch', verifyToken, async (req, res) => {
+  try {
+    const { adDuration, adId } = req.body;
+    const userId = req.user.uid || req.user.id;
+    const email = req.user.email;
+    
+    if (!adDuration || typeof adDuration !== 'number') {
+      return res.status(400).json({ error: 'Invalid ad duration' });
+    }
 
-  if (!adId || typeof adId !== 'string') {
-    return res.status(400).json({ error: 'Ad ID is required' });
-  }
+    if (!adId || typeof adId !== 'string') {
+      return res.status(400).json({ error: 'Ad ID is required' });
+    }
 
-  // Check daily ad limit (5 ads per day)
-  const transactions = loadTransactions();
-  const todaysAds = transactions.filter(t =>
-    t.userId === userId && t.type === 'ad_watch' && isToday(t.date)
-  );
+    // Check daily ad limit (5 ads per day)
+    const txColl = mongoNative.getTransactionsCollection();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todaysAds = await txColl.find({
+      userId,
+      type: 'ad_watch',
+      createdAt: { $gte: today }
+    }).toArray();
 
-  if (todaysAds.length >= 5) {
-    return res.status(403).json({
-      error: 'Daily ad limit reached (5/day)',
-      message: 'You can watch 5 ads per day. Limit resets at 12:00 AM tomorrow',
-      adsToday: 5,
-      remaining: 0
-    });
-  }
+    if (todaysAds.length >= 5) {
+      return res.status(403).json({
+        error: 'Daily ad limit reached (5/day)',
+        message: 'You can watch 5 ads per day. Limit resets at 12:00 AM tomorrow',
+        adsToday: 5,
+        remaining: 0
+      });
+    }
 
-  // Check if ad is 15+ seconds to approve payment
-  let payment = 0; // in NGN
-  if (adDuration >= 15) {
-    payment = 2.00; // 2.00 NGN for watching 15+ second ad
-  } else {
-    return res.status(400).json({
-      error: 'Ad too short',
-      message: 'Video must be at least 15 seconds for payment',
-      minDuration: 15,
-      yourDuration: adDuration
-    });
-  }
+    // Check if ad is 15+ seconds to approve payment
+    let payment = 0; // in NGN
+    if (adDuration >= 15) {
+      payment = 2.00; // 2.00 NGN for watching 15+ second ad
+    } else {
+      return res.status(400).json({
+        error: 'Ad too short',
+        message: 'Video must be at least 15 seconds for payment',
+        minDuration: 15,
+        yourDuration: adDuration
+      });
+    }
 
-  // Convert to USD
-  const paymentUsd = +(payment / 1500).toFixed(6);
+    // Convert to USD
+    const paymentUsd = +(payment / 1500).toFixed(6);
 
-  // Record the ad watch transaction
-  const adTx = {
-    id: Date.now().toString(),
-    userId,
-    adId,
-    type: 'ad_watch',
-    source: 'video_ad',
-    title: `Watched ${adDuration}s ad`,
-    amountUsd: paymentUsd,
-    amountNaira: payment,
-    adDuration,
-    date: new Date().toISOString()
-  };
+    // Record the ad watch transaction
+    const adTx = {
+      userId,
+      email: email || null,
+      adId,
+      type: 'ad_watch',
+      source: 'video_ad',
+      title: `Watched ${adDuration}s ad`,
+      amountUsd: paymentUsd,
+      amountNaira: payment,
+      adDuration,
+      createdAt: new Date()
+    };
 
-  transactions.unshift(adTx);
-  saveTransactions(transactions);
+    await txColl.insertOne(adTx);
 
-  // If we have a connected MongoDB, also record earnings and update user wallet
-  (async () => {
-    try {
-      if (isMongooseReady()) {
-        const user = await User.findOne({ firebaseUid: userId });
-        if (user) {
-          user.wallet = (user.wallet || 0) + payment;
-          user.totalEarned = (user.totalEarned || 0) + payment;
-          user.lastAdShowTime = new Date();
-          await user.save();
+    // Update user wallet and balance in MongoDB
+    const user = await User.findOne({ $or: [{ firebaseUid: userId }, { email }] });
+    if (user) {
+      user.balance = (user.balance || 0) + paymentUsd;
+      user.wallet = (user.wallet || 0) + payment;
+      user.totalEarned = (user.totalEarned || 0) + paymentUsd;
+      user.lastAdShowTime = new Date();
+      await user.save();
 
-          await Earning.create({ userId: user._id, firebaseUid: userId, amount: payment, type: 'ad_watch', description: `Watched ad ${adId}` });
-          await History.create({ userId: user._id, firebaseUid: userId, type: 'ad_watch', amount: payment, description: `Watched ad ${adId}`, referenceId: adTx.id, metadata: { adId } });
+      // Record earning
+      if (Earning) {
+        await Earning.create({ userId: user._id, firebaseUid: userId, amount: payment, type: 'ad_watch', description: `Watched ad ${adId}` });
+      }
+      if (History) {
+        await History.create({ userId: user._id, firebaseUid: userId, type: 'ad_watch', amount: payment, description: `Watched ad ${adId}`, referenceId: adTx._id, metadata: { adId } });
+      }
 
-          // If user has a referrer in DB, pay commission
-          if (user.referredBy) {
-            const referrer = await User.findById(user.referredBy);
-            if (referrer) {
-              const commission = +(payment * 0.1).toFixed(2);
-              referrer.wallet = (referrer.wallet || 0) + commission;
-              referrer.totalEarned = (referrer.totalEarned || 0) + commission;
-              await referrer.save();
-              const refTx = { id: Date.now().toString() + '_ref', userId: referrer._id, type: 'referral_commission', source: 'ad_referral', title: `Referral commission from user ad watch`, amountUsd: +(paymentUsd * 0.1).toFixed(6), amountNaira: Math.round(payment * 0.1), date: new Date().toISOString(), referredUserId: userId };
-              // also persist to file-backed transactions for compatibility
-              transactions.unshift(refTx);
-              saveTransactions(transactions);
+      // If user has a referrer, pay commission
+      if (user.referredBy) {
+        const referrer = await User.findById(user.referredBy);
+        if (referrer) {
+          const commission = +(payment * 0.1).toFixed(2);
+          const commissionUsd = +(paymentUsd * 0.1).toFixed(6);
+          
+          referrer.balance = (referrer.balance || 0) + commissionUsd;
+          referrer.wallet = (referrer.wallet || 0) + commission;
+          referrer.totalEarned = (referrer.totalEarned || 0) + commissionUsd;
+          await referrer.save();
 
-              await Earning.create({ userId: referrer._id, firebaseUid: referrer.firebaseUid || null, amount: commission, type: 'referral_commission', description: `Commission from ${userId}` });
-              await History.create({ userId: referrer._id, firebaseUid: referrer.firebaseUid || null, type: 'referral_commission', amount: commission, description: `Referral commission from ${userId}`, referenceId: refTx.id });
-              await Message.create({ userId: referrer._id, firebaseUid: referrer.firebaseUid || null, message: `You earned ₦${commission} referral commission`, type: 'earning' });
-            }
+          // Record referral transaction
+          const refTx = {
+            userId: referrer._id,
+            email: referrer.email,
+            type: 'referral_commission',
+            source: 'ad_referral',
+            title: `Referral commission from user ad watch`,
+            amountUsd: commissionUsd,
+            amountNaira: commission,
+            referredUserId: userId,
+            createdAt: new Date()
+          };
+          await txColl.insertOne(refTx);
+
+          if (Earning) {
+            await Earning.create({ userId: referrer._id, firebaseUid: referrer.firebaseUid, amount: commission, type: 'referral_commission', description: `Commission from ${userId}` });
+          }
+          if (Message) {
+            await Message.create({ userId: referrer._id, firebaseUid: referrer.firebaseUid, message: `You earned ₦${commission} referral commission`, type: 'earning' });
           }
         }
       }
-    } catch (err) {
-      console.error('Error while syncing ad watch to MongoDB:', err);
     }
-  })();
 
-  // If user was referred, give referrer 10% commission
-  const users = loadUsers();
-  const user = users.find(u => u.id === userId || u.uid === userId);
-  const referrerId = user && user.referredBy;
-
-  if (referrerId) {
-    const commissionUsd = +(paymentUsd * 0.1).toFixed(6); // 10% commission
-    const commissionNaira = Math.round(payment * 0.1);
-    
-    const refTx = {
-      id: Date.now().toString() + '_ref',
-      userId: referrerId,
-      type: 'referral_commission',
-      source: 'ad_referral',
-      title: `Referral commission from user ad watch`,
-      amountUsd: commissionUsd,
-      amountNaira: commissionNaira,
-      date: new Date().toISOString(),
-      referredUserId: userId
-    };
-    transactions.unshift(refTx);
-    saveTransactions(transactions);
+    res.json({
+      success: true,
+      message: 'Ad watched successfully',
+      payment,
+      paymentUsd,
+      adsToday: todaysAds.length + 1,
+      remaining: Math.max(5 - (todaysAds.length + 1), 0),
+      resetTime: '12:00 AM'
+    });
+  } catch (err) {
+    console.error('Error in POST /watch:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  res.json({
-    success: true,
-    message: 'Ad watched successfully',
-    payment,
-    paymentUsd,
-    adsToday: todaysAds.length + 1,
-    remaining: Math.max(5 - (todaysAds.length + 1), 0),
-    resetTime: '12:00 AM'
-  });
 });
 
 module.exports = router;

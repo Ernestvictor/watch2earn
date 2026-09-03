@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 const { getRate } = require('../config/exchange');
 
 // Mongoose models
-const User = require('../models/User');
+const User = require('../models/users');
 const Earning = require('../models/earning');
 const Message = require('../models/messeges');
 
@@ -278,27 +278,15 @@ router.post('/suspend-appeal', verifyToken, async (req, res) => {
     }
 
     const appealsDir = path.join(__dirname, '..', 'data');
-    if (!fs.existsSync(appealsDir)) fs.mkdirSync(appealsDir, { recursive: true });
-    const appealsPath = path.join(appealsDir, 'appeals.json');
-    
-    let appeals = [];
-    if (fs.existsSync(appealsPath)) {
-      try { appeals = JSON.parse(fs.readFileSync(appealsPath, 'utf8') || '[]'); } catch (e) { appeals = []; }
-    }
-
-    const entry = {
-      id: Date.now().toString(),
-      userId,
-      email: req.user.email || '',
-      message,
-      status: 'under_review',
-      createdAt: new Date().toISOString(),
-      reviewedBy: null,
-      reviewedAt: null
-    };
-
-    appeals.unshift(entry);
-    fs.writeFileSync(appealsPath, JSON.stringify(appeals, null, 2));
+        // Store appeal in MongoDB (new `Appeal` collection)
+        const Appeal = require('../models/appeal');
+        const entry = await Appeal.create({
+          userId,
+          firebaseUid: userId,
+          email: req.user.email || null,
+          message,
+          status: 'under_review'
+        });
     
     // Also update user record in MongoDB
     try {

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
-const User = require('../models/User');
+const User = require('../models/users');
 const mongoose = require('mongoose');
 
 // Add a bank account or crypto wallet for the logged-in user

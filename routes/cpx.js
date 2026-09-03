@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const verifyToken = require('../middleware/auth');
+const mongoNative = require('../mongodb');
+const User = require('../models/users');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const USERS_PATH = path.join(DATA_DIR, 'users.json');
@@ -14,64 +16,86 @@ const CPX_TRACKING_PATH = path.join(DATA_DIR, 'cpx-tracking.json');
 // CPX Secure Key from dashboard
 const CPX_SECURE_KEY = "CTJ6jPqHw1T80G7qCTxG6AjE72aadXzE";
 
-function ensureFiles() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(USERS_PATH)) fs.writeFileSync(USERS_PATH, '[]');
-  if (!fs.existsSync(TXN_PATH)) fs.writeFileSync(TXN_PATH, '[]');
-  if (!fs.existsSync(CPX_TRACKING_PATH)) fs.writeFileSync(CPX_TRACKING_PATH, '[]');
+async function loadUsers() {
+  try {
+    if (mongoNative && typeof mongoNative.getUsersCollection === 'function') {
+      const col = mongoNative.getUsersCollection();
+      return await col.find({}).toArray();
+    }
+  } catch (e) { console.warn('loadUsers (cpx) failed:', e && e.message); }
+  throw new Error('MongoDB required for CPX routes');
 }
 
-function loadUsers() {
-  ensureFiles();
-  try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf8')); } catch (e) { return []; }
+async function loadTransactions() {
+  try {
+    if (mongoNative && typeof mongoNative.getTransactionsCollection === 'function') {
+      const col = mongoNative.getTransactionsCollection();
+      return await col.find({}).sort({ date: -1 }).limit(10000).toArray();
+    }
+  } catch (e) { console.warn('loadTransactions (cpx) failed:', e && e.message); }
+  throw new Error('MongoDB required for CPX routes');
 }
 
-function loadTransactions() {
-  ensureFiles();
-  try { return JSON.parse(fs.readFileSync(TXN_PATH, 'utf8')); } catch (e) { return []; }
+async function saveTransactions(items) {
+  try {
+    if (mongoNative && typeof mongoNative.getTransactionsCollection === 'function') {
+      // insert new transactions if needed - no-op: app code should insert via insertOne
+      return;
+    }
+  } catch (e) { console.warn('saveTransactions (cpx) failed:', e && e.message); }
+  throw new Error('MongoDB required for CPX routes');
 }
 
-function saveTransactions(items) {
-  ensureFiles();
-  fs.writeFileSync(TXN_PATH, JSON.stringify(items, null, 2));
+async function loadCpxTracking() {
+  try {
+    if (mongoNative && typeof mongoNative.getCollection === 'function') {
+      const col = mongoNative.getCollection('cpx_tracking');
+      return await col.find({}).toArray();
+    }
+  } catch (e) { console.warn('loadCpxTracking failed:', e && e.message); }
+  throw new Error('MongoDB required for CPX routes');
 }
 
-function loadCpxTracking() {
-  ensureFiles();
-  try { return JSON.parse(fs.readFileSync(CPX_TRACKING_PATH, 'utf8')); } catch (e) { return []; }
-}
-
-function saveCpxTracking(items) {
-  ensureFiles();
-  fs.writeFileSync(CPX_TRACKING_PATH, JSON.stringify(items, null, 2));
+async function saveCpxTracking(items) {
+  try {
+    if (mongoNative && typeof mongoNative.getCollection === 'function') {
+      const col = mongoNative.getCollection('cpx_tracking');
+      // For simplicity, insert tracking entries
+      for (const t of items || []) {
+        try { await col.updateOne({ trans_id: t.trans_id }, { $set: t }, { upsert: true }); } catch (e) {}
+      }
+      return;
+    }
+  } catch (e) { console.warn('saveCpxTracking failed:', e && e.message); }
+  throw new Error('MongoDB required for CPX routes');
 }
 
 // GET /api/cpx/hash - Generate MD5 hash for iframe authentication
-router.get('/hash', verifyToken, (req, res) => {
+router.get('/hash', verifyToken, async (req, res) => {
   try {
     const userId = req.user.uid || req.user.id;
-    const users = loadUsers();
-    let user = users.find(u => u.uid === userId || u.id === userId);
+    // load user from MongoDB
+    let user = null;
+    try { user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] }).lean(); } catch (e) { /* ignore */ }
 
-    // If user not present in local JSON store, try to create one from token payload
+    // If user not present in DB, create a lightweight record
     if (!user) {
       const tokenUser = req.user || {};
       const newUser = {
-        id: userId,
+        firebaseUid: userId,
         uid: userId,
         email: tokenUser.email || '',
         displayName: tokenUser.name || tokenUser.displayName || 'User'
       };
-      users.push(newUser);
       try {
-        fs.writeFileSync(USERS_PATH, JSON.stringify(users, null, 2));
-        user = newUser;
-        console.log('Created missing user record for', userId);
+        const created = await User.create(newUser);
+        user = created.toObject ? created.toObject() : created;
       } catch (e) {
-        console.error('Failed to write new user to users.json', e);
+        console.error('Failed to create user record for CPX hash:', e && e.message);
         return res.status(500).json({ error: 'Failed to create user record' });
       }
     }
+
 
     // Generate secure hash: MD5(user_id + user_email + CPX_SECURE_KEY)
     const checkString = userId + (user.email || '') + CPX_SECURE_KEY;
@@ -106,8 +130,9 @@ router.get('/postback', async (req, res) => {
   }
 
   // Prevent double payment
-  const tracking = loadCpxTracking();
-  if (tracking.find(t => t.trans_id === trans_id)) {
+  let tracking = [];
+  try { tracking = await loadCpxTracking(); } catch (e) { return res.status(503).send('MongoDB required'); }
+  if ((tracking || []).find(t => t.trans_id === trans_id)) {
     console.log('trans_id already processed:', trans_id);
     return res.send('OK - Already Processed');
   }
@@ -117,7 +142,8 @@ router.get('/postback', async (req, res) => {
     const amountUsd = parseFloat(amount_usd || 0);
     const amountNaira = Math.round(amountUsd * 1500); // 1500 NGN = $1 USD
 
-    const transactions = loadTransactions();
+    let transactions = [];
+    try { transactions = await loadTransactions(); } catch (e) { return res.status(503).send('MongoDB required'); }
     const newTx = {
       id: trans_id,
       userId: user_id,
@@ -130,18 +156,17 @@ router.get('/postback', async (req, res) => {
       cpxTransId: trans_id
     };
 
-    transactions.unshift(newTx);
-    saveTransactions(transactions);
+    // Insert transaction into Mongo
+    try {
+      const txCol = mongoNative.getTransactionsCollection();
+      await txCol.insertOne(newTx);
+    } catch (e) { console.error('Failed to insert tx into mongo:', e && e.message); }
 
     // Track this trans_id
-    tracking.push({
-      trans_id: trans_id,
-      user_id: user_id,
-      amount_usd: amountUsd,
-      status: 'completed',
-      date: new Date().toISOString()
-    });
-    saveCpxTracking(tracking);
+    try {
+      const col = mongoNative.getCollection('cpx_tracking');
+      await col.updateOne({ trans_id }, { $set: { trans_id, user_id, amount_usd: amountUsd, status: 'completed', date: new Date() } }, { upsert: true });
+    } catch (e) { console.error('Failed to save cpx tracking:', e && e.message); }
 
     console.log(`✅ Credited ₦${amountNaira} ($${amountUsd}) to user ${user_id} for survey`);
   } else if (status === '2') {
@@ -149,7 +174,8 @@ router.get('/postback', async (req, res) => {
     const amountUsd = parseFloat(amount_usd || 0);
     const amountNaira = Math.round(amountUsd * 1500);
 
-    const transactions = loadTransactions();
+    let transactions = [];
+    try { transactions = await loadTransactions(); } catch (e) { return res.status(503).send('MongoDB required'); }
     const reversal = {
       id: trans_id + '_reversed',
       userId: user_id,
@@ -162,17 +188,15 @@ router.get('/postback', async (req, res) => {
       cpxTransId: trans_id
     };
 
-    transactions.unshift(reversal);
-    saveTransactions(transactions);
+    try {
+      const txCol = mongoNative.getTransactionsCollection();
+      await txCol.insertOne(reversal);
+    } catch (e) { console.error('Failed to insert reversal tx:', e && e.message); }
 
-    // Track reversal
-    const tracking = loadCpxTracking();
-    const idx = tracking.findIndex(t => t.trans_id === trans_id);
-    if (idx !== -1) {
-      tracking[idx].status = 'reversed';
-      tracking[idx].reversedAt = new Date().toISOString();
-    }
-    saveCpxTracking(tracking);
+    try {
+      const col = mongoNative.getCollection('cpx_tracking');
+      await col.updateOne({ trans_id }, { $set: { status: 'reversed', reversedAt: new Date() } });
+    } catch (e) { console.error('Failed to update cpx tracking reversal:', e && e.message); }
 
     console.log(`⚠️ Reversed ₦${amountNaira} ($${amountUsd}) from user ${user_id}`);
   }

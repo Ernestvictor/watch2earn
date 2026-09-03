@@ -5,7 +5,7 @@ const path = require('path');
 const verifyToken = require('../middleware/auth');
 const mongoNative = require('../mongodb');
 const { getRate } = require('../config/exchange');
-const User = require('../models/User');
+const User = require('../models/users');
 const { ObjectId } = require('mongodb');
 const mongoose = require('mongoose');
 
@@ -25,15 +25,20 @@ function isRateLimited(userId) {
   return false;
 }
 
-function logClaimError(obj) {
+async function logClaimError(obj) {
   try {
-    const p = path.join(__dirname, '..', 'data', 'claim_errors.json');
-    fs.mkdirSync(path.dirname(p), { recursive: true });
-    let arr = [];
-    try { arr = JSON.parse(fs.readFileSync(p, 'utf8') || '[]'); } catch (e) { arr = []; }
-    arr.unshift({ ...obj, time: new Date().toISOString() });
-    fs.writeFileSync(p, JSON.stringify(arr.slice(0, 500), null, 2));
-  } catch (e) { console.warn('Failed to log claim error', e && e.message); }
+    if (mongoNative && typeof mongoNative.getCollection === 'function') {
+      const col = mongoNative.getCollection('claim_errors');
+      await col.insertOne({ ...obj, time: new Date() });
+      return;
+    }
+    if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+      const col = mongoose.connection.collection('claim_errors');
+      await col.insertOne({ ...obj, time: new Date() });
+      return;
+    }
+  } catch (e) { /* fall through */ }
+  console.warn('Claim error (no mongo):', obj);
 }
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
@@ -41,21 +46,28 @@ const TXN_PATH = path.join(DATA_DIR, 'transactions.json');
 const SETTINGS_PATH = path.join(DATA_DIR, 'settings.json');
 const USERS_PATH = path.join(DATA_DIR, 'users.json');
 
-function ensureFiles() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(TXN_PATH)) fs.writeFileSync(TXN_PATH, '[]');
-  if (!fs.existsSync(SETTINGS_PATH)) fs.writeFileSync(SETTINGS_PATH, JSON.stringify({ dailyAdLimit: 5, bonusAdCount: 0, lastAnnouncement: '' }, null, 2));
-  if (!fs.existsSync(USERS_PATH)) fs.writeFileSync(USERS_PATH, '[]');
+async function loadTransactions() {
+  if (mongoNative && typeof mongoNative.getTransactionsCollection === 'function') {
+    const col = mongoNative.getTransactionsCollection();
+    return await col.find({}).sort({ createdAt: -1 }).limit(10000).toArray();
+  }
+  if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+    const col = mongoose.connection.collection('transactions');
+    return await col.find({}).sort({ createdAt: -1 }).limit(10000).toArray();
+  }
+  throw new Error('MongoDB required: transactions migrated to MongoDB only');
 }
 
-function loadTransactions() {
-  ensureFiles();
-  try { return JSON.parse(fs.readFileSync(TXN_PATH, 'utf8')); } catch (e) { return []; }
-}
-
-function saveTransactions(items) {
-  ensureFiles();
-  fs.writeFileSync(TXN_PATH, JSON.stringify(items, null, 2));
+async function saveTransactions(items) {
+  if (mongoNative && typeof mongoNative.getTransactionsCollection === 'function') {
+    // Prefer atomic inserts via insertTxMongo; this function can be a noop for Mongo.
+    return;
+  }
+  if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+    // No-op: inserts should be done via insertTxMongo
+    return;
+  }
+  throw new Error('MongoDB required: transactions migrated to MongoDB only');
 }
 
 // Try to insert a transaction into MongoDB native collection when available
@@ -71,19 +83,51 @@ async function insertTxMongo(tx) {
   }
 }
 
-function loadSettings() {
-  ensureFiles();
-  try { return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')); } catch (e) { return { dailyAdLimit: 5, bonusAdCount: 0, lastAnnouncement: '' }; }
+async function loadSettings() {
+  // Read settings from MongoDB `settings` collection (single doc)
+  if (mongoNative && typeof mongoNative.getCollection === 'function') {
+    const col = mongoNative.getCollection('settings');
+    const doc = await col.findOne({});
+    return doc || { dailyAdLimit: 5, bonusAdCount: 0, lastAnnouncement: '' };
+  }
+  if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+    const col = mongoose.connection.collection('settings');
+    const doc = await col.findOne({});
+    return doc || { dailyAdLimit: 5, bonusAdCount: 0, lastAnnouncement: '' };
+  }
+  throw new Error('MongoDB required for settings');
 }
 
-function loadUsers() {
-  ensureFiles();
-  try { return JSON.parse(fs.readFileSync(USERS_PATH, 'utf8')); } catch (e) { return []; }
+async function loadUsers() {
+  if (mongoNative && typeof mongoNative.getUsersCollection === 'function') {
+    const col = mongoNative.getUsersCollection();
+    return await col.find({}).toArray();
+  }
+  if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+    return await User.find({}).lean();
+  }
+  throw new Error('MongoDB required for users');
 }
 
-function saveUsers(items) {
-  ensureFiles();
-  fs.writeFileSync(USERS_PATH, JSON.stringify(items, null, 2));
+async function saveUsers(items) {
+  if (mongoNative && typeof mongoNative.getUsersCollection === 'function') {
+    const col = mongoNative.getUsersCollection();
+    for (const u of items || []) {
+      const filter = u.email ? { email: u.email } : (u.firebaseUid ? { firebaseUid: u.firebaseUid } : null);
+      if (!filter) continue;
+      await col.updateOne(filter, { $set: u }, { upsert: true });
+    }
+    return;
+  }
+  if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+    for (const u of items || []) {
+      const filter = u.email ? { email: u.email } : (u.firebaseUid ? { firebaseUid: u.firebaseUid } : null);
+      if (!filter) continue;
+      await User.updateOne(filter, { $set: u }, { upsert: true });
+    }
+    return;
+  }
+  throw new Error('MongoDB required to save users');
 }
 
 // alias expected by other modules
@@ -163,10 +207,11 @@ function isToday(value) {
 router.post('/earn', verifyToken, async (req, res) => {
   const { nairaAmount, source, title, referrerId } = req.body;
   const userId = req.user.uid || req.user.id;
-  const settings = loadSettings();
+  let settings;
+  try { settings = await loadSettings(); } catch (e) { return res.status(503).json({ error: 'MongoDB required for transactions' }); }
   const dailyLimit = Number(settings.dailyAdLimit || 5);
 
-  const transactions = loadTransactions();
+    const transactions = await loadTransactions();
   const adCount = transactions.filter(t => t.userId === userId && t.type === 'ad' && isToday(t.date)).length;
 
   if (adCount >= dailyLimit) {
@@ -187,9 +232,11 @@ router.post('/earn', verifyToken, async (req, res) => {
     referrerId: referrerId || null
   };
 
-  transactions.unshift(newTx);
-  saveTransactions(transactions);
-  insertTxMongo(newTx).catch(() => {});
+    // Persist transaction (Mongo preferred)
+    await insertTxMongo(newTx).catch(() => {});
+    // keep file fallback in sync when Mongo is not available
+    transactions.unshift(newTx);
+    await saveTransactions(transactions);
 
   // Update user wallet in MongoDB only
   try {
@@ -212,9 +259,9 @@ router.post('/earn', verifyToken, async (req, res) => {
       date: new Date().toISOString(),
       referredUserId: userId
     };
-    transactions.unshift(referralTx);
-    saveTransactions(transactions);
-    insertTxMongo(referralTx).catch(() => {});
+      await insertTxMongo(referralTx).catch(() => {});
+      transactions.unshift(referralTx);
+      await saveTransactions(transactions);
 
     const referralNaira = Math.round(referralBonus * exchangeRate);
     try {
@@ -361,12 +408,12 @@ router.get('/bonuses', verifyToken, async (req, res) => {
 });
 
 // POST /api/transactions/claim-strike - Claim daily strike bonus
-router.post('/claim-strike', verifyToken, (req, res) => {
+router.post('/claim-strike', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
-  const transactions = loadTransactions();
+  const transactions = await loadTransactions();
   
   // Check if user already claimed strike today
-  const strikeToday = transactions.find(t => t.userId === userId && t.type === 'strike' && isToday(t.date));
+  const strikeToday = (transactions || []).find(t => t.userId === userId && t.type === 'strike' && isToday(t.date));
   if (strikeToday) {
     return res.status(403).json({ error: 'Daily strike already claimed today' });
   }
@@ -382,9 +429,9 @@ router.post('/claim-strike', verifyToken, (req, res) => {
     date: new Date().toISOString()
   };
 
+  await insertTxMongo(strikeTx).catch(() => {});
   transactions.unshift(strikeTx);
-  saveTransactions(transactions);
-  insertTxMongo(strikeTx).catch(() => {});
+  await saveTransactions(transactions);
 
   res.json({ message: 'Daily strike claimed', amount: 0.01 });
 });
@@ -570,9 +617,10 @@ router.get('/history', verifyToken, async (req, res) => {
 });
 
 // POST /api/transactions/signup-bonus - Award signup bonus once and referral small bonus
-router.post('/signup-bonus', verifyToken, (req, res) => {
+router.post('/signup-bonus', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
-  const users = loadUsers();
+  let users;
+  try { users = await loadUsers(); } catch (e) { return res.status(503).json({ error: 'MongoDB required' }); }
   let user = users.find(u => u.id === userId || u.uid === userId);
   if (!user) {
     user = { id: userId, createdAt: new Date().toISOString(), signupBonusGiven: false };
@@ -635,17 +683,19 @@ router.post('/signup-bonus', verifyToken, (req, res) => {
 });
 
 // Consecutive claim bonus endpoints
-router.get('/consecutive-status', verifyToken, (req, res) => {
+router.get('/consecutive-status', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
-  const users = loadUsers();
+  let users;
+  try { users = await loadUsers(); } catch (e) { return res.status(503).json({ error: 'MongoDB required' }); }
   const u = users.find(x => x.id === userId) || {};
   const consecutive = (u.consecutiveBonus && u.consecutiveBonus.streak) || 0;
   res.json({ streak: consecutive });
 });
 
-router.post('/claim-consecutive', verifyToken, (req, res) => {
+router.post('/claim-consecutive', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
-  const users = loadUsers();
+  let users;
+  try { users = await loadUsers(); } catch (e) { return res.status(503).json({ error: 'MongoDB required' }); }
   let u = users.find(x => x.id === userId);
   if (!u) { u = { id: userId }; users.unshift(u); }
 

@@ -3,7 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Withdrawal = require('../models/withdrawal');
 const verifyToken = require('../middleware/auth');
-const User = require('../models/User');
+const User = require('../models/users');
 const History = require('../models/history');
 const mongoNative = require('../mongodb');
 

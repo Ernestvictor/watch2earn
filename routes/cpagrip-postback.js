@@ -1,45 +1,49 @@
-const fs = require('fs');
-const path = require('path');
+const express = require('express');
+const router = express.Router();
+const mongoNative = require('../mongodb');
 
-function readJSON(file){
-  return JSON.parse(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'));
-}
-function writeJSON(file, data){
-  fs.writeFileSync(path.join(__dirname, '..', file), JSON.stringify(data, null, 2));
-}
+// CPAgrip postback handler — MongoDB-only implementation
+router.get('/postback/cpagrip', async (req, res) => {
+  const { subid, payout, status, secret } = req.query;
 
-app.get('/postback/cpagrig', (req, res) => {
-  const { subid, payout, status, key } = req.query;
-  
-  // 1. SECURITY CHECK - add this key in CPAgrip too
-  const MY_SECRET_KEY = "ihrb4hru4bj3bhnvihbu485yji"; 
-  if(key!== MY_SECRET_KEY){
-    return res.status(403).send('Invalid key');
+  if (!mongoNative || typeof mongoNative.getUsersCollection !== 'function') {
+    return res.status(503).send('MongoDB required');
   }
 
-  // 2. Only credit if status = 1 meaning completed
-  if(status == '1' && subid && payout){
-    try{
-      let users = readJSON('data/users.json');
-      let userKey = Object.keys(users).find(key => users[key].email === subid);
-
-       const amoutNaira = parsefloat(payout) * 700; //
-        
-       users[userKey].balance = (users[userKey] .balance ||0) + amountNaira;
-        // Log transaction
-        let tx = readJSON('data/transactions.json');
-        tx.push({user: subid, amount: amountNaira, source: 'CPAgrip', date: new Date()});
-        writeJSON('data/transactions.json', tx);
-        
-        writeJSON('data/users.json', users);
-        console.log(`Credited ${subid} with ₦${amountNaira}`);
-      }
-    } catch(e){
-      console.log("Postback Error:", e);
-      return res.status(500).send('Error');
-    }
+  // Validate secret
+  const expected = process.env.CPAGRIP_SECRET || process.env.CPAGRIP_KEY;
+  if (!expected || String(secret) !== String(expected)) {
+    console.warn('Invalid CPAGRIP secret on postback');
+    return res.status(403).send('Invalid secret');
   }
-  
-  // 3. CPAgrip MUST get "OK" back
-  res.send('OK'); 
-})
+
+  if (String(status) !== '1' || !subid || !payout) {
+    return res.send('OK');
+  }
+
+  try {
+    const usersCol = mongoNative.getUsersCollection();
+    const txCol = mongoNative.getTransactionsCollection();
+
+    const cleanEmail = String(subid).toLowerCase().trim();
+    const amount = parseFloat(payout) || 0;
+    if (!amount || amount <= 0) return res.send('OK');
+
+    // Credit user (upsert)
+    await usersCol.updateOne(
+      { email: cleanEmail },
+      { $inc: { balance: amount, totalEarned: amount, fromCPA: amount }, $setOnInsert: { email: cleanEmail, createdAt: new Date(), uid: 'u_' + Date.now() } },
+      { upsert: true }
+    );
+
+    await txCol.insertOne({ email: cleanEmail, type: 'earn', source: 'CPAgrip', amount: amount, createdAt: new Date() });
+
+    console.log(`✅ Credited $${amount} to ${cleanEmail} (CPAGrip)`);
+    return res.send('OK');
+  } catch (e) {
+    console.error('CPAGrip postback error:', e && e.message);
+    return res.status(500).send('Error');
+  }
+});
+
+module.exports = router;

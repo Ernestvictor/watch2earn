@@ -6,14 +6,9 @@ const path = require('path');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const LOG_PATH = path.join(DATA_DIR, 'user_logs.json');
 
-function ensureLogFile() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(LOG_PATH)) fs.writeFileSync(LOG_PATH, '[]');
-}
-
 module.exports = async function activityLogger(req, res, next) {
   try {
-    ensureLogFile();
+    // Prefer MongoDB for activity logging. If unavailable, skip logging.
 
     const authHeader = req.headers && req.headers.authorization;
     let uid = null;
@@ -45,13 +40,8 @@ module.exports = async function activityLogger(req, res, next) {
         return next();
       }
     } catch (e) { /* fall back to file */ }
-
-    // Fallback to file-based logging
-    try {
-      const arr = JSON.parse(fs.readFileSync(LOG_PATH, 'utf8') || '[]');
-      arr.unshift(entry);
-      fs.writeFileSync(LOG_PATH, JSON.stringify(arr.slice(0, 2000), null, 2));
-    } catch (e) { /* ignore */ }
+    // If MongoDB unavailable, skip activity file logging (deprecated)
+    console.warn('Activity logging skipped: MongoDB unavailable');
   } catch (e) {
     // Don't block requests on logging errors
     console.warn('Activity logger error:', e && e.message);

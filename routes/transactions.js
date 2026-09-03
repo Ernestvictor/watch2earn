@@ -461,96 +461,50 @@ router.get('/referral-earnings', verifyToken, async (req, res) => {
   res.json({ referralEarningsUsd: referralEarnings, referralEarningsNaira: Math.round(referralEarnings * exchangeRate) });
 });
 
-// GET /api/transactions/balance - Return user's current wallet balance + earnings breakdown
+// GET /api/transactions/balance - MongoDB-only, return user's wallet balance + earnings breakdown
 router.get('/balance', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
-  console.log('[BALANCE] userId:', userId, '| MongoDB ready:', mongoose?.connection?.readyState === 1);
   
-  const zeroBreakdown = {
-    totalUsd: 0,
-    totalNaira: 0,
-    adsUsd: 0,
-    referralUsd: 0,
-    bonusUsd: 0,
-    gameUsd: 0,
-    surveyUsd: 0,
-    withdrawalsUsd: 0
-  };
-
-  // Try MongoDB first
   try {
-    if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
-      console.log('[BALANCE] Querying MongoDB for user...');
-      const user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] }).lean();
-      
-      if (!user) {
-        console.log('[BALANCE] User not found in MongoDB, trying file fallback');
-      } else {
-        console.log('[BALANCE] ✓ User found | wallet:', user.wallet, 'balance:', user.balance);
-
-        const exchangeRate = Number(process.env.USD_TO_NAIRA_RATE || 1500);
-        const walletNaira = Number(user.wallet || user.balance || 0);
-        const walletUsd = +(walletNaira / exchangeRate).toFixed(6);
-
-        let docs = [];
-        try {
-          const col = mongoNative && typeof mongoNative.getTransactionsCollection === 'function' ? mongoNative.getTransactionsCollection() : null;
-          if (col) docs = await col.find({ userId: String(userId) }).toArray();
-          console.log('[BALANCE] Found', docs.length, 'transactions');
-        } catch (e) {
-          console.warn('[BALANCE] Transaction fetch failed:', e?.message);
-        }
-
-        const breakdown = docs.reduce((acc, t) => {
-          const type = (t.type || 'other').toLowerCase();
-          const amountUsd = Number(t.amountUsd || t.amount || 0);
-          acc.totalUsd += amountUsd;
-          acc.totalNaira += Math.round(amountUsd * 1500);
-          if (type.includes('ad')) acc.adsUsd += amountUsd;
-          if (type.includes('referral') || type.includes('commission')) acc.referralUsd += amountUsd;
-          if (type.includes('bonus') || type === 'signup_bonus') acc.bonusUsd += amountUsd;
-          if (type.includes('game')) acc.gameUsd += amountUsd;
-          if (type.includes('survey')) acc.surveyUsd += amountUsd;
-          if (type.includes('withdraw')) acc.withdrawalsUsd += amountUsd;
-          return acc;
-        }, JSON.parse(JSON.stringify(zeroBreakdown)));
-
-        const adCount = docs.filter(t => t.type && String(t.type).toLowerCase().includes('ad') && isToday(t.date)).length;
-
-        const response = {
-          balanceUsd: walletUsd,
-          balanceNaira: walletNaira,
-          adsEarnUsd: +breakdown.adsUsd.toFixed(6),
-          referralEarnUsd: +breakdown.referralUsd.toFixed(6),
-          bonusEarnUsd: +breakdown.bonusUsd.toFixed(6),
-          gameEarnUsd: +breakdown.gameUsd.toFixed(6),
-          surveyEarnUsd: +breakdown.surveyUsd.toFixed(6),
-          withdrawalsUsd: +breakdown.withdrawalsUsd.toFixed(6),
-          adCount,
-          rate: 1500,
-          source: 'mongodb'
-        };
-        console.log('[BALANCE] ✓ Returning from MongoDB:', response);
-        return res.json(response);
-      }
-    } else {
-      console.log('[BALANCE] MongoDB not ready, using file fallback');
+    // Require MongoDB connection
+    if (!mongoose || !mongoose.connection || mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'Database unavailable' });
     }
-  } catch (e) {
-    console.error('[BALANCE] MongoDB error:', e?.message);
-  }
 
-  // File-based fallback
-  console.log('[BALANCE] Using file-based fallback');
-  try {
-    const allTx = loadTransactions().filter(t => String(t.userId) === String(userId) || String(t.firebaseUid || '') === String(userId));
-    console.log('[BALANCE] Found', allTx.length, 'transactions in file');
+    // Fetch user from Mongoose User model
+    const user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] }).lean();
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-    const breakdown = allTx.reduce((acc, t) => {
+    const exchangeRate = Number(process.env.USD_TO_NAIRA_RATE || 1500);
+    const walletNaira = Number(user.balance || 0);
+    const walletUsd = +(walletNaira / exchangeRate).toFixed(6);
+
+    // Fetch transactions from MongoDB native driver
+    let docs = [];
+    try {
+      const col = mongoNative && typeof mongoNative.getTransactionsCollection === 'function' ? mongoNative.getTransactionsCollection() : null;
+      if (col) {
+        docs = await col.find({ userId: String(userId) }).toArray();
+      }
+    } catch (e) {
+      console.warn('[BALANCE] Transaction fetch failed:', e?.message);
+    }
+
+    // Compute breakdown by transaction type
+    const zeroBreakdown = {
+      adsUsd: 0,
+      referralUsd: 0,
+      bonusUsd: 0,
+      gameUsd: 0,
+      surveyUsd: 0,
+      withdrawalsUsd: 0
+    };
+
+    const breakdown = docs.reduce((acc, t) => {
       const type = (t.type || 'other').toLowerCase();
       const amountUsd = Number(t.amountUsd || t.amount || 0);
-      acc.totalUsd += amountUsd;
-      acc.totalNaira += Math.round(amountUsd * 1500);
       if (type.includes('ad')) acc.adsUsd += amountUsd;
       if (type.includes('referral') || type.includes('commission')) acc.referralUsd += amountUsd;
       if (type.includes('bonus') || type === 'signup_bonus') acc.bonusUsd += amountUsd;
@@ -560,26 +514,9 @@ router.get('/balance', verifyToken, async (req, res) => {
       return acc;
     }, JSON.parse(JSON.stringify(zeroBreakdown)));
 
-    let walletNaira = 0;
-    try {
-      const usersData = JSON.parse(fs.readFileSync(USERS_PATH, 'utf8') || '[]');
-      const userRecord = usersData.find(u => String(u.id) === String(userId) || String(u.uid) === String(userId) || String(u.firebaseUid) === String(userId));
-      if (userRecord) {
-        walletNaira = Number(userRecord.wallet || userRecord.balance || 0);
-        console.log('[BALANCE] Wallet from file:', walletNaira);
-      } else {
-        console.log('[BALANCE] User record not found in users file');
-        walletNaira = 0;
-      }
-    } catch (e) {
-      console.warn('[BALANCE] File wallet read error:', e?.message);
-      walletNaira = 0;
-    }
+    const adCount = docs.filter(t => t.type && String(t.type).toLowerCase().includes('ad') && isToday(t.date)).length;
 
-    const walletUsd = +(walletNaira / 1500).toFixed(6);
-    const adCount = allTx.filter(t => t.type && String(t.type).toLowerCase().includes('ad') && isToday(t.date)).length;
-
-    const response = {
+    return res.json({
       balanceUsd: walletUsd,
       balanceNaira: walletNaira,
       adsEarnUsd: +breakdown.adsUsd.toFixed(6),
@@ -589,14 +526,12 @@ router.get('/balance', verifyToken, async (req, res) => {
       surveyEarnUsd: +breakdown.surveyUsd.toFixed(6),
       withdrawalsUsd: +breakdown.withdrawalsUsd.toFixed(6),
       adCount,
-      rate: 1500,
-      source: 'file'
-    };
-    console.log('[BALANCE] ✓ Returning from file:', response);
-    return res.json(response);
+      rate: exchangeRate,
+      source: 'mongodb'
+    });
   } catch (e) {
-    console.error('[BALANCE] File fallback error:', e?.message);
-    return res.status(500).json({ error: 'Failed to compute balance', details: e?.message });
+    console.error('[BALANCE] Error:', e?.message);
+    return res.status(500).json({ error: 'Failed to compute balance' });
   }
 });
 

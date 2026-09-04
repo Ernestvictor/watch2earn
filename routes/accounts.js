@@ -30,7 +30,7 @@ router.post('/', verifyToken, async (req, res) => {
 
     // Save account to MongoDB User model
     const user = await User.findOneAndUpdate(
-      { firebaseUid: userId },
+      { $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] },
       {
         $push: {
           accountDetails: {
@@ -51,7 +51,7 @@ router.post('/', verifyToken, async (req, res) => {
     );
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'User not found. Please contact support.' });
     }
 
     const newAccount = user.accountDetails[user.accountDetails.length - 1];
@@ -71,7 +71,7 @@ router.get('/', verifyToken, async (req, res) => {
       return res.status(503).json({ error: 'MongoDB is required. Database is unavailable.' });
     }
 
-    const user = await User.findOne({ firebaseUid: userId }).lean();
+    const user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] }).lean();
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -97,7 +97,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
     }
 
     const user = await User.findOneAndUpdate(
-      { firebaseUid: userId },
+      { $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] },
       { $pull: { accountDetails: { id: accountId } } },
       { new: true }
     );
@@ -123,7 +123,7 @@ router.get('/:id', verifyToken, async (req, res) => {
       return res.status(503).json({ error: 'MongoDB is required. Database is unavailable.' });
     }
 
-    const user = await User.findOne({ firebaseUid: userId }).lean();
+    const user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }] }).lean();
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }

@@ -178,6 +178,27 @@ firebase.auth().onAuthStateChanged(async user => {
     document.getElementById('mainBal').innerText = '—';
     document.getElementById('mainNaira').innerText = '—';
   }
+
+  // Reload balance every 5 seconds
+  setInterval(async () => {
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+      if(res.ok) {
+        const data = await res.json();
+        const usd = Number(data.balanceUsd || 0);
+        const naira = Math.round(usd * 1500);
+        document.getElementById('mainBal').innerText = usd.toFixed(2);
+        document.getElementById('mainNaira').innerText = naira.toLocaleString();
+        document.getElementById('adsEarn').innerText = (Number(data.adsEarnUsd || 0)).toFixed(2);
+        document.getElementById('gameEarn').innerText = (Number(data.gameEarnUsd || 0)).toFixed(2);
+        document.getElementById('surveyEarn').innerText = (Number(data.surveyEarnUsd || 0)).toFixed(2);
+        document.getElementById('refEarn').innerText = (Number(data.referralEarnUsd || 0)).toFixed(2);
+      }
+    } catch (err) {
+      console.warn('Auto-refresh balance failed', err);
+    }
+  }, 5000);
 });
 
 function toggleInvite() {

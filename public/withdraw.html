@@ -187,6 +187,28 @@
       }
 
       await fetchAndRenderAccounts();
+
+      // Reload balance every 5 seconds
+      setInterval(async () => {
+        try {
+          const t = token || await user.getIdToken();
+          if (t) {
+            const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + t }, cache: 'no-store' });
+            if(res.ok) {
+              const data = await res.json();
+              const rawNaira = Number(data.balanceNaira ?? (Number(data.balanceUsd || 0) * Number(data.rate || 1500)));
+              currentBalance = Number.isFinite(rawNaira) ? rawNaira : 0;
+              const usdText = (currentBalance / 1500).toFixed(2);
+              const nairaText = Math.round(currentBalance).toLocaleString();
+              document.getElementById('bal').innerText = nairaText;
+              document.getElementById('usdBal').innerText = usdText;
+              document.getElementById('topBal').innerText = '₦' + nairaText;
+            }
+          }
+        } catch (err) {
+          console.warn('Auto-refresh balance failed', err);
+        }
+      }, 5000);
     });
 
     function formatMoney(value) {

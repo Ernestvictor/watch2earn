@@ -156,10 +156,40 @@ async function creditLiveUserWallet(userId, amountNaira, options = {}) {
   if (!userId || !Number.isFinite(amount) || amount === 0) return null;
 
   const email = options.email || null;
-  const filter = { $or: [{ firebaseUid: String(userId) }, { uid: String(userId) }, { id: String(userId) }, { email: String(userId) }] };
-  if (email) {
-    filter.$or.push({ email: String(email) });
+  const safeUserId = String(userId);
+  const safeEmail = email ? String(email) : null;
+
+  try {
+    if (mongoNative && typeof mongoNative.getUsersCollection === 'function') {
+      const usersCol = mongoNative.getUsersCollection();
+      const nativeFilter = { $or: [{ firebaseUid: safeUserId }, { uid: safeUserId }, { id: safeUserId }, { email: safeUserId }] };
+      if (safeEmail) nativeFilter.$or.push({ email: safeEmail });
+
+      const result = await usersCol.findOneAndUpdate(
+        nativeFilter,
+        {
+          $inc: { wallet: amount, balance: amount, totalEarned: amount },
+          $set: { updatedAt: new Date() },
+          $setOnInsert: {
+            firebaseUid: safeUserId,
+            email: safeEmail || `${safeUserId.replace(/[@.]/g, '_')}@local.user`,
+            displayName: safeUserId,
+            wallet: 0,
+            balance: 0,
+            totalEarned: 0,
+            status: 'active'
+          }
+        },
+        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
+      );
+      return result?.value || result;
+    }
+  } catch (e) {
+    console.warn('creditLiveUserWallet native fallback failed:', e && e.message);
   }
+
+  const filter = { $or: [{ firebaseUid: safeUserId }, { uid: safeUserId }, { id: safeUserId }, { email: safeUserId }] };
+  if (safeEmail) filter.$or.push({ email: safeEmail });
 
   try {
     const record = await User.findOneAndUpdate(
@@ -168,9 +198,9 @@ async function creditLiveUserWallet(userId, amountNaira, options = {}) {
         $inc: { wallet: amount, balance: amount, totalEarned: amount },
         $set: { updatedAt: new Date() },
         $setOnInsert: {
-          firebaseUid: String(userId),
-          email: String(email || `${String(userId).replace(/[@.]/g, '_')}@local.user`),
-          displayName: String(userId),
+          firebaseUid: safeUserId,
+          email: safeEmail || `${safeUserId.replace(/[@.]/g, '_')}@local.user`,
+          displayName: safeUserId,
           wallet: 0,
           balance: 0,
           totalEarned: 0,
@@ -332,7 +362,12 @@ router.post('/bonuses/claim', verifyToken, async (req, res) => {
 
     // Credit user wallet using helper (upsert + atomic $inc) — MongoDB only
     const credited = await creditLiveUserWallet(userId, amountNaira, { email: req.user && req.user.email ? req.user.email : null, source: 'bonus_claim' });
-    if (!credited) return res.status(500).json({ error: 'Failed to credit user wallet (MongoDB unavailable)' });
+    if (!credited) {
+      const mongoStatus = mongoNative && typeof mongoNative.getUsersCollection === 'function' ? 'native' : 'not available';
+      const mongooseStatus = mongoose && mongoose.connection && mongoose.connection.readyState === 1 ? 'connected' : 'not connected';
+      console.error(`Wallet credit failed. userId=${userId}, mongoNative=${mongoStatus}, mongoose=${mongooseStatus}`);
+      return res.status(500).json({ error: 'Failed to credit user wallet. Please check MongoDB connection and try again.' });
+    }
 
     // Record transaction in MongoDB only
     const tx = {
@@ -456,7 +491,9 @@ router.post('/claim-strike', verifyToken, async (req, res) => {
       transactions.unshift(bonusTx);
       await saveTransactions(transactions);
     } else {
-      console.warn('Failed to credit user wallet for daily strike:', userId);
+      const mongoStatus = mongoNative && typeof mongoNative.getUsersCollection === 'function' ? 'available' : 'not available';
+      const mongooseStatus = mongoose && mongoose.connection && mongoose.connection.readyState === 1 ? 'connected' : 'not connected';
+      console.error(`Failed to credit user wallet for daily strike. userId=${userId}, mongoNative=${mongoStatus}, mongoose=${mongooseStatus}`);
     }
   } catch (e) {
     console.error('Error crediting wallet for strike:', e && e.message);

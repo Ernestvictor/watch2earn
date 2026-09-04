@@ -248,13 +248,32 @@
 
   window.w2e.refreshBalance = async function(opts = {}){
     try {
+      const authUser = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+      const email = (authUser && authUser.email) || localStorage.getItem('w2e_email') || '';
       const token = await window.w2e.getAuthToken();
-      try { console.debug('[W2E] refreshBalance tokenPresent=', !!token); } catch (e) {}
-      if (!token) {
-        console.warn('refreshBalance: No auth token');
+      try { console.debug('[W2E] refreshBalance tokenPresent=', !!token, 'emailPresent=', !!email); } catch (e) {}
+
+      // Prefer the secure, token-protected transactions endpoint when we have a token.
+      // Fall back to the lightweight public `/api/balance` endpoint when we only have an email.
+      // This avoids 401s from /api/transactions/balance while still keeping the auth-protected path primary.
+      let url;
+      const headers = {};
+      if (token) {
+        url = '/api/transactions/balance';
+        headers.Authorization = 'Bearer ' + token;
+      } else if (email) {
+        url = '/api/balance?email=' + encodeURIComponent(email);
+      } else {
+        console.warn('refreshBalance: No auth token and no email available');
         return null;
       }
-      const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+
+      let res = await fetch(url, { headers, cache: 'no-store' });
+      if (!res.ok && email && token) {
+        const fallbackUrl = '/api/balance?email=' + encodeURIComponent(email);
+        res = await fetch(fallbackUrl, { cache: 'no-store' });
+      }
+
       if (!res.ok) {
         console.warn('refreshBalance: API returned', res.status);
         return null;
@@ -278,6 +297,14 @@
           return;
         }
         console.log('User authenticated:', user.uid);
+        try {
+          await window.w2e.syncMongoUser({
+            username: user.displayName || (user.email || 'User').split('@')[0],
+            displayName: user.displayName || (user.email || 'User').split('@')[0]
+          });
+        } catch (e) {
+          console.warn('syncMongoUser during auth changed failed:', e && e.message);
+        }
         // initial refresh
         await window.w2e.refreshBalance();
         // periodic refresh every 5 seconds
@@ -414,125 +441,6 @@
       }
     } catch (e) {
       // silent
-    }
-  });
-
-  // Inject a consistent global navigation for public and admin-panel pages
-  document.addEventListener('DOMContentLoaded', ()=>{
-    try {
-      if (document.getElementById('w2e-global-nav')) return;
-
-      const container = document.createElement('div');
-      container.id = 'w2e-global-nav';
-      container.style.position = 'fixed';
-      container.style.top = '0';
-      container.style.left = '0';
-      container.style.right = '0';
-      container.style.zIndex = '9998';
-      container.style.display = 'flex';
-      container.style.alignItems = 'center';
-      container.style.justifyContent = 'space-between';
-      container.style.padding = '8px 14px';
-      container.style.background = 'linear-gradient(180deg, rgba(7,7,9,0.95), rgba(7,7,9,0.85))';
-      container.style.borderBottom = '1px solid rgba(255,255,255,0.03)';
-      container.style.backdropFilter = 'saturate(120%) blur(6px)';
-
-      const left = document.createElement('div');
-      left.style.display = 'flex';
-      left.style.gap = '10px';
-      left.style.alignItems = 'center';
-
-      const brand = document.createElement('a');
-      brand.href = '/home.html';
-      brand.innerText = 'Watch2Earn';
-      brand.style.fontWeight = '800';
-      brand.style.color = '#fff';
-      brand.style.textDecoration = 'none';
-      brand.style.fontSize = '14px';
-      left.appendChild(brand);
-
-      const links = document.createElement('div');
-      links.style.display = 'flex';
-      links.style.gap = '8px';
-
-      const makeLink = (txt, href) => {
-        const a = document.createElement('a');
-        a.href = href || '#';
-        a.innerText = txt;
-        a.style.color = '#bfeccb';
-        a.style.textDecoration = 'none';
-        a.style.fontWeight = '700';
-        a.style.padding = '6px 8px';
-        a.style.borderRadius = '6px';
-        return a;
-      };
-
-      // show admin links when in admin-panel
-      const path = (location.pathname || '').toLowerCase();
-      if (path.includes('/admin-panel/') || path.includes('/admin')) {
-        links.appendChild(makeLink('Dashboard','/admin-panel/users.html'));
-        links.appendChild(makeLink('Approvals','/admin-panel/approvals.html'));
-        links.appendChild(makeLink('Messages','/admin-panel/messages.html'));
-        links.appendChild(makeLink('Withdrawals','/admin-panel/withdrawals.html'));
-      } else {
-        links.appendChild(makeLink('Home','/home.html'));
-        links.appendChild(makeLink('Earn','/earn.html'));
-        links.appendChild(makeLink('VERIFIED','/verifild.html'));
-        links.appendChild(makeLink('History','/history.html'));
-        links.appendChild(makeLink('Account','/account.html'));
-      }
-
-      left.appendChild(links);
-
-      const right = document.createElement('div');
-      right.style.display = 'flex';
-      right.style.gap = '8px';
-      right.style.alignItems = 'center';
-
-      const authBtn = document.createElement('a');
-      authBtn.href = '/login.html';
-      authBtn.innerText = 'Login';
-      authBtn.style.color = '#fff';
-      authBtn.style.background = '#4CAF50';
-      authBtn.style.padding = '6px 10px';
-      authBtn.style.borderRadius = '6px';
-      authBtn.style.textDecoration = 'none';
-      authBtn.style.fontWeight = '800';
-
-      const adminLink = makeLink('Admin','/admin-panel/users.html');
-      adminLink.style.background = 'transparent';
-      adminLink.style.color = '#cfe8d7';
-
-      right.appendChild(authBtn);
-
-      // If page is admin, show Admin link on left instead
-      if (path.includes('/admin-panel/') || path.includes('/admin')) {
-        left.appendChild(adminLink);
-      }
-
-      container.appendChild(left);
-      container.appendChild(right);
-      document.body.style.paddingTop = '54px';
-      document.body.prepend(container);
-
-      // Update auth button based on Firebase auth state
-      if (typeof firebase !== 'undefined' && firebase.auth) {
-        firebase.auth().onAuthStateChanged(user => {
-          if (user) {
-            authBtn.innerText = 'Logout';
-            authBtn.href = '#';
-            authBtn.onclick = async (e) => { e.preventDefault(); try{ await firebase.auth().signOut(); window.location.href='/login.html'; }catch(err){ window.location.href='/login.html'; } };
-          } else {
-            authBtn.innerText = 'Login';
-            authBtn.href = '/login.html';
-            authBtn.onclick = null;
-          }
-        });
-      }
-
-    } catch (e) {
-      // ignore nav injection failures
-      console.warn('nav inject failed', e);
     }
   });
 

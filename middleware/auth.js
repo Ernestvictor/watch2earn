@@ -1,12 +1,16 @@
 const { auth } = require('../config/firebaseAdmin');
 
 async function verifyToken(req, res, next) {
-  if (!auth || typeof auth.verifyIdToken !== 'function') {
-    return res.status(503).json({ error: 'Firebase auth is not configured' });
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
   }
 
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'No token provided' });
+  if (!auth || typeof auth.verifyIdToken !== 'function') {
+    return res.status(503).json({ error: 'Firebase auth is not configured on this server.' });
+  }
 
   try {
     const decoded = await auth.verifyIdToken(token);

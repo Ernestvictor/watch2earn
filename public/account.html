@@ -80,14 +80,13 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 
   <div class="main-balance">
     <div style="color:#888;font-size:11px">MAIN BALANCE • Referral + Ads + Game + Survey</div>
-    <!-- Balance populated by JavaScript: public/js/app.js → window.w2e.applyBalanceToDom / refreshBalance -->
-    <h1>$<span id="mainBal">0.00</span></h1>
-    <div style="color:#888;font-size:12px">≈ ₦<span id="mainNaira">0.00</span></div>
+    <h1>$<span id="mainBal">--</span></h1>
+    <div style="color:#888;font-size:12px">≈ ₦<span id="mainNaira">--</span></div>
     <div class="breakdown">
-      <div class="break-item"><small>Ads</small><b>$<span id="adsEarn">0.00</span></b></div>
-      <div class="break-item"><small>Games</small><b>$<span id="gameEarn">0.00</span></b></div>
-      <div class="break-item"><small>Survey</small><b>$<span id="surveyEarn">0.00</span></b></div>
-      <div class="break-item"><small>Referral</small><b>$<span id="refEarn">0.00</span></b></div>
+      <div class="break-item"><small>Ads</small><b>$<span id="adsEarn">--</span></b></div>
+      <div class="break-item"><small>Games</small><b>$<span id="gameEarn">--</span></b></div>
+      <div class="break-item"><small>Survey</small><b>$<span id="surveyEarn">--</span></b></div>
+      <div class="break-item"><small>Referral</small><b>$<span id="refEarn">--</span></b></div>
     </div>
     <div style="display:flex;gap:12px;margin-top:14px;flex-wrap:wrap">
       <button class="btn btn-withdraw" onclick="location.href='withdraw.html'"><i class="fas fa-arrow-up-from-bracket"></i> Withdraw</button>

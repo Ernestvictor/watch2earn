@@ -179,12 +179,17 @@ router.post('/claim/:id', verifyToken, async (req, res) => {
       // Don't fail the response, the wallet was already updated
     }
 
+    // Fetch fresh user data to return updated balance
+    const refreshedUser = await User.findOne({ _id: user._id }).lean();
+    const refreshedBalance = Number(refreshedUser?.balance || 0);
+
     res.json({
       success: true,
       message: `Bonus claimed successfully!`,
       amount: amountUsd,
       amountNaira,
-      newWallet: Number(user.wallet || 0),
+      newWallet: refreshedBalance,
+      newWalletUsd: refreshedBalance / 1500,
       bonus: bonus.description
     });
   } catch (error) {

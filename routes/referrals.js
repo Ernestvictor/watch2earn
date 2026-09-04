@@ -149,28 +149,29 @@ router.get('/summary', verifyToken, async (req, res) => {
   try {
     const firebaseUid = req.user.uid || req.user.id;
     
-    // Find user
-    const user = await User.findOne({ firebaseUid });
+    // Find user with multiple fallback methods
+    const user = await User.findOne({ $or: [{ firebaseUid }, { uid: firebaseUid }, { id: firebaseUid }] });
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      console.warn(`[REFERRALS] User not found: ${firebaseUid}`);
+      return res.json({ success: true, totalReferralUsd: 0, totalReferralNaira: 0, countInvited: 0, earnings: 0 });
     }
 
     // Get all referral earnings for this user
     const referralEarnings = await Earning.find({
       userId: user._id,
       type: 'referral'
-    });
+    }).lean();
 
-    const totalReferralUsd = referralEarnings.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const totalReferralNaira = totalReferralUsd * 1500;
+    const totalReferralUsd = referralEarnings.reduce((sum, e) => sum + (Number(e.amount || 0) / 1500), 0);
+    const totalReferralNaira = referralEarnings.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
     // Get count of referred users
-    const referredUsers = await User.find({ referredBy: user._id });
+    const referredUsers = await User.find({ referredBy: user._id }).lean();
     const countInvited = referredUsers.length;
 
     return res.json({
       success: true,
-      totalReferralUsd: Number(totalReferralUsd.toFixed(4)),
+      totalReferralUsd: +totalReferralUsd.toFixed(4),
       totalReferralNaira: Math.round(totalReferralNaira),
       countInvited,
       earnings: referralEarnings.length

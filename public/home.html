@@ -276,6 +276,15 @@ async function claimBonus(){
     const result = await res.json().catch(() => ({}));
     if(res.ok){
       showToast(result.message || (`Bonus claimed! You received $${(bonus.amountUsd || 0).toFixed ? bonus.amountUsd.toFixed(2) : (bonus.amountUsd||0)}`), 'success');
+      
+      // Update balance immediately from response
+      if(result.newWalletUsd !== undefined) {
+        document.getElementById('usd').innerText = result.newWalletUsd.toFixed(2);
+        document.getElementById('naira').innerText = Math.round(result.newWalletUsd * 1500).toLocaleString();
+        document.getElementById('nairaTop').innerText = Math.round(result.newWalletUsd * 1500).toLocaleString();
+      }
+      
+      // Then fetch fresh data from server
       await load();
       await loadBonuses();
     } else {

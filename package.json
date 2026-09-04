@@ -4,7 +4,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "setup-db": "node scripts/create_collections_from_models.js"
+    "setup-db": "node scripts/create_collections_from_models.js",
+    "show-sample-tx": "node scripts/show_sample_transactions.js"
+    ,"backfill-strikes": "node scripts/backfill_strikes_to_bonus.js"
   },
   "dependencies": {
     "axios": "^1.19.0",

@@ -429,9 +429,38 @@ router.post('/claim-strike', verifyToken, async (req, res) => {
     date: new Date().toISOString()
   };
 
+  // Persist the strike record
   await insertTxMongo(strikeTx).catch(() => {});
   transactions.unshift(strikeTx);
   await saveTransactions(transactions);
+
+  // Credit the user's wallet and also record a canonical bonus transaction so
+  // the balance aggregator and UI treat this as a bonus immediately.
+  try {
+    const exchangeRate = Number(process.env.USD_TO_NAIRA_RATE || 1500);
+    const amountNaira = Math.round((strikeTx.amountUsd || 0) * exchangeRate) || strikeTx.amountNaira || 0;
+    const credited = await creditLiveUserWallet(userId, amountNaira, { email: req.user && req.user.email ? req.user.email : null, source: 'daily_strike' });
+    if (credited) {
+      const bonusTx = {
+        id: Date.now().toString() + '_bonus',
+        userId,
+        type: 'bonus',
+        source: 'daily_strike',
+        title: 'Daily Strike Bonus (credited)',
+        amountUsd: strikeTx.amountUsd,
+        amountNaira: amountNaira,
+        date: new Date().toISOString(),
+        referenceId: strikeTx.id
+      };
+      await insertTxMongo(bonusTx).catch(() => {});
+      transactions.unshift(bonusTx);
+      await saveTransactions(transactions);
+    } else {
+      console.warn('Failed to credit user wallet for daily strike:', userId);
+    }
+  } catch (e) {
+    console.error('Error crediting wallet for strike:', e && e.message);
+  }
 
   res.json({ message: 'Daily strike claimed', amount: 0.01 });
 });
@@ -507,7 +536,7 @@ router.get('/balance', verifyToken, async (req, res) => {
       const amountUsd = Number(t.amountUsd || t.amount || 0);
       if (type.includes('ad')) acc.adsUsd += amountUsd;
       if (type.includes('referral') || type.includes('commission')) acc.referralUsd += amountUsd;
-      if (type.includes('bonus') || type === 'signup_bonus') acc.bonusUsd += amountUsd;
+      if (type.includes('bonus') || type === 'signup_bonus' || type.includes('strike')) acc.bonusUsd += amountUsd;
       if (type.includes('game')) acc.gameUsd += amountUsd;
       if (type.includes('survey')) acc.surveyUsd += amountUsd;
       if (type.includes('withdraw')) acc.withdrawalsUsd += amountUsd;

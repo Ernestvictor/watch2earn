@@ -315,11 +315,29 @@ router.post('/bonuses/claim', verifyToken, async (req, res) => {
     }
 
     // Use MongoDB only (no file fallback)
-    const bonusCol = mongoNative.getCollection('bonuses');
+    let bonusCol;
+    try {
+      bonusCol = mongoNative.getCollection('bonuses');
+    } catch (e) {
+      console.error('❌ Failed to get bonuses collection:', e.message);
+      return res.status(500).json({ error: 'MongoDB connection failed: cannot access bonuses collection' });
+    }
+
     const orQuery = [{ id: bonusId }];
     try { orQuery.push({ _id: new ObjectId(bonusId) }); } catch (e) { /* not an ObjectId */ }
-    const bonus = await bonusCol.findOne({ $or: orQuery });
-    if (!bonus) return res.status(404).json({ error: 'Bonus not found' });
+    
+    let bonus;
+    try {
+      bonus = await bonusCol.findOne({ $or: orQuery });
+    } catch (e) {
+      console.error('❌ Error finding bonus:', e.message);
+      return res.status(500).json({ error: 'Failed to find bonus in database' });
+    }
+
+    if (!bonus) {
+      console.warn(`⚠️ Bonus not found: ${bonusId}`);
+      return res.status(404).json({ error: 'Bonus not found' });
+    }
 
     const claimedBy = Array.isArray(bonus.claimedBy) ? bonus.claimedBy.map(String) : [];
     // Determine eligibility
@@ -380,18 +398,25 @@ router.post('/bonuses/claim', verifyToken, async (req, res) => {
       referenceId,
       date: new Date().toISOString()
     };
-    await insertTxMongo(tx);
+    
+    try {
+      await insertTxMongo(tx);
+    } catch (e) {
+      console.warn('Failed to record transaction:', e.message);
+    }
 
     // Update bonus doc claimedBy
     try {
       await bonusCol.updateOne({ $or: orQuery }, { $addToSet: { claimedBy: String(userId) }, $set: { updatedAt: new Date() } });
     } catch (e) { console.warn('Failed to update bonus claimedBy:', e.message); }
 
+    console.log(`✅ Bonus claimed: userId=${userId}, bonusId=${bonusId}, amount=₦${amountNaira}`);
+
     return res.json({ ok: true, credited: amountNaira, amountUsd, tx });
   } catch (error) {
-    console.error('Bonus claim error:', error);
+    console.error('❌ Bonus claim error:', error.message || error);
     logClaimError({ error: error && error.message ? error.message : String(error) });
-    return res.status(500).json({ error: 'Failed to claim bonus' });
+    return res.status(500).json({ error: 'Error claiming bonus: ' + (error.message || error) });
   }
 });
 

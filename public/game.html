@@ -5,47 +5,72 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Game</title>
     <style>
+      * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: Arial, sans-serif;
-        background: #f4f4f4;
-        color: #111;
+        background: #0f0f13;
+        color: #fff;
       }
 
-      .container {
-        max-width: 900px;
-        margin: 40px auto;
-        padding: 24px;
-        background: #fff;
-        border-radius: 12px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      .page {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
       }
 
-      h1 {
-        margin-top: 0;
-      }
-
-      .box {
-        margin-top: 20px;
+      .game-shell {
+        width: 100%;
+        max-width: 980px;
+        background: #111827;
+        border: 1px solid #2a2f3a;
+        border-radius: 18px;
         padding: 16px;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        background: #fafafa;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+      }
+
+      .game-frame {
+        width: 100%;
+        min-height: 260px;
+        border: 0;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #000;
+      }
+
+      @media (max-width: 768px) {
+        .page { padding: 12px; }
+        .game-shell { padding: 10px; border-radius: 12px; }
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <h1>Game</h1>
-      <p>Simple plain HTML page.</p>
-
-      <div class="box">
-        <p>Nothing here yet.</p>
-      </div>
-
-      <div class="box" style="margin-top: 30px;">
-        <iframe src="https://uncached.gamemonetize.com/7ubj0focn2ah0c9km8a4bxzskl6emjuy/" style="width: 100%; height: 600px; border: none; border-radius: 8px;"></iframe>
+    <div class="page">
+      <div class="game-shell">
+        <div id="gamemonetize-video-container" class="game-frame"></div>
       </div>
     </div>
+
+    <script type="text/javascript">
+      window.VIDEO_OPTIONS = {
+        gameid: "4kci7og3klgj0ivy2wz3gdvd9dth5e7n",
+        width: "100%",
+        height: "480px",
+        color: "#3f007e",
+        getAds: "true"
+      };
+
+      (function (a, b, c) {
+        var d = a.getElementsByTagName(b)[0];
+        if (!a.getElementById(c)) {
+          var s = a.createElement(b);
+          s.id = c;
+          s.src = "https://api.gamemonetize.com/video.js";
+          d.parentNode.insertBefore(s, d);
+        }
+      })(document, "script", "gamemonetize-video-api");
+    </script>
   </body>
 </html>

@@ -5,72 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Game</title>
     <style>
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        font-family: Arial, sans-serif;
-        background: #0f0f13;
-        color: #fff;
-      }
-
-      .page {
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-      }
-
-      .game-shell {
-        width: 100%;
-        max-width: 980px;
-        background: #111827;
-        border: 1px solid #2a2f3a;
-        border-radius: 18px;
-        padding: 16px;
-        box-shadow: 0 12px 32px rgba(0,0,0,0.35);
-      }
-
-      .game-frame {
-        width: 100%;
-        min-height: 260px;
-        border: 0;
-        border-radius: 12px;
-        overflow: hidden;
-        background: #000;
-      }
-
-      @media (max-width: 768px) {
-        .page { padding: 12px; }
-        .game-shell { padding: 10px; border-radius: 12px; }
-      }
+      *{box-sizing:border-box}
+      body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#0b0b0f;color:#fff}
+      .page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+      .game-shell{width:100%;max-width:980px;background:#0f1724;border:1px solid #1f2937;border-radius:12px;padding:12px}
+      .game-frame{width:100%;border-radius:8px;overflow:hidden;background:#000}
+      .game-frame iframe{display:block;width:100%;height:480px;border:0}
+      @media (max-width:600px){.game-frame iframe{height:calc(60vw);}}
+      .info{font-size:13px;color:#cbd5e1;margin-top:8px}
     </style>
   </head>
   <body>
     <div class="page">
       <div class="game-shell">
-        <div id="gamemonetize-video-container" class="game-frame"></div>
+        <!-- Embed iframe provided -->
+        <div class="game-frame">
+          <iframe src="https://html5.gamemonetize.co/rrq98w912s5jferm6uxtvf13efrmv8d2/" title="Game"></iframe>
+        </div>
+
+        <!-- ID container requested (id must be a valid identifier) -->
+        <div id="rrq98w912s5jferm6uxtvf13efrmv8d2" class="info">rrq98w912s5jferm6uxtvf13efrmv8d2</div>
+
+        <script type="text/javascript">
+           window.VIDEO_OPTIONS = {
+               gameid : "rrq98w912s5jferm6uxtvf13efrmv8d2",
+               width  : "100%",
+               height : "480px",
+               color  : "#3f007e",
+               getAds  : "true"
+           };
+           (function (a, b, c) {
+              var d = a.getElementsByTagName(b)[0];
+              if(!a.getElementById(c)){
+                var s = a.createElement(b); s.id = c; s.src = "https://api.gamemonetize.com/video.js"; d.parentNode.insertBefore(s, d);
+              }
+           })(document, "script", "gamemonetize-video-api"); 
+        </script>
       </div>
     </div>
-
-    <script type="text/javascript">
-      window.VIDEO_OPTIONS = {
-        gameid: "4kci7og3klgj0ivy2wz3gdvd9dth5e7n",
-        width: "100%",
-        height: "480px",
-        color: "#3f007e",
-        getAds: "true"
-      };
-
-      (function (a, b, c) {
-        var d = a.getElementsByTagName(b)[0];
-        if (!a.getElementById(c)) {
-          var s = a.createElement(b);
-          s.id = c;
-          s.src = "https://api.gamemonetize.com/video.js";
-          d.parentNode.insertBefore(s, d);
-        }
-      })(document, "script", "gamemonetize-video-api");
-    </script>
   </body>
 </html>

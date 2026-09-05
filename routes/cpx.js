@@ -14,7 +14,8 @@ const TXN_PATH = path.join(DATA_DIR, 'transactions.json');
 const CPX_TRACKING_PATH = path.join(DATA_DIR, 'cpx-tracking.json');
 
 // CPX Secure Key from dashboard
-const CPX_SECURE_KEY = "CTJ6jPqHw1T80G7qCTxG6AjE72aadXzE";
+const CPX_SECURE_KEY = process.env.CPX_SECURE_KEY || "CTJ6jPqHw1T80G7qCTxG6AjE72aadXzE";
+const CPX_APP_ID = Number(process.env.CPX_APP_ID || 35282);
 
 async function loadUsers() {
   try {
@@ -106,7 +107,7 @@ router.get('/hash', verifyToken, async (req, res) => {
       email: user.email || '',
       username: user.displayName || user.name || 'User',
       secure_hash: secureHash,
-      app_id: 35282
+      app_id: CPX_APP_ID
     });
   } catch (err) {
     console.error('Error generating CPX hash:', err);

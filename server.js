@@ -590,6 +590,175 @@ app.post('/api/auto-tag/mark-shown', async (req, res) => {
   }
 });
 
+// CPX postback route used by the app URL format:
+// https://watch2earn-ergc.onrender.com/cpx-postback?user_id={user_id}&status={status}&transaction_id={trans_id}&amount_local={amount_local}&amount_usd={amount_usd}&sub_id={subid}&offer_id={offer_ID}&ip={ip_click}&hash={...}
+app.get('/cpx-postback', async (req, res) => {
+  try {
+    const {
+      user_id,
+      status,
+      transaction_id,
+      amount_local,
+      amount_usd,
+      sub_id,
+      offer_id,
+      ip,
+      hash
+    } = req.query;
+
+    const normalizedStatus = String(status || '').toLowerCase();
+    const amount = parseFloat(amount_usd || 0);
+
+    console.log('CPX POSTBACK RECEIVED:', req.query);
+
+    if (!user_id || !transaction_id || !normalizedStatus || Number.isNaN(amount) || amount <= 0) {
+      return res.status(400).send('Missing required parameters');
+    }
+
+    const txColl = mongoNative.getTransactionsCollection();
+    const usersColl = mongoNative.getUsersCollection();
+
+    // prevent duplicate payments
+    const existingTx = await txColl.findOne({
+      $or: [
+        { cpxTransId: String(transaction_id) },
+        { transaction_id: String(transaction_id) },
+        { trans_id: String(transaction_id) }
+      ]
+    });
+
+    if (existingTx) {
+      console.log('Duplicate CPX transaction ignored:', transaction_id);
+      return res.send('OK - Already processed');
+    }
+
+    const currencyFactor = Number(process.env.CURRENCY_FACTOR || 1000);
+    const amountNaira = Math.round(amount * 1500);
+    const coins = Math.round(amount * currencyFactor);
+
+    if (normalizedStatus === 'complete' || normalizedStatus === '1') {
+      const userQuery = {
+        $or: [
+          { userId: String(user_id) },
+          { firebaseUid: String(user_id) },
+          { uid: String(user_id) },
+          { id: String(user_id) }
+        ]
+      };
+
+      if (sub_id) {
+        userQuery.$or.push({ email: String(sub_id).toLowerCase() });
+      }
+
+      const userUpdate = {
+        $inc: {
+          coins: coins,
+          balance: coins,
+          totalEarned: coins
+        },
+        $set: {
+          userId: String(user_id),
+          uid: String(user_id),
+          email: sub_id ? String(sub_id).toLowerCase() : (userQuery.email || ''),
+          lastActivity: new Date(),
+          updatedAt: new Date()
+        }
+      };
+
+      await usersColl.updateOne(userQuery, userUpdate, { upsert: true });
+
+      await txColl.insertOne({
+        userId: String(user_id),
+        email: sub_id ? String(sub_id).toLowerCase() : null,
+        transaction_id: String(transaction_id),
+        cpxTransId: String(transaction_id),
+        type: 'survey',
+        source: 'cpx',
+        title: 'CPX Survey Completed',
+        amountUsd: amount,
+        amountNaira: amountNaira,
+        coins: coins,
+        offerId: offer_id || null,
+        status: 'complete',
+        ip: ip || null,
+        hash: hash || null,
+        createdAt: new Date()
+      });
+
+      console.log(`✅ Credited ${coins} coins / ₦${amountNaira} to user ${user_id} for CPX survey`);
+      return res.send('OK');
+    }
+
+    if (normalizedStatus === 'canceled' || normalizedStatus === '2' || normalizedStatus === 'cancelled') {
+      const userQuery = {
+        $or: [
+          { userId: String(user_id) },
+          { firebaseUid: String(user_id) },
+          { uid: String(user_id) },
+          { id: String(user_id) }
+        ]
+      };
+
+      if (sub_id) {
+        userQuery.$or.push({ email: String(sub_id).toLowerCase() });
+      }
+
+      await usersColl.updateOne(userQuery, {
+        $inc: {
+          coins: -coins,
+          balance: -coins,
+          totalEarned: -coins
+        }
+      }, { upsert: true });
+
+      await txColl.insertOne({
+        userId: String(user_id),
+        email: sub_id ? String(sub_id).toLowerCase() : null,
+        transaction_id: String(transaction_id),
+        cpxTransId: String(transaction_id),
+        type: 'survey_reversal',
+        source: 'cpx',
+        title: 'CPX Survey Reversed',
+        amountUsd: -amount,
+        amountNaira: -amountNaira,
+        coins: -coins,
+        offerId: offer_id || null,
+        status: 'canceled',
+        ip: ip || null,
+        hash: hash || null,
+        createdAt: new Date()
+      });
+
+      console.log(`❌ Deducted ${coins} coins / ₦${amountNaira} from user ${user_id}`);
+      return res.send('OK');
+    }
+
+    if (normalizedStatus === 'screenout') {
+      await txColl.insertOne({
+        userId: String(user_id),
+        email: sub_id ? String(sub_id).toLowerCase() : null,
+        transaction_id: String(transaction_id),
+        cpxTransId: String(transaction_id),
+        type: 'survey_screenout',
+        source: 'cpx',
+        title: 'CPX Survey Screenout',
+        amountUsd: amount,
+        offerId: offer_id || null,
+        status: 'screenout',
+        ip: ip || null,
+        hash: hash || null,
+        createdAt: new Date()
+      });
+      return res.send('OK');
+    }
+
+    return res.send('OK');
+  } catch (error) {
+    console.error('CPX postback error:', error);
+    return res.status(500).send('Server Error');
+  }
+});
+
 // ✅ Middleware
 const fraudCheck = require('./middleware/fraudcheck');
 

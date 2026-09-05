@@ -28,9 +28,10 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 
 // ✅ Connect to MongoDB (required)
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+const mongoDbName = process.env.MONGO_DB_NAME || process.env.DB_NAME || 'watch2earn';
 mongoose.set('strictQuery', false);
-mongoose.connect(mongoUri)
-  .then(() => { console.log('✅ Connected to MongoDB'); })
+mongoose.connect(mongoUri, { dbName: mongoDbName })
+  .then(() => { console.log(`✅ Connected to MongoDB (Mongoose): ${mongoDbName}`); })
   .catch(err => {
     console.error('❌ MongoDB connection error:', err);
     process.exit(1);
@@ -52,7 +53,6 @@ mongoNative.connectDB().then(() => {
   }
 }).catch(err => { /* already logged in module */ });
 
-const { auth: firebaseAuth } = require('./config/firebaseAdmin');
 const authMiddleware = require('./middleware/auth');
 const User = require('./models/users');
 

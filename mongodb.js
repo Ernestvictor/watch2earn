@@ -2,6 +2,8 @@ const { MongoClient } = require('mongodb');
 require('dotenv').config();
 
 const uri = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URL;
+const dbName = process.env.MONGO_DB_NAME || process.env.DB_NAME || 'watch2earn';
+
 if (!uri) console.warn('⚠️ MONGODB_URI/MONGO_URI is not set — mongodb features will be disabled');
 
 const client = new MongoClient(uri, {
@@ -20,13 +22,13 @@ async function connectDB() {
     if (!client.topology || !client.topology.isConnected()) {
       await client.connect();
     }
-    db = client.db('watch2earn');
+    db = client.db(dbName);
     users = db.collection('users');
     transactions = db.collection('transactions');
     try {
       await users.createIndex({ email: 1 }, { unique: true });
     } catch (e) {}
-    console.log('✅ Connected to MongoDB (native): watch2earn');
+    console.log(`✅ Connected to MongoDB (native): ${dbName}`);
   } catch (err) {
     console.error('❌ MongoDB native connection failed:', err.message || err);
     throw err;

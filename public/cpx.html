@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPX Surveys - Watch2Earn</title>
+  <link rel="stylesheet" href="user.css">
+  <style>
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Arial, sans-serif;
+      background:#0b0b0f;
+      color:#fff;
+    }
+    .container{max-width:980px;margin:0 auto;padding:20px}
+    .header{
+      background:linear-gradient(135deg,#667eea 0%, #764ba2 100%);
+      padding:20px 0;
+      margin-bottom:20px;
+    }
+    .header h1{margin:0;font-size:28px}
+    .card{
+      background:#111827;border:1px solid #1f2937;border-radius:12px;padding:18px;margin-bottom:18px
+    }
+    .nav{
+      display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px
+    }
+    .nav a{
+      text-decoration:none;color:#d1d5db;padding:10px 14px;border-radius:8px;background:#111827;border:1px solid #1f2937
+    }
+    .nav a.active{background:#4CAF50;color:#fff;border-color:#4CAF50}
+    .panel{background:#111827;border:1px solid #1f2937;border-radius:12px;padding:16px}
+    .info{color:#cbd5e1;line-height:1.6;margin:0 0 16px}
+    .widget-wrap{margin-top:20px;padding:12px;border-radius:10px;background:#0b0b0f;border:1px solid #1f2937}
+    #fullscreen{min-height:420px}
+    @media (max-width:600px){
+      .container{padding:14px}
+      .header h1{font-size:22px}
+      .widget-wrap{padding:8px}
+      #fullscreen{min-height:320px}
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="container">
+      <h1>Complete Surveys & Earn 💰</h1>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="nav">
+      
+      <a href="survey.html">Surveys</a>
+      <a href="cpx.html" class="active">CPX</a>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0; margin-bottom:12px;">CPX Research Surveys</h3>
+      <p class="info">Complete survey offers from CPX Research and unlock reward opportunities directly inside the widget below.</p>
+      <p><a href="survey.html" style="color:#4CAF50; font-weight:700; text-decoration:none;">← Back to Survey Page</a></p>
+    </div>
+
+    <div class="panel">
+      <div class="widget-wrap">
+        <iframe width="100%" frameBorder="0" height="2000px" src="https://offers.cpx-research.com/index.php?app_id=35914&ext_user_id={unique_user_id}&secure_hash={secure_hash}&username={user_name}&email={user_email}&subid_1=&subid_2"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // How to use:
+    // 1. Add div(s) to html and give it an id
+    // 2. add this config script before the script tag
+    // 3. place the script on the bottom before the closing html tag
+    const script1 = {
+        div_id: "fullscreen",
+        theme_style: 1,
+        order_by: 2,
+        limit_surveys: 7
+    };
+
+    const config = {
+        general_config: {
+            app_id: 35282,
+            ext_user_id: "your_user_id",
+            email: "",
+            username: "",
+            secure_hash: "",
+            subid_1: "",
+            subid_2: ""
+        },
+        style_config: {
+            text_color: "#2b2b2b",
+            survey_box: {
+                topbar_background_color: "#ffaf20",
+                box_background_color: "white",
+                rounded_borders: true,
+                stars_filled: "black"
+            }
+        },
+        script_config: [script1],
+        debug: false,
+        useIFrame: true,
+        iFramePosition: 1,
+        functions: {
+            no_surveys_available: () => {
+                console.log("no surveys available function here");
+            },
+            count_new_surveys: (countsurveys) => {
+                console.log("count surveys function here, count:", countsurveys);
+            },
+            get_all_surveys: (surveys) => {
+                console.log("get all surveys function here, surveys: ", surveys);
+            },
+            get_transaction: (transactions) => {
+                console.log("transaction function here, transaction: ", transactions);
+            }
+        }
+    };
+
+    window.config = config;
+  </script>
+
+  <script type="text/javascript" src="https://cdn.cpx-research.com/assets/js/script_tag_v2.0.js"></script>
+</body>
+</html>

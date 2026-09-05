@@ -40,6 +40,17 @@
       .widget-wrap{padding:8px}
       #fullscreen{min-height:320px}
     }
+    .back-btn{
+      display:inline-block;
+      color:#fff;
+      background:linear-gradient(135deg,#667eea 0%, #764ba2 100%);
+      text-decoration:none;
+      padding:10px 16px;
+      border-radius:8px;
+      font-weight:700;
+      margin-top:8px;
+    }
+    .back-btn:hover{opacity:0.96}
   </style>
 </head>
 <body>
@@ -52,19 +63,19 @@
   <div class="container">
     <div class="nav">
       
-      <a href="survey.html">Surveys</a>
+      <a href="survey.html">Back to Surveys</a>
       <a href="cpx.html" class="active">CPX</a>
     </div>
 
     <div class="card">
       <h3 style="margin-top:0; margin-bottom:12px;">CPX Research Surveys</h3>
       <p class="info">Complete survey offers from CPX Research and unlock reward opportunities directly inside the widget below.</p>
-      <p><a href="survey.html" style="color:#4CAF50; font-weight:700; text-decoration:none;">← Back to Survey Page</a></p>
+      <p><a href="survey.html" class="back-btn">← Back to Survey </a></p>
     </div>
 
     <div class="panel">
       <div class="widget-wrap">
-        <iframe width="100%" frameBorder="0" height="2000px" src="https://offers.cpx-research.com/index.php?app_id=35914&ext_user_id={unique_user_id}&secure_hash={secure_hash}&username={user_name}&email={user_email}&subid_1=&subid_2"></iframe>
+        <iframe width="100%" frameBorder="0" height="420px" src="https://offers.cpx-research.com/index.php?app_id=35914&ext_user_id={unique_user_id}&secure_hash={secure_hash}&username={user_name}&email={user_email}&subid_1=&subid_2"></iframe>
       </div>
     </div>
   </div>

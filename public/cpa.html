@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPA Offers</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f7f7fb;
+            margin: 0;
+            padding: 32px 16px;
+            color: #1f2937;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+        .offer-btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            text-decoration: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            margin: 6px 0;
+            font-weight: 600;
+        }
+        h1 { margin-top: 0; }
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .back-btn {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .back-btn:hover { opacity: 0.95; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="topbar">
+            <h1>CPA Offers</h1>
+            <a class="back-btn" href="survey.html">← Back to Survey</a>
+        </div>
+
+        <p>Use this page for CPA offers and postback tracking.</p>
+
+        <div style="background:#fff;padding:12px;border-radius:8px;border:1px solid #eee">
+            <h6 style="margin-top:0;margin-bottom:8px">Tundrafile Offer</h6>
+            <p style="color:#666;font-size:13px;margin-bottom:8px">Open this Tundrafile offer in a new tab:</p>
+            <p><a class="offer-btn" href="#" onclick="cpagripTrack('https://tundrafile.com/show.php?l=0&u=2549198&id=70075&subid=email'); return false;">Open Tundrafile offer</a></p>
+
+            <div style="margin-top:12px">
+                <script type="text/javascript" src="https://tundrafile.com/script_include.php?id=1908915"></script>
+                <p style="margin:6px 0"><a class="offer-btn" href="https://tundrafile.com/show.php?l=0&u=2549198&id=70075&subid=email" target="_blank" rel="noopener noreferrer">Open tundrafile (script 1908915)</a></p>
+
+                <script type="text/javascript" src="https://tundrafile.com/script_include.php?id=1908879"></script>
+                <p style="margin:6px 0"><a class="offer-btn" href="https://tundrafile.com/show.php?l=0&u=2549198&id=70075&subid=email" target="_blank" rel="noopener noreferrer">Open tundrafile (script 1908879)</a></p>
+
+                <script type="text/javascript" src="https://tundrafile.com/script_include.php?id=1908916"></script>
+                <p style="margin:6px 0"><a class="offer-btn" href="https://tundrafile.com/show.php?l=0&u=2549198&id=70075&subid=email" target="_blank" rel="noopener noreferrer">Open tundrafile (script 1908916)</a></p>
+
+                <p style="margin:6px 0"><a class="offer-btn" href="https://tundrafile.com/1909739" target="_blank" rel="noopener noreferrer">Open tundrafile (1909739)</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/cpagrip-postback.js"></script>
+</body>
+</html>

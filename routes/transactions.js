@@ -160,56 +160,88 @@ async function creditLiveUserWallet(userId, amountNaira, options = {}) {
   const safeEmail = email ? String(email) : null;
   const source = options.source || 'transaction';
 
-  const filter = { $or: [{ firebaseUid: safeUserId }, { uid: safeUserId }, { id: safeUserId }, { email: safeUserId }] };
-  if (safeEmail) filter.$or.push({ email: safeEmail });
+  const filters = [
+    { firebaseUid: safeUserId },
+    { uid: safeUserId },
+    { id: safeUserId },
+    { email: safeUserId }
+  ];
+  if (safeEmail) filters.push({ email: safeEmail });
 
-  const updateOp = {
-    $inc: { wallet: amount, balance: amount, totalEarned: amount },
-    $set: { updatedAt: new Date() },
-    $setOnInsert: {
-      firebaseUid: safeUserId,
-      email: safeEmail || `${safeUserId.replace(/[@.]/g, '_')}@local.user`,
-      displayName: safeUserId,
-      wallet: amount,
-      balance: amount,
-      totalEarned: amount,
-      status: 'active'
-    }
-  };
-
-  // Try Mongoose first (most reliable in this setup)
   try {
     if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
-      const record = await User.findOneAndUpdate(filter, updateOp, { upsert: true, new: true }).lean();
-      if (record) {
-        console.log(`✅ Credited ${source}: userId=${safeUserId}, amount=₦${amount}`);
-        return record;
+      let user = await User.findOne({ $or: filters }).lean();
+      if (!user) {
+        const nameBase = safeEmail ? safeEmail.split('@')[0] : safeUserId;
+        user = await User.create({
+          firebaseUid: safeUserId,
+          uid: safeUserId,
+          id: safeUserId,
+          email: safeEmail || `${nameBase.replace(/[^a-zA-Z0-9]/g, '_')}@local.user`,
+          username: nameBase,
+          displayName: nameBase,
+          wallet: 0,
+          balance: 0,
+          totalEarned: 0,
+          status: 'active'
+        });
+      }
+
+      const updated = await User.findOneAndUpdate(
+        { _id: user._id },
+        { $inc: { wallet: amount, balance: amount, totalEarned: amount }, $set: { updatedAt: new Date() } },
+        { new: true }
+      ).lean();
+
+      if (updated) {
+        console.log(`✅ Credited ${source}: userId=${safeUserId}, amount=₦${amount}, wallet=₦${Number(updated.wallet || 0)}`);
+        return updated;
       }
     }
   } catch (e) {
-    console.error(`⚠️ Mongoose credit failed for ${source}:`, e && e.message);
+    console.warn(`Mongoose credit failed for ${source}:`, e && e.message);
   }
 
-  // Fallback to native MongoDB
   try {
     if (mongoNative && typeof mongoNative.getUsersCollection === 'function') {
       const usersCol = mongoNative.getUsersCollection();
-      const result = await usersCol.findOneAndUpdate(
-        filter,
-        updateOp,
-        { upsert: true, returnDocument: 'after' }
+      let user = await usersCol.findOne({ $or: filters });
+      if (!user) {
+        const nameBase = safeEmail ? safeEmail.split('@')[0] : safeUserId;
+        const inserted = await usersCol.insertOne({
+          firebaseUid: safeUserId,
+          uid: safeUserId,
+          id: safeUserId,
+          email: safeEmail || `${nameBase.replace(/[^a-zA-Z0-9]/g, '_')}@local.user`,
+          username: nameBase,
+          displayName: nameBase,
+          wallet: 0,
+          balance: 0,
+          totalEarned: 0,
+          status: 'active',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        user = await usersCol.findOne({ _id: inserted.insertedId });
+      }
+
+      const updated = await usersCol.findOneAndUpdate(
+        { _id: user._id },
+        { $inc: { wallet: amount, balance: amount, totalEarned: amount }, $set: { updatedAt: new Date() } },
+        { returnDocument: 'after' }
       );
-      const doc = result?.value || result?.lastErrorObject?.upserted || result;
+
+      const doc = updated?.value || updated;
       if (doc) {
-        console.log(`✅ Credited ${source} (native MongoDB): userId=${safeUserId}, amount=₦${amount}`);
+        console.log(`✅ Credited ${source} (native): userId=${safeUserId}, amount=₦${amount}, wallet=₦${Number(doc.wallet || 0)}`);
         return doc;
       }
     }
   } catch (e) {
-    console.error(`⚠️ Native MongoDB credit failed for ${source}:`, e && e.message);
+    console.warn(`Native credit failed for ${source}:`, e && e.message);
   }
 
-  console.error(`❌ Failed to credit wallet for ${source}: userId=${safeUserId}, amount=₦${amount} — No database connection available`);
+  console.error(`❌ Failed to credit wallet for ${source}: userId=${safeUserId}, amount=₦${amount}. Mongo connection or user record missing.`);
   return null;
 }
 

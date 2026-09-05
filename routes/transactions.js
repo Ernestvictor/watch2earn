@@ -8,6 +8,7 @@ const { getRate } = require('../config/exchange');
 const User = require('../models/users');
 const { ObjectId } = require('mongodb');
 const mongoose = require('mongoose');
+const { payReferralCommission } = require('../lib/referralHelpers');
 
 // Simple in-memory rate limiter for bonus claims (per-process)
 const CLAIM_RATE = {};
@@ -194,6 +195,7 @@ async function creditLiveUserWallet(userId, amountNaira, options = {}) {
       ).lean();
 
       if (updated) {
+        try { await payReferralCommission(updated, amount, source); } catch (e) { console.warn('Referral commission (transactions mongoose) failed:', e && e.message); }
         console.log(`✅ Credited ${source}: userId=${safeUserId}, amount=₦${amount}, wallet=₦${Number(updated.wallet || 0)}`);
         return updated;
       }
@@ -232,6 +234,7 @@ async function creditLiveUserWallet(userId, amountNaira, options = {}) {
       );
 
       const doc = updated?.value || updated;
+      try { await payReferralCommission(doc, amount, source); } catch (e) { console.warn('Referral commission (transactions native) failed:', e && e.message); }
       if (doc) {
         console.log(`✅ Credited ${source} (native): userId=${safeUserId}, amount=₦${amount}, wallet=₦${Number(doc.wallet || 0)}`);
         return doc;
@@ -302,11 +305,12 @@ router.post('/earn', verifyToken, async (req, res) => {
     await creditLiveUserWallet(userId, Number(nairaAmount || 0), { email: req.user.email, source: 'ad' });
   } catch (e) { console.warn('MongoDB wallet update failed:', e?.message); }
 
-  // If there's a referrer, add 10% referral bonus to referrer
+  // If there's a referrer, add referral bonus to referrer (configurable rate)
   if (referrerId) {
+    const referralRate = Number(process.env.REFERRAL_RATE || 0.10);
     let exchangeRate;
     try { exchangeRate = getRate(); } catch (e) { console.error('Exchange rate error:', e.message); return res.status(500).json({ error: 'Server misconfiguration: exchange rate' }); }
-    const referralBonus = usdAmount * 0.1; // 10% referral earnings
+    const referralBonus = usdAmount * referralRate;
     const referralTx = {
       id: Date.now().toString() + '_ref',
       userId: referrerId,

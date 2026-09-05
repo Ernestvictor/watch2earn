@@ -22,6 +22,17 @@ router.post('/register', async (req, res) => {
       user = await User.findOne({ email: normalizedEmail });
     }
 
+    // If a referredBy (uid) was provided, try to resolve to a MongoDB _id
+    let resolvedReferrerId = null;
+    if (referredBy) {
+      try {
+        const refUser = await User.findOne({ $or: [{ firebaseUid: referredBy }, { uid: referredBy }, { id: referredBy }, { email: (referredBy || '').toLowerCase() }] });
+        if (refUser) resolvedReferrerId = refUser._id;
+      } catch (e) {
+        // ignore resolution errors
+      }
+    }
+
     if (!user) {
       user = await User.create({
         firebaseUid,
@@ -31,13 +42,13 @@ router.post('/register', async (req, res) => {
         wallet: 0,
         balance: 0,
         totalEarned: 0,
-        referredBy: referredBy || null
+        referredBy: resolvedReferrerId || null
       });
     } else {
       user.email = normalizedEmail;
       user.username = safeName;
       user.displayName = safeName;
-      if (referredBy && !user.referredBy) user.referredBy = referredBy;
+      if (resolvedReferrerId && !user.referredBy) user.referredBy = resolvedReferrerId;
       await user.save();
     }
 
@@ -60,6 +71,15 @@ router.post('/register-guest', async (req, res) => {
     // Create a deterministic placeholder firebaseUid so later real uid can replace it
     const placeholder = 'guest:' + crypto.createHash('md5').update(normalizedEmail).digest('hex');
 
+    // resolve referredBy UID to ObjectId if possible
+    let resolvedReferrerId = null;
+    if (referredBy) {
+      try {
+        const refUser = await User.findOne({ $or: [{ firebaseUid: referredBy }, { uid: referredBy }, { id: referredBy }, { email: (referredBy || '').toLowerCase() }] });
+        if (refUser) resolvedReferrerId = refUser._id;
+      } catch (e) {}
+    }
+
     let user = await User.findOne({ email: normalizedEmail }).catch(() => null);
     if (!user) {
       user = await User.create({
@@ -70,14 +90,14 @@ router.post('/register-guest', async (req, res) => {
         wallet: 0,
         balance: 0,
         totalEarned: 0,
-        referredBy: referredBy || null
+        referredBy: resolvedReferrerId || null
       });
       return res.json({ success: true, user, created: true });
     }
 
     // update referredBy only if not set
-    if (referredBy && !user.referredBy) {
-      user.referredBy = referredBy;
+    if (resolvedReferrerId && !user.referredBy) {
+      user.referredBy = resolvedReferrerId;
       await user.save();
     }
 

@@ -83,12 +83,16 @@
         try {
           const token = user ? await user.getIdToken() : null;
           if (token) {
-            await fetch('/api/auth/register', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-              body: JSON.stringify({ firebaseUid: user.uid, email: user.email, username: fullName, displayName: fullName })
-            });
-          }
+              // include referral UID if present in localStorage
+              const ref = localStorage.getItem('w2e_ref');
+              const body = { firebaseUid: user.uid, email: user.email, username: fullName, displayName: fullName };
+              if (ref) body.referredBy = ref;
+              await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                body: JSON.stringify(body)
+              });
+            }
         } catch(e) { console.warn('Backend register sync failed', e); }
 
         btn.innerText = 'Signed up';

@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const verifyToken = require('../middleware/auth');
 const mongoNative = require('../mongodb');
 const User = require('../models/users');
+const { payReferralCommission, createRewardLog } = require('../lib/referralHelpers');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const USERS_PATH = path.join(DATA_DIR, 'users.json');
@@ -168,6 +169,27 @@ router.get('/postback', async (req, res) => {
       const col = mongoNative.getCollection('cpx_tracking');
       await col.updateOne({ trans_id }, { $set: { trans_id, user_id, amount_usd: amountUsd, status: 'completed', date: new Date() } }, { upsert: true });
     } catch (e) { console.error('Failed to save cpx tracking:', e && e.message); }
+
+    // Attempt to credit the user's live wallet immediately and create canonical earning records
+    try {
+      const updated = await (async () => {
+        try {
+          const u = await User.findOne({ $or: [{ firebaseUid: user_id }, { uid: user_id }, { id: user_id }, { email: user_id }] });
+          if (!u) return null;
+          u.wallet = Number(u.wallet || 0) + amountNaira;
+          u.totalEarned = Number(u.totalEarned || 0) + amountNaira;
+          await u.save();
+
+          // create earning/history/message
+          await createRewardLog({ user: u, firebaseUid: u.firebaseUid, type: 'survey', sourceId: `cpx-${trans_id}`, amount: amountNaira, description: 'CPX survey completed', metadata: { cpxTransId: trans_id } });
+
+          // pay referral commission
+          try { await payReferralCommission(u, amountNaira, 'survey'); } catch (e) { console.warn('Referral commission (cpx survey) failed:', e && e.message); }
+
+          return u;
+        } catch (e) { console.warn('CPX credit user failed:', e && e.message); return null; }
+      })();
+    } catch (e) { console.warn('CPX credit flow error:', e && e.message); }
 
     console.log(`✅ Credited ₦${amountNaira} ($${amountUsd}) to user ${user_id} for survey`);
   } else if (status === '2') {

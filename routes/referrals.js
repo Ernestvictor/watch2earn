@@ -53,7 +53,7 @@ async function payReferralCommission(user, amount, source = 'ad') {
   if (!user.referredBy) return; // User has no referrer
 
   try {
-    const commissionRate = 0.10;
+    const commissionRate = Number(process.env.REFERRAL_RATE || 0.10);
     const commission = amount * commissionRate;
     const referrer = await User.findById(user.referredBy);
     

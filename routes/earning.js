@@ -4,6 +4,7 @@ const User = require('../models/users');
 const Earning = require('../models/earning');
 const Message = require('../models/messeges');
 const History = require('../models/history');
+const { payReferralCommission } = require('../lib/referralHelpers');
 
 async function createEarningLog({ user, firebaseUid, type, amount, description }) {
   return Earning.create({
@@ -104,6 +105,9 @@ router.post('/watch-ad', async (req, res) => {
       description: `Watched ad and earned ₦${amount}`
     });
 
+    // pay referral commission (10%) to referrer if any
+    try { await payReferralCommission(user, result.userAmount, 'ad'); } catch (e) { console.warn('Referral commission (ad) failed:', e && e.message); }
+
     res.json({ success: true, newWallet: result.newBalance, amount: result.userAmount });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -134,35 +138,8 @@ router.post('/offer-click', async (req, res) => {
       description: `Clicked sponsored offer and earned ₦${OFFER_REWARD}`
     });
 
-    // Also pay referral commission if user has a referrer
-    if (user.referredBy) {
-      try {
-        const referrer = await User.findById(user.referredBy);
-        if (referrer) {
-          const commission = OFFER_REWARD * 0.10; // 10% commission
-          referrer.wallet = Number(referrer.wallet || 0) + commission;
-          referrer.totalEarned = Number(referrer.totalEarned || 0) + commission;
-          await referrer.save();
-
-          await createRewardLog({
-            user: referrer,
-            firebaseUid: referrer.firebaseUid,
-            type: 'referral',
-            sourceId: `referral-offer-${Date.now()}`,
-            amount: commission,
-            description: `10% commission from ${user.username || user.email}'s offer click`,
-            metadata: {
-              source: 'offer_referral',
-              referredUserId: user._id.toString()
-            }
-          });
-
-          console.log(`✅ Referral commission: ₦${(commission * 1500).toFixed(2)} to ${referrer.email}`);
-        }
-      } catch (err) {
-        console.warn('Referral commission failed (offer click):', err.message);
-      }
-    }
+    // pay referral commission (10%) to referrer if any
+    try { await payReferralCommission(user, OFFER_REWARD, 'offer'); } catch (e) { console.warn('Referral commission (offer) failed:', e && e.message); }
 
     res.json({ 
       success: true, 

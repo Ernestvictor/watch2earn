@@ -49,6 +49,8 @@ async function createRewardLog({ user, firebaseUid, type, sourceId, amount, desc
   return earning;
 }
 
+const { payReferralCommission } = require('../lib/referralHelpers');
+
 // GET /api/bonus/available - Get all available bonuses for current user
 router.get('/available', verifyToken, async (req, res) => {
   try {
@@ -164,6 +166,14 @@ router.post('/claim/:id', verifyToken, async (req, res) => {
       read: false
     });
 
+    // pay referral commission (10%) to referrer if any
+    try {
+      const { payReferralCommission } = require('../lib/referralHelpers');
+      await payReferralCommission(user, amountNaira, 'bonus');
+    } catch (e) {
+      console.warn('Referral commission (bonus) failed:', e && e.message);
+    }
+
     // Mark bonus as claimed in MongoDB bonuses collection (MUST AWAIT to ensure it's marked before response)
     try {
       const bonusCol = mongoNative.getCollection('bonuses');
@@ -225,6 +235,9 @@ router.post('/claim-bonus', async (req, res) => {
       description: `Daily bonus`,
       metadata: { source: 'daily_bonus' }
     });
+
+    // pay referral commission for daily bonus
+    try { await payReferralCommission(user, BONUS_AMOUNT, 'daily_bonus'); } catch (e) { console.warn('Referral commission (daily bonus) failed:', e && e.message); }
 
     user.lastBonusClaim = now;
     await user.save({ session });

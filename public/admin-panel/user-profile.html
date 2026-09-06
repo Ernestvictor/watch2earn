@@ -99,7 +99,7 @@
       return 'other';
     }
 
-    function formatMoney(value) { return `$${Number(value || 0).toFixed(2)}`; }
+    function formatMoney(value) { return `₦${Number(value || 0).toLocaleString(undefined, {maximumFractionDigits:2})}`; }
 
     function formatDateTime(dateString) {
       const d = new Date(dateString || Date.now());
@@ -130,31 +130,59 @@
         summaryStats.innerHTML = `
           <div class="stat"><span class="label">Total Earnings</span><span class="value">${formatMoney(summary.total)}</span></div>
           <div class="stat"><span class="label">Ads</span><span class="value">${formatMoney(summary.ads)}</span></div>
-          <div class="stat"><span class="label">Referral</span><span class="value">${formatMoney(summary.referrals)}</span></div>
+          <div class="stat"><span class="label">Referral Bonus</span><span class="value">${formatMoney(summary.referrals)}</span></div>
           <div class="stat"><span class="label">Bonus</span><span class="value">${formatMoney(summary.bonus)}</span></div>
           <div class="stat"><span class="label">Game</span><span class="value">${formatMoney(summary.game)}</span></div>
           <div class="stat"><span class="label">Survey</span><span class="value">${formatMoney(summary.survey)}</span></div>
+          <div class="stat"><span class="label">Daily Strike</span><span class="value">${formatMoney(summary.dailystrike)}</span></div>
           <div class="stat"><span class="label">Telegram</span><span class="value">${formatMoney(summary.telegram)}</span></div>
         `;
 
         if (!transactions.length) {
           tableBody.innerHTML = '<tr><td colspan="5" class="empty">No earnings found yet</td></tr>';
-          return;
+        } else {
+          tableBody.innerHTML = transactions.map((tx) => {
+            const type = String(tx.type || 'other');
+            const amount = Number(tx.amountUsd || tx.amount || 0);
+            return `
+              <tr>
+                <td>${formatDateTime(tx.date || tx.createdAt)}</td>
+                <td>${new Date(tx.date || tx.createdAt || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</td>
+                <td><span class="badge ${badgeClass(type)}">${type.replace(/_/g, ' ').toUpperCase()}</span></td>
+                <td>${tx.title || tx.description || 'Activity'}</td>
+                <td>${formatMoney(amount)}</td>
+              </tr>
+            `;
+          }).join('');
         }
 
-        tableBody.innerHTML = transactions.map((tx) => {
-          const type = String(tx.type || 'other');
-          const amount = Number(tx.amountUsd || tx.amount || 0);
-          return `
-            <tr>
-              <td>${formatDateTime(tx.date || tx.createdAt)}</td>
-              <td>${new Date(tx.date || tx.createdAt || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</td>
-              <td><span class="badge ${badgeClass(type)}">${type.replace(/_/g, ' ').toUpperCase()}</span></td>
-              <td>${tx.title || tx.description || 'Activity'}</td>
-              <td>${formatMoney(amount)}</td>
-            </tr>
+        // Render referrals (count + list)
+        const referrals = data.referrals || [];
+        let refCard = document.getElementById('referralsCard');
+        if (!refCard) {
+          const container = document.querySelector('.container');
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.id = 'referralsCard';
+          card.innerHTML = `
+            <h3 style="margin-top:0">Referrals (${referrals.length})</h3>
+            <div style="overflow-x:auto">
+              <table>
+                <thead><tr><th>#</th><th>Referred Email / UID</th><th>Commission</th><th>Date</th><th>Status</th></tr></thead>
+                <tbody id="referralsTable"></tbody>
+              </table>
+            </div>
           `;
-        }).join('');
+          container.appendChild(card);
+          refCard = card;
+        }
+
+        const refTBody = document.getElementById('referralsTable');
+        if (!referrals || referrals.length === 0) {
+          refTBody.innerHTML = '<tr><td colspan="5" class="empty">No referrals found for this user</td></tr>';
+        } else {
+          refTBody.innerHTML = referrals.map((r, i) => `<tr><td>${i+1}</td><td>${r.referredEmail || r.referredUid || 'N/A'}</td><td>${formatMoney(r.commission)}</td><td>${formatDateTime(r.createdAt)}</td><td>${r.status || ''}</td></tr>`).join('');
+        }
       } catch (error) {
         console.error(error);
         profileHeader.innerHTML = '<h2>Error</h2><p style="color:#d0d5db;margin:0">Could not load user profile.</p>';

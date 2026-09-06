@@ -3,6 +3,8 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/users');
 const Earning = require('../models/earning');
+const Transaction = require('../models/Transaction');
+const Referral = require('../models/referral');
 const Message = require('../models/messeges');
 const Withdrawal = require('../models/withdrawal');
 const fs = require('fs');
@@ -1650,6 +1652,7 @@ router.get('/user/:id', verifyAdminToken, async (req, res) => {
       total: 0,
       ads: 0,
       referrals: 0,
+      dailystrike: 0,
       bonus: 0,
       game: 0,
       survey: 0,
@@ -1665,6 +1668,7 @@ router.get('/user/:id', verifyAdminToken, async (req, res) => {
       
       if (type.includes('ad')) summaryMap.ads += amount;
       else if (type.includes('referral') || type.includes('commission')) summaryMap.referrals += amount;
+      else if (type.includes('strike')) summaryMap.dailystrike += amount;
       else if (type.includes('bonus')) summaryMap.bonus += amount;
       else if (type.includes('game')) summaryMap.game += amount;
       else if (type.includes('survey')) summaryMap.survey += amount;
@@ -1672,10 +1676,39 @@ router.get('/user/:id', verifyAdminToken, async (req, res) => {
       else summaryMap.other += amount;
     });
 
+    // Fetch referrals for this user (who they referred)
+    let referrals = [];
+    try {
+      if (isMongooseReady()) {
+        const query = {
+          $or: [
+            { referredByUid: user.firebaseUid },
+            { referredByEmail: (user.email || '').toLowerCase() },
+            { referredByUid: String(user._id) }
+          ]
+        };
+        const refDocs = await Referral.find(query).sort({ createdAt: -1 }).limit(500).lean();
+        referrals = (refDocs || []).map(r => ({
+          id: r._id?.toString?.() || r.referralId || null,
+          referredUid: r.referredUid || null,
+          referredEmail: r.referredEmail || null,
+          commission: r.commission || 0,
+          status: r.status || null,
+          source: r.source || null,
+          createdAt: r.createdAt || r.updatedAt || null
+        }));
+      }
+    } catch (e) {
+      console.warn('Failed to load referrals for user profile:', e && e.message);
+      referrals = [];
+    }
+
     return res.json({
       ...profile,
       transactions,
-      summary: summaryMap
+      summary: summaryMap,
+      referrals: referrals,
+      referralCount: Array.isArray(referrals) ? referrals.length : 0
     });
   } catch (error) {
     console.error('Get user profile error:', error);

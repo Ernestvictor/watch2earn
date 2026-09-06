@@ -21,7 +21,21 @@ body{background:#070709;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 <body>
 <div class="top"><div><b>Referrals</b><div class="small">People you invited & earnings from them</div></div><div><a href="home.html" style="color:#4CAF50">Home</a></div></div>
 <div class="container">
-  <div class="card"><b>Total referral earnings</b><div style="font-size:20px;margin-top:6px">$<span id="totalUsd">0.00</span> • ₦<span id="totalNaira">0</span></div></div>
+  <div class="card" style="background:linear-gradient(135deg,#1a2810,#0f1608);border:2px solid #4CAF50">
+    <b style="color:#4CAF50">📊 Your Referral Stats</b>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+      <div style="background:#0f0f0f;padding:12px;border-radius:8px;border-left:3px solid #4CAF50">
+        <div class="small">Total Invited</div>
+        <div style="font-size:24px;font-weight:700;color:#4CAF50;margin-top:4px"><span id="referralCount">0</span></div>
+      </div>
+      <div style="background:#0f0f0f;padding:12px;border-radius:8px;border-left:3px solid #4CAF50">
+        <div class="small">Total Earned</div>
+        <div style="font-size:20px;font-weight:700;color:#4CAF50;margin-top:4px">$<span id="referralEarnUsd">0.00</span></div>
+        <div class="small" style="margin-top:2px">≈ ₦<span id="referralEarnNaira">0</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="card"><b>Total referral earnings (from commissions)</b><div style="font-size:20px;margin-top:6px">$<span id="totalUsd">0.00</span> • ₦<span id="totalNaira">0</span></div></div>
   <div class="card">
     <b>Your invited users (<span id="countInvited">0</span>)</b>
     <div id="list" class="list" style="margin-top:10px"></div>
@@ -39,6 +53,21 @@ firebase.auth().onAuthStateChanged(async user=>{
   if(!user) return location.href='login.html';
   try{
     const token = await user.getIdToken();
+    
+    // Fetch user stats (referralCount, referralEarn)
+    try {
+      const userRes = await fetch('/api/users/profile', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        document.getElementById('referralCount').innerText = (userData.referralCount || 0).toLocaleString();
+        document.getElementById('referralEarnUsd').innerText = ((userData.referralEarn || 0) / 1500).toFixed(4);
+        document.getElementById('referralEarnNaira').innerText = (userData.referralEarn || 0).toLocaleString();
+      }
+    } catch (e) {
+      console.warn('Could not fetch user profile:', e);
+    }
+    
+    // Fetch referral list
     const res = await fetch('/api/referrals', { headers: { 'Authorization': 'Bearer ' + token } });
     if(!res.ok) throw new Error('Failed to load referrals');
     const data = await res.json();

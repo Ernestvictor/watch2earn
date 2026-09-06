@@ -3,10 +3,8 @@ const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
 
-// =======================
-// Import Models (from models/)
-// =======================
 const User = require('../models/users');
+const Referral = require('../models/referral');
 const Earning = require('../models/earning');
 const Message = require('../models/messeges');
 const History = require('../models/history');
@@ -46,18 +44,14 @@ async function createRewardLog({ user, firebaseUid, type, sourceId, amount, desc
   return earning;
 }
 
-// =======================
-// Referral Commission Logic (10% per earning)
-// =======================
 async function payReferralCommission(user, amount, source = 'ad') {
-  if (!user.referredBy) return; // User has no referrer
+  if (!user || !user.referredBy) return;
 
   try {
     const commissionRate = Number(process.env.REFERRAL_RATE || 0.10);
-    const commission = amount * commissionRate;
-    const referrer = await User.findById(user.referredBy);
-    
-    if (!referrer) return; // Referrer not found
+    const commission = Number(amount || 0) * commissionRate;
+    const referrer = await User.findOne({ firebaseUid: user.referredBy });
+    if (!referrer) return;
 
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -65,6 +59,7 @@ async function payReferralCommission(user, amount, source = 'ad') {
     try {
       referrer.wallet = Number(referrer.wallet || 0) + commission;
       referrer.totalEarned = Number(referrer.totalEarned || 0) + commission;
+      referrer.referralEarn = Number(referrer.referralEarn || 0) + commission;
 
       const earning = await createRewardLog({
         user: referrer,
@@ -80,40 +75,34 @@ async function payReferralCommission(user, amount, source = 'ad') {
         }
       });
 
-      await referrer.save({ session });
+      await Referral.findOneAndUpdate(
+        { referredByUid: user.referredBy, referredUid: user.firebaseUid },
+        { $inc: { commission: commission } },
+        { new: true }
+      );
 
+      await referrer.save({ session });
       await session.commitTransaction();
-      console.log(`✅ Referral commission: ₦${(commission * 1500).toFixed(2)} to ${referrer.email}`);
       return earning;
     } catch (err) {
       await session.abortTransaction();
-      console.error("❌ Referral commission transaction error:", err);
+      console.error('❌ Referral commission transaction error:', err);
       throw err;
     } finally {
       session.endSession();
     }
   } catch (err) {
-    console.error("❌ Referral commission error:", err);
+    console.error('❌ Referral commission error:', err);
   }
 }
 
-// =======================
-// API Routes
-// =======================
-
-// POST /api/referrals/watch-ad - Credit earner & pay referral commission
 router.post('/watch-ad', async (req, res) => {
   try {
     const { firebaseUid, amount = 0.005 } = req.body;
-    
-    if (!firebaseUid) {
-      return res.status(400).json({ error: 'firebaseUid required' });
-    }
+    if (!firebaseUid) return res.status(400).json({ error: 'firebaseUid required' });
 
     const user = await User.findOne({ firebaseUid });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
     const earning = await createRewardLog({
       user,
@@ -122,9 +111,7 @@ router.post('/watch-ad', async (req, res) => {
       sourceId: `ad-${Date.now()}`,
       amount,
       description: 'Watched advertisement',
-      metadata: {
-        source: 'ad'
-      }
+      metadata: { source: 'ad' }
     });
 
     user.wallet = (user.wallet || 0) + amount;
@@ -133,48 +120,31 @@ router.post('/watch-ad', async (req, res) => {
 
     await payReferralCommission(user, amount, 'ad');
 
-    return res.json({ 
-      success: true, 
-      newWallet: user.wallet,
-      earned: amount
-    });
+    return res.json({ success: true, newWallet: user.wallet, earned: amount });
   } catch (error) {
     console.error('❌ /watch-ad error:', error);
     return res.status(500).json({ error: error.message });
   }
 });
 
-// GET /api/referrals/summary - Get referral summary for authenticated user
 router.get('/summary', verifyToken, async (req, res) => {
   try {
     const firebaseUid = req.user.uid || req.user.id;
-    
-    // Find user with multiple fallback methods
     const user = await User.findOne({ $or: [{ firebaseUid }, { uid: firebaseUid }, { id: firebaseUid }] });
     if (!user) {
-      console.warn(`[REFERRALS] User not found: ${firebaseUid}`);
       return res.json({ success: true, totalReferralUsd: 0, totalReferralNaira: 0, countInvited: 0, earnings: 0 });
     }
 
-    // Get all referral earnings for this user
-    const referralEarnings = await Earning.find({
-      userId: user._id,
-      type: 'referral'
-    }).lean();
-
-    const totalReferralUsd = referralEarnings.reduce((sum, e) => sum + (Number(e.amount || 0) / 1500), 0);
-    const totalReferralNaira = referralEarnings.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-
-    // Get count of referred users
-    const referredUsers = await User.find({ referredBy: user._id }).lean();
-    const countInvited = referredUsers.length;
+    const referralDocs = await Referral.find({ referredByUid: firebaseUid }).lean();
+    const totalReferralNaira = referralDocs.reduce((sum, doc) => sum + Number(doc.commission || 0), 0);
+    const totalReferralUsd = totalReferralNaira / 1500;
 
     return res.json({
       success: true,
       totalReferralUsd: +totalReferralUsd.toFixed(4),
       totalReferralNaira: Math.round(totalReferralNaira),
-      countInvited,
-      earnings: referralEarnings.length
+      countInvited: referralDocs.length,
+      earnings: referralDocs.length
     });
   } catch (err) {
     console.error('❌ /summary error:', err);
@@ -182,65 +152,46 @@ router.get('/summary', verifyToken, async (req, res) => {
   }
 });
 
-// GET /api/referrals - Get detailed referral list with referred users
 router.get('/', verifyToken, async (req, res) => {
   try {
     const firebaseUid = req.user.uid || req.user.id;
-
-    // Find user
     const user = await User.findOne({ firebaseUid });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Get all referral records for this referrer
+    const referralDocs = await Referral.find({ referredByUid: firebaseUid }).lean();
+    
+    // Build referral list by processing Referral documents (single source of truth)
+    const referralMap = {};
+    let totalReferralNaira = 0;
+
+    for (const doc of referralDocs) {
+      const referredUser = await User.findOne({ firebaseUid: doc.referredUid }).lean();
+      
+      referralMap[doc.referredUid] = {
+        id: doc.referredUid,
+        name: referredUser?.username || referredUser?.email?.split('@')[0] || 'User',
+        email: doc.referredEmail || referredUser?.email || 'N/A',
+        totalUsd: Number((doc.commission || 0) / 1500).toFixed(4),
+        totalNaira: Math.round(doc.commission || 0),
+        joined: referredUser?.createdAt || new Date(),
+        status: doc.status
+      };
+      
+      totalReferralNaira += Number(doc.commission || 0);
     }
 
-    // Get all referred users
-    const referredUsers = await User.find({ referredBy: user._id });
-
-    // Calculate earnings for each referred user
-    const referralMap = {};
-    referredUsers.forEach(refUser => {
-      const uid = refUser._id.toString();
-      referralMap[uid] = {
-        id: uid,
-        name: refUser.username || refUser.email.split('@')[0],
-        email: refUser.email,
-        totalUsd: 0,
-        totalNaira: 0,
-        joined: refUser.createdAt || new Date()
-      };
-    });
-
-    // Get all referral commissions
-    const referralEarnings = await Earning.find({
-      userId: user._id,
-      type: 'referral'
-    });
-
-    let totalReferralUsd = 0;
-    referralEarnings.forEach(earning => {
-      totalReferralUsd += earning.amount || 0;
-    });
-
     const referrals = Object.values(referralMap);
-    const countInvited = referrals.length;
-    const avgEarningPerReferral = countInvited > 0 ? totalReferralUsd / countInvited : 0;
 
-    referrals.forEach(ref => {
-      ref.totalUsd = avgEarningPerReferral;
-      ref.totalNaira = Math.round(avgEarningPerReferral * 1500);
-    });
-
-    const totals = {
-      totalReferralUsd: Number(totalReferralUsd.toFixed(4)),
-      totalReferralNaira: Math.round(totalReferralUsd * 1500),
-      countInvited,
-      totalEarnings: referralEarnings.length
-    };
-
-    return res.json({ 
+    return res.json({
       success: true,
-      referrals, 
-      totals 
+      referrals,
+      totals: {
+        totalReferralUsd: Number((totalReferralNaira / 1500).toFixed(4)),
+        totalReferralNaira: Math.round(totalReferralNaira),
+        countInvited: referrals.length,
+        totalEarnings: referralDocs.reduce((sum, doc) => sum + (doc.earnings?.length || 0), 0)
+      }
     });
   } catch (err) {
     console.error('❌ / error:', err);
@@ -248,31 +199,26 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// POST /api/referrals/update-referrer - Update referrer when new user signs up
 router.post('/update-referrer', async (req, res) => {
   try {
     const { referrerId, newUserId } = req.body;
-    if (!referrerId || !newUserId) {
-      return res.status(400).json({ error: 'referrerId and newUserId required' });
-    }
+    if (!referrerId || !newUserId) return res.status(400).json({ error: 'referrerId and newUserId required' });
 
     const referrer = await User.findOne({ firebaseUid: referrerId });
     const newUser = await User.findOne({ firebaseUid: newUserId });
 
-    if (!referrer || !newUser) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    if (!referrer || !newUser) return res.status(404).json({ error: 'User not found' });
 
-    // Update new user's referredBy field
-    newUser.referredBy = referrer._id;
+    newUser.referredBy = referrer.firebaseUid;
     await newUser.save();
 
-    return res.json({ 
-      success: true, 
-      message: 'Referrer updated successfully',
-      referrerEmail: referrer.email,
-      newUserEmail: newUser.email
-    });
+    await Referral.findOneAndUpdate(
+      { referredByUid: referrer.firebaseUid, referredUid: newUser.firebaseUid },
+      { $set: { referredByEmail: referrer.email || '', referredEmail: newUser.email || '' } },
+      { upsert: true }
+    );
+
+    return res.json({ success: true, message: 'Referrer updated successfully', referrerEmail: referrer.email, newUserEmail: newUser.email });
   } catch (err) {
     console.error('❌ /update-referrer error:', err);
     return res.status(500).json({ error: 'Failed to update referrer' });

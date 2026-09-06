@@ -37,9 +37,26 @@ const userSchema = new mongoose.Schema({
     min: 0
   },
   referredBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
+    type: String,
+    default: null,
+    index: true,
+    trim: true
+  },
+  referralCount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  referralEarn: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  referralId: {
+    type: String,
+    default: '',
+    trim: true,
+    index: true
   },
   lastAdShowTime: {
     type: Date,

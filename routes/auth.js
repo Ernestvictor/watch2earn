@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/users');
+const Referral = require('../models/referral');
 
 const mongoose = require('mongoose');
 const crypto = require('crypto');
@@ -16,21 +17,11 @@ router.post('/register', async (req, res) => {
 
     const normalizedEmail = String(email).trim().toLowerCase();
     const safeName = (username || displayName || normalizedEmail.split('@')[0] || 'User').trim();
+    const referrerUid = referredBy ? String(referredBy).trim() : null;
 
     let user = await User.findOne({ firebaseUid });
     if (!user) {
       user = await User.findOne({ email: normalizedEmail });
-    }
-
-    // If a referredBy (uid) was provided, try to resolve to a MongoDB _id
-    let resolvedReferrerId = null;
-    if (referredBy) {
-      try {
-        const refUser = await User.findOne({ $or: [{ firebaseUid: referredBy }, { uid: referredBy }, { id: referredBy }, { email: (referredBy || '').toLowerCase() }] });
-        if (refUser) resolvedReferrerId = refUser._id;
-      } catch (e) {
-        // ignore resolution errors
-      }
     }
 
     if (!user) {
@@ -42,14 +33,41 @@ router.post('/register', async (req, res) => {
         wallet: 0,
         balance: 0,
         totalEarned: 0,
-        referredBy: resolvedReferrerId || null
+        referredBy: referrerUid,
+        referralId: `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       });
     } else {
       user.email = normalizedEmail;
       user.username = safeName;
       user.displayName = safeName;
-      if (resolvedReferrerId && !user.referredBy) user.referredBy = resolvedReferrerId;
+      if (referrerUid && !user.referredBy) user.referredBy = referrerUid;
+      if (!user.referralId) user.referralId = `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       await user.save();
+    }
+
+    if (referrerUid) {
+      const referrerUser = await User.findOne({ firebaseUid: referrerUid });
+      if (referrerUser) {
+        const referralDoc = await Referral.findOne({ referredByUid: referrerUid, referredUid: firebaseUid });
+        if (!referralDoc) {
+          await Referral.create({
+            referralId: user.referralId || `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            referredByUid: referrerUid,
+            referredByEmail: referrerUser.email || '',
+            referredUid: firebaseUid,
+            referredEmail: normalizedEmail,
+            commission: 0,
+            source: 'signup',
+            status: 'active'
+          });
+        }
+
+        await User.findOneAndUpdate(
+          { firebaseUid: referrerUid },
+          { $inc: { referralCount: 1 } },
+          { new: true }
+        );
+      }
     }
 
     return res.json({ success: true, user });
@@ -67,18 +85,10 @@ router.post('/register-guest', async (req, res) => {
 
     const normalizedEmail = String(email).trim().toLowerCase();
     const safeName = (username || displayName || normalizedEmail.split('@')[0] || 'User').trim();
+    const referrerUid = referredBy ? String(referredBy).trim() : null;
 
     // Create a deterministic placeholder firebaseUid so later real uid can replace it
     const placeholder = 'guest:' + crypto.createHash('md5').update(normalizedEmail).digest('hex');
-
-    // resolve referredBy UID to ObjectId if possible
-    let resolvedReferrerId = null;
-    if (referredBy) {
-      try {
-        const refUser = await User.findOne({ $or: [{ firebaseUid: referredBy }, { uid: referredBy }, { id: referredBy }, { email: (referredBy || '').toLowerCase() }] });
-        if (refUser) resolvedReferrerId = refUser._id;
-      } catch (e) {}
-    }
 
     let user = await User.findOne({ email: normalizedEmail }).catch(() => null);
     if (!user) {
@@ -90,18 +100,41 @@ router.post('/register-guest', async (req, res) => {
         wallet: 0,
         balance: 0,
         totalEarned: 0,
-        referredBy: resolvedReferrerId || null
+        referredBy: referrerUid,
+        referralId: `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       });
-      return res.json({ success: true, user, created: true });
-    }
-
-    // update referredBy only if not set
-    if (resolvedReferrerId && !user.referredBy) {
-      user.referredBy = resolvedReferrerId;
+    } else {
+      if (referrerUid && !user.referredBy) user.referredBy = referrerUid;
+      if (!user.referralId) user.referralId = `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       await user.save();
     }
 
-    return res.json({ success: true, user, created: false });
+    if (referrerUid) {
+      const referrerUser = await User.findOne({ firebaseUid: referrerUid });
+      if (referrerUser) {
+        const referralDoc = await Referral.findOne({ referredByUid: referrerUid, referredUid: placeholder });
+        if (!referralDoc) {
+          await Referral.create({
+            referralId: user.referralId || `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            referredByUid: referrerUid,
+            referredByEmail: referrerUser.email || '',
+            referredUid: placeholder,
+            referredEmail: normalizedEmail,
+            commission: 0,
+            source: 'signup',
+            status: 'active'
+          });
+        }
+
+        await User.findOneAndUpdate(
+          { firebaseUid: referrerUid },
+          { $inc: { referralCount: 1 } },
+          { new: true }
+        );
+      }
+    }
+
+    return res.json({ success: true, user, created: !user || user.firebaseUid === placeholder });
   } catch (error) {
     console.error('register-guest error:', error);
     return res.status(500).json({ error: error.message || 'Failed to register guest' });

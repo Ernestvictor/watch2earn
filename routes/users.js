@@ -63,6 +63,8 @@ router.get('/profile', verifyToken, async (req, res) => {
       gameEarn: +gameEarnUsd,
       surveyEarn: +surveyEarnUsd,
       refEarn: +refEarnUsd,
+      referralCount: user.referralCount || 0,
+      referralEarn: user.referralEarn || 0,
       invitedCount: user.invitedCount || 0,
       displayName: user.displayName || user.username || 'User',
       email: user.email

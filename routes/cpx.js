@@ -15,8 +15,31 @@ const TXN_PATH = path.join(DATA_DIR, 'transactions.json');
 const CPX_TRACKING_PATH = path.join(DATA_DIR, 'cpx-tracking.json');
 
 // CPX Secure Key from dashboard
-const CPX_SECURE_KEY = process.env.CPX_SECURE_KEY || "CTJ6jPqHw1T80G7qCTxG6AjE72aadXzE";
-const CPX_APP_ID = Number(process.env.CPX_APP_ID || 35282);
+const CPX_SECURE_KEY = process.env.CPX_SECURE_KEY || process.env.CPX_SECURE_HASH || "CTJ6jPqHw1T80G7qCTxG6AjE72aadXzE";
+const CPX_APP_ID = process.env.CPX_APP_ID || 'watch2earn';
+
+const CPX_API_KEY = process.env.CPX_API_KEY || '35a90c6582f6ff21f81de4d48211c9ea';
+const CPX_BASE_URL = 'https://publisher.cpx-research.com/index.php';
+
+function buildCpxApiUrl(page, params = {}) {
+  const query = new URLSearchParams({
+    api_key: params.api_key || CPX_API_KEY,
+    ...params
+  });
+
+  query.set('page', page);
+  return `${CPX_BASE_URL}?${query.toString()}`;
+}
+
+function getDefaultCpxParams(req) {
+  return {
+    start_time: req.query.start_time || '2026-09-05',
+    end_time: req.query.end_time || '2026-12-31',
+    app_id: req.query.app_id || 'watch2earn',
+    country_code: req.query.country_code || 'ngn',
+    group_by: req.query.group_by || 'day'
+  };
+}
 
 async function loadUsers() {
   try {
@@ -226,6 +249,101 @@ router.get('/postback', async (req, res) => {
 
   // MUST return 'OK' or CPX will retry
   res.send('OK');
+});
+
+// GET /api/cpx/analytics - return all CPX API URLs for the admin dashboard
+router.get('/analytics', (req, res) => {
+  const defaultParams = getDefaultCpxParams(req);
+  const endpoints = [
+    {
+      id: 'time',
+      label: 'Statistics Time',
+      description: 'Returns time-based statistics for the selected range.',
+      url: buildCpxApiUrl('api-statistics-time', {
+        ...defaultParams,
+        api_key: CPX_API_KEY
+      })
+    },
+    {
+      id: 'country-sales',
+      label: 'Sales by Country',
+      description: 'Returns sales statistics grouped by country for the selected time range.',
+      url: buildCpxApiUrl('api-statistics-country-sales', {
+        start_time: defaultParams.start_time,
+        end_time: defaultParams.end_time,
+        app_id: defaultParams.app_id,
+        country_code: req.query.country_code || 'US',
+        api_key: CPX_API_KEY
+      })
+    },
+    {
+      id: 'completes',
+      label: 'Get Completes',
+      description: 'Download a list of completes for the selected date range.',
+      url: buildCpxApiUrl('api-statistics-completes', {
+        start_time: req.query.completes_start_time || '2020-06-01',
+        end_time: req.query.completes_end_time || '2020-06-01',
+        api_key: CPX_API_KEY
+      })
+    },
+    {
+      id: 'screen-outs',
+      label: 'Get Screen Outs',
+      description: 'Download a list of screen outs for the selected date range.',
+      url: buildCpxApiUrl('api-statistics-outs', {
+        start_time: req.query.outs_start_time || '2020-06-01',
+        end_time: req.query.outs_end_time || '2020-06-01',
+        api_key: CPX_API_KEY
+      })
+    },
+    {
+      id: 'validate-transaction',
+      label: 'Validate Transaction',
+      description: 'Check whether a transaction ID is valid.',
+      url: buildCpxApiUrl('api-check-transaction-id', {
+        transaction_id: req.query.transaction_id || 'XXXXXX',
+        api_key: CPX_API_KEY
+      })
+    }
+  ];
+
+  return res.json({
+    api_key: CPX_API_KEY,
+    base_url: CPX_BASE_URL,
+    default_params: defaultParams,
+    endpoints
+  });
+});
+
+// GET /api/cpx/embed/:page - render the CPX page inside an iframe wrapper
+router.get('/embed/:page', (req, res) => {
+  const pageName = req.params.page;
+  const defaultParams = getDefaultCpxParams(req);
+  const params = { ...defaultParams, ...req.query };
+
+  const url = buildCpxApiUrl(pageName, {
+    api_key: CPX_API_KEY,
+    ...params
+  });
+
+  const html = `<!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>CPX: ${pageName}</title>
+        <style>
+          html, body { margin: 0; background: #0b0c0f; height: 100%; }
+          body { display: flex; align-items: stretch; justify-content: center; }
+          iframe { width: 100%; height: 100vh; border: 0; background: #111; }
+        </style>
+      </head>
+      <body>
+        <iframe src="${url}" title="CPX ${pageName}"></iframe>
+      </body>
+    </html>`;
+
+  return res.type('html').send(html);
 });
 
 module.exports = router;

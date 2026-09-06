@@ -2,70 +2,238 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin Charts</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPX Analytics</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
   <style>
-    body { background:#0b0c0f; color:#e0e0e0; font-family:'Segoe UI',Inter,Arial,sans-serif; padding-bottom:90px; }
-    h1,h2 { color:#4CAF50; }
-    .chart-container { height:400px; width:100%; background:#121214; padding:12px; border-radius:12px; }
-    table { background:#1a1a1d; color:#e0e0e0; }
-    th { color:#4CAF50; }
-    tr:hover { background:#1f2023; }
-    .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#121214;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20}
-    .bottom-nav a{color:#888;text-decoration:none;font-size:12px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
-    .bottom-nav a.active{color:#4CAF50;font-weight:700}
+    :root {
+      --bg: #0b0c0f;
+      --panel: #121418;
+      --panel-2: #171b22;
+      --line: #2d3748;
+      --text: #ebf0f6;
+      --muted: #9aa7b5;
+      --green: #4caf50;
+      --blue: #2196f3;
+      --orange: #ff9800;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      padding-bottom: 110px;
+    }
+
+    .container {
+      max-width: 1500px;
+      margin: 30px auto;
+      padding: 0 16px;
+    }
+
+    .topbar {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      color: var(--green);
+      font-size: clamp(1.8rem, 2vw, 2.6rem);
+    }
+
+    .api-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .meta-pill {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    }
+
+    .card h2 {
+      margin: 0 0 8px 0;
+      font-size: 1.15rem;
+      color: var(--green);
+    }
+
+    .card p {
+      color: var(--muted);
+      margin: 0 0 12px 0;
+      min-height: 48px;
+      line-height: 1.45;
+    }
+
+    iframe {
+      width: 100%;
+      height: 430px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0f1723;
+      display: block;
+    }
+
+    .filter-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    }
+
+    .filter-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      align-items: end;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    .field input,
+    .field select,
+    .btn-apply {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 0.95rem;
+    }
+
+    .btn-apply {
+      background: linear-gradient(135deg, var(--green), #2f9e44);
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .btn-apply:hover {
+      filter: brightness(1.05);
+    }
+
+    .btn-apply:active {
+      transform: translateY(1px);
+    }
+
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #111418;
+      border-top: 1px solid #26313f;
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+      z-index: 20;
+    }
+
+    .bottom-nav a {
+      color: #aeb8c5;
+      text-decoration: none;
+      font-size: 12px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .bottom-nav a.active {
+      color: var(--green);
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
-  <div class="container mt-5">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;background:#121214;padding:16px;border-radius:12px">
-      <h1 style="margin:0">Admin Analytics</h1>
-      <a href="/admin-panel/inbox.html" style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#18181b;border:1px solid #2f2f32;color:#fff;text-decoration:none" title="Inbox"><i class="fas fa-inbox"></i></a>
+  <div class="container">
+    <div class="topbar">
+      <h1>CPX Analytics</h1>
+      <a href="/admin-panel/inbox.html" class="btn btn-outline-light btn-sm">Inbox</a>
     </div>
-    <div class="row">
-      <div class="col-md-6">
-        <h2>Earnings Chart</h2>
-        <div class="chart-container"><canvas id="earningsChart"></canvas></div>
-      </div>
-      <div class="col-md-6">
-        <h2>Ads Watched Chart</h2>
-        <div class="chart-container"><canvas id="adsWatchedChart"></canvas></div>
-      </div>
-    </div>
-    <div class="row mt-5">
-      <div class="col-md-12">
-        <h2>Earnings Summary</h2>
-        <table class="table table-striped">
-          <thead><tr><th>Time Period</th><th>Earnings</th></tr></thead>
-          <tbody>
-            <tr><td>Last 1 Day</td><td id="earnings-1-day"></td></tr>
-            <tr><td>Last 7 Days</td><td id="earnings-7-days"></td></tr>
-            <tr><td>Last 30 Days</td><td id="earnings-30-days"></td></tr>
-            <tr><td>Last 90 Days</td><td id="earnings-90-days"></td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div class="row mt-5">
-      <div class="col-md-6">
-        <h2>Active Users</h2>
-        <table class="table table-striped">
-          <thead><tr><th>Email</th><th>Last Active</th></tr></thead>
-          <tbody id="active-users-table"></tbody>
-        </table>
-      </div>
-      <div class="col-md-6">
-        <h2>Passive Users</h2>
-        <table class="table table-striped">
-          <thead><tr><th>Email</th><th>Last Active</th></tr></thead>
-          <tbody id="passive-users-table"></tbody>
-        </table>
+
+    <div class="filter-card">
+      <div class="filter-row">
+        <div class="field">
+          <label for="start_time">Start Date</label>
+          <input id="start_time" type="date" value="2026-09-05">
+        </div>
+        <div class="field">
+          <label for="end_time">End Date</label>
+          <input id="end_time" type="date" value="2026-12-31">
+        </div>
+        <div class="field">
+          <label for="app_id">App ID</label>
+          <input id="app_id" type="text" value="watch2earn">
+        </div>
+        <div class="field">
+          <label for="country_code">Country</label>
+          <input id="country_code" type="text" value="ngn">
+        </div>
+        <div class="field">
+          <label for="group_by">Group By</label>
+          <select id="group_by">
+            <option value="day" selected>day</option>
+            <option value="hour">hour</option>
+            <option value="week">week</option>
+            <option value="month">month</option>
+          </select>
+        </div>
+        <div class="field">
+          <button class="btn-apply" id="applyFilters">Apply</button>
+        </div>
       </div>
     </div>
+
+    <div id="api-meta" class="api-meta"></div>
+    <div id="cpx-grid" class="grid"></div>
   </div>
 
-  <!-- Linked navigation -->
   <div class="bottom-nav">
     <a href="/admin-panel/carbinate.html"><i class="fas fa-house"></i>Home</a>
     <a href="/admin-panel/users.html"><i class="fas fa-users"></i>Users</a>
@@ -75,65 +243,123 @@
     <a href="/admin-panel/messages.html"><i class="fas fa-envelope"></i>Messages</a>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
   <script>
-    function checkAuth() {
-      const token = localStorage.getItem('adminToken');
-      if (!token) {
-        location.href = '/admin-panel/verify.html';
-        return false;
-      }
-      return true;
+    const defaultParams = {
+      start_time: '2026-09-05',
+      end_time: '2026-12-31',
+      app_id: 'watch2earn',
+      country_code: 'ngn',
+      group_by: 'day'
+    };
+
+    function getCurrentParams() {
+      return {
+        start_time: document.getElementById('start_time').value || defaultParams.start_time,
+        end_time: document.getElementById('end_time').value || defaultParams.end_time,
+        app_id: document.getElementById('app_id').value || defaultParams.app_id,
+        country_code: document.getElementById('country_code').value || defaultParams.country_code,
+        group_by: document.getElementById('group_by').value || defaultParams.group_by
+      };
     }
 
-    async function loadCharts() {
-      const token = localStorage.getItem('adminToken');
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      };
+    function buildFallbackEndpoints(params) {
+      return [
+        {
+          id: 'time',
+          label: 'Statistics Time',
+          description: 'Time-based analytics from CPX using the selected range.',
+          url: `https://publisher.cpx-research.com/index.php?page=api-statistics-time&start_time=${params.start_time}&end_time=${params.end_time}&app_id=${encodeURIComponent(params.app_id)}&country_code=${encodeURIComponent(params.country_code)}&group_by=${params.group_by}&api_key=35a90c6582f6ff21f81de4d48211c9ea`
+        },
+        {
+          id: 'country-sales',
+          label: 'Sales by Country',
+          description: 'Sales statistics grouped by country for the selected date range.',
+          url: `https://publisher.cpx-research.com/index.php?page=api-statistics-country-sales&start_time=${params.start_time}&end_time=${params.end_time}&app_id=${encodeURIComponent(params.app_id)}&country_code=${encodeURIComponent(params.country_code)}&api_key=35a90c6582f6ff21f81de4d48211c9ea`
+        },
+        {
+          id: 'completes',
+          label: 'Get Completes',
+          description: 'Download completes from CPX for your selected date range.',
+          url: `https://publisher.cpx-research.com/index.php?page=api-statistics-completes&start_time=${params.start_time}&end_time=${params.end_time}&api_key=35a90c6582f6ff21f81de4d48211c9ea`
+        },
+        {
+          id: 'screen-outs',
+          label: 'Get Screen Outs',
+          description: 'Download screen-out data from CPX for your selected date range.',
+          url: `https://publisher.cpx-research.com/index.php?page=api-statistics-outs&start_time=${params.start_time}&end_time=${params.end_time}&api_key=35a90c6582f6ff21f81de4d48211c9ea`
+        },
+        {
+          id: 'validate-transaction',
+          label: 'Validate Transaction',
+          description: 'Validate a specific transaction ID using the CPX API.',
+          url: `https://publisher.cpx-research.com/index.php?page=api-check-transaction-id&transaction_id=XXXXXX&api_key=35a90c6582f6ff21f81de4d48211c9ea`
+        }
+      ];
+    }
+
+    async function renderCPXDashboard() {
+      const metaEl = document.getElementById('api-meta');
+      const gridEl = document.getElementById('cpx-grid');
+      const params = getCurrentParams();
+      gridEl.innerHTML = '';
 
       try {
-        // Earnings chart
-        const earningsRes = await fetch('/api/admin/chart/earnings', {headers, credentials:'include'});
-        if (earningsRes.ok) {
-          const eData = await earningsRes.json();
-          new Chart(document.getElementById('earningsChart'),{
-            type:'bar',
-            data:{labels:eData.labels,datasets:[{label:'Earnings ($)',data:eData.data,backgroundColor:'rgba(76,175,80,0.2)',borderColor:'rgba(76,175,80,1)',borderWidth:2}]},
-            options:{scales:{y:{beginAtZero:true}}}
-          });
-        }
+        const url = new URL('/api/cpx/analytics', window.location.origin);
+        Object.entries(params).forEach(([key, value]) => {
+          if (value) url.searchParams.set(key, value);
+        });
 
-        // Ads watched chart
-        const adsRes = await fetch('/api/admin/chart/ads-watched', {headers, credentials:'include'});
-        if (adsRes.ok) {
-          const aData = await adsRes.json();
-          new Chart(document.getElementById('adsWatchedChart'),{
-            type:'bar',
-            data:{labels:aData.labels,datasets:[{label:'Ads Watched',data:aData.data,backgroundColor:'rgba(33,150,243,0.2)',borderColor:'rgba(33,150,243,1)',borderWidth:2}]},
-            options:{scales:{y:{beginAtZero:true}}}
-          });
-        }
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to load CPX analytics');
+        const data = await res.json();
 
-        // Earnings summary
-        const summaryRes = await fetch('/api/admin/chart/earnings-summary', {headers, credentials:'include'});
-        if (summaryRes.ok) {
-          const sData = await summaryRes.json();
-          document.getElementById('earnings-1-day').innerText = sData['1-day'] || '$0';
-          document.getElementById('earnings-7-days').innerText = sData['7-days'] || '$0';
-          document.getElementById('earnings-30-days').innerText = sData['30-days'] || '$0';
-          document.getElementById('earnings-90-days').innerText = sData['90-days'] || '$0';
-        }
-      } catch(err) {
-        console.error('Charts load error:', err);
+        metaEl.innerHTML = `
+          <span class="meta-pill">API key: ${data.api_key || 'not-set'}</span>
+          <span class="meta-pill">Start: ${data.default_params?.start_time || params.start_time}</span>
+          <span class="meta-pill">End: ${data.default_params?.end_time || params.end_time}</span>
+          <span class="meta-pill">App ID: ${data.default_params?.app_id || params.app_id}</span>
+          <span class="meta-pill">Country: ${data.default_params?.country_code || params.country_code}</span>
+          <span class="meta-pill">Group by: ${data.default_params?.group_by || params.group_by}</span>
+        `;
+
+        data.endpoints.forEach((endpoint) => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <h2>${endpoint.label}</h2>
+            <p>${endpoint.description}</p>
+            <iframe src="${endpoint.url}" title="${endpoint.label}"></iframe>
+          `;
+          gridEl.appendChild(card);
+        });
+      } catch (error) {
+        console.error('CPX analytics fetch failed:', error);
+        metaEl.innerHTML = `
+          <span class="meta-pill">API key: 35a90c6582f6ff21f81de4d48211c9ea</span>
+          <span class="meta-pill">Start: ${params.start_time}</span>
+          <span class="meta-pill">End: ${params.end_time}</span>
+          <span class="meta-pill">App ID: ${params.app_id}</span>
+          <span class="meta-pill">Country: ${params.country_code}</span>
+          <span class="meta-pill">Group by: ${params.group_by}</span>
+        `;
+
+        buildFallbackEndpoints(params).forEach((endpoint) => {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <h2>${endpoint.label}</h2>
+            <p>${endpoint.description}</p>
+            <iframe src="${endpoint.url}" title="${endpoint.label}"></iframe>
+          `;
+          gridEl.appendChild(card);
+        });
       }
     }
 
-    if (checkAuth()) {
-      loadCharts();
-    }
+    document.getElementById('applyFilters').addEventListener('click', renderCPXDashboard);
+    renderCPXDashboard();
   </script>
 </body>
 </html>
+

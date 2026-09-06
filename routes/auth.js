@@ -171,7 +171,7 @@ router.post('/status', async (req, res) => {
       return res.json({
         status: 'suspended',
         redirect: '/suspend.html',
-        message: 'This account is suspended and waiting for review.'
+        message: 'You have been suspended for breaking rules'
       });
     }
 

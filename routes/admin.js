@@ -506,6 +506,80 @@ router.get('/users', verifyAdminToken, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to read users' }); }
 });
 
+// GET /api/admin/user/:id - get detailed user profile with earnings and referrals
+router.get('/user/:id', verifyAdminToken, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+    // Find user by multiple identifiers
+    let user = await User.findOne({
+      $or: [
+        { _id: safeObjectId(userId) },
+        { firebaseUid: userId },
+        { uid: userId },
+        { id: userId },
+        { email: String(userId).toLowerCase() }
+      ]
+    }).lean();
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get earning history
+    const earnings = await Earning.find({ userId: user._id || userId }).sort({ createdAt: -1 }).limit(500).lean();
+    const transactions = earnings.map(e => ({
+      type: e.type || 'other',
+      description: e.description,
+      amount: e.amount,
+      amountUsd: e.amount,
+      date: e.createdAt,
+      createdAt: e.createdAt,
+      title: e.description
+    }));
+
+    // Calculate summary by earning type
+    const summary = {
+      total: user.totalEarned || 0,
+      ads: user.fromAds || 0,
+      referrals: user.referralEarn || 0,
+      bonus: user.fromBonus || 0,
+      game: user.fromGame || 0,
+      survey: user.fromSurveys || 0,
+      dailystrike: user.fromDailyStrike || 0,
+      telegram: user.fromTelegram || 0,
+      cpa: user.fromCPA || 0
+    };
+
+    // Get referrals
+    const referrals = await Referral.find({ referredByUid: user.firebaseUid || user.uid || user.id }).sort({ createdAt: -1 }).lean();
+    const referralsList = referrals.map(r => ({
+      referredEmail: r.referredEmail,
+      referredUid: r.referredUid,
+      commission: r.commission || 0,
+      status: r.status,
+      createdAt: r.createdAt
+    }));
+
+    return res.json({
+      name: user.displayName || user.username || 'User',
+      email: user.email,
+      status: user.status || (user.isBanned ? 'banned' : user.isSuspended ? 'suspended' : 'active'),
+      firebaseUid: user.firebaseUid,
+      balance: user.balance || 0,
+      totalEarned: user.totalEarned || 0,
+      referralCount: user.referralCount || 0,
+      summary,
+      transactions,
+      referrals: referralsList
+    });
+  } catch (e) {
+    console.error('Failed to get user profile:', e);
+    res.status(500).json({ error: 'Failed to get user profile' });
+  }
+});
+
 // GET /api/admin/firebase-users - list users from Firebase Auth
 router.get('/firebase-users', verifyAdminToken, async (req, res) => {
   try {

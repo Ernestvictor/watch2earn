@@ -58,6 +58,41 @@ const userSchema = new mongoose.Schema({
     trim: true,
     index: true
   },
+  fromAds: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  fromSurveys: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  fromGame: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  fromBonus: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  fromDailyStrike: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  fromTelegram: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  fromCPA: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   lastAdShowTime: {
     type: Date,
     default: null

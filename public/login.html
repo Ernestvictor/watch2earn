@@ -69,7 +69,25 @@
           btn.innerText='Login';
           return;
         }
-        // successful signin
+
+        // Check user status (suspended, banned, etc)
+        try {
+          const statusRes = await fetch('/api/auth/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+          });
+          const statusData = await statusRes.json();
+          if (statusData.redirect) {
+            // Redirect based on user status
+            window.location.href = statusData.redirect;
+            return;
+          }
+        } catch (statusErr) {
+          console.warn('Status check failed, continuing to home:', statusErr);
+        }
+
+        // Default redirect to home
         window.location.href = 'home.html';
       } catch (error) {
         errorMsg.innerText = error.message || 'Unable to sign in.';

@@ -31,6 +31,17 @@
   window.w2e.setTheme = applyTheme;
   window.w2e.setNotificationsEnabled = setNotificationEnabled;
 
+  // Hide any static VERIFIED links until we confirm admin promotion status
+  function updateVerifiedLinkVisibility(show) {
+    try {
+      document.querySelectorAll('a[href$="verifild.html"]').forEach(a => {
+        a.style.display = show ? '' : 'none';
+      });
+    } catch (e) {}
+  }
+  // Hide by default on initial load
+  try { if (typeof document !== 'undefined') updateVerifiedLinkVisibility(false); } catch (e) {}
+
   window.w2e.initFirebase = function(){
     if(typeof firebase === 'undefined' || !firebase.apps) return null;
     if(!firebase.apps.length){
@@ -56,8 +67,9 @@
               return;
             }
 
-            // If user is promoted, inject a centered nav (home earn VERIFIED history account)
+            // If user is promoted, inject a centered nav and show VERIFIED links
             if (info && info.promoted) {
+              try { updateVerifiedLinkVisibility(true); } catch (e) {}
               injectVerifiedNav(info.referralLink);
             }
           } catch (e) { /* ignore */ }

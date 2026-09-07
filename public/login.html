@@ -44,11 +44,12 @@
     const btn=document.getElementById('loginBtn');
     const errorMsg=document.getElementById('errorMsg');
 
-    firebase.auth().onAuthStateChanged((user) => {
-      if (user) {
-        window.location.href = 'home.html';
-      }
-    });
+    // Auto-redirect disabled: users must explicitly submit the login form
+    // firebase.auth().onAuthStateChanged((user) => {
+    //   if (user) {
+    //     window.location.href = 'home.html';
+    //   }
+    // });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();

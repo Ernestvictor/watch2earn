@@ -24,7 +24,6 @@
     "mongodb": "^7.6.0",
     "mongoose": "^9.9.1",
     "morgan": "^1.11.0",
-    "nodemailer": "^9.0.5",
     "pg": "^8.22.0",
     "uuid": "^9.0.1",
     "web-push": "^3.6.7"

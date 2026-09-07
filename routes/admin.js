@@ -17,9 +17,8 @@ const TRANSACTIONS_PATH = path.join(DATA_DIR, 'transactions.json');
 const MESSAGES_PATH = path.join(DATA_DIR, 'messages.json');
 const PROMOTIONS_PATH = path.join(DATA_DIR, 'promotions.json');
 const TRIGGERS_PATH = path.join(DATA_DIR, 'triggers.json');
-const nodemailer = (() => {
-  try { return require('nodemailer'); } catch (e) { return null; }
-})();
+// Nodemailer removed — SMTP forwarding disabled
+const nodemailer = null;
 
 // ✅ Admin Auth Middleware - verify admin token
 function verifyAdminToken(req, res, next) {
@@ -155,35 +154,13 @@ function getSMTPConfig() {
 }
 
 function buildAdminEmailTransport() {
-  if (!nodemailer) return null;
-  const cfg = getSMTPConfig();
-  if (!cfg.pass) return null;
-  return nodemailer.createTransport({
-    host: cfg.host,
-    port: cfg.port,
-    secure: cfg.secure,
-    auth: { user: cfg.user, pass: cfg.pass }
-  });
+  // SMTP disabled — always return null
+  return null;
 }
 
 async function forwardInboxEmail({ from, subject, text, html }) {
-  const transporter = buildAdminEmailTransport();
-  if (!transporter) return null;
-
-  const adminEmail = process.env.ADMIN_EMAIL || process.env.FROM_EMAIL || process.env.SMTP_FROM || 'watch2earn36@gmail.com';
-  try {
-    return await transporter.sendMail({
-      from: adminEmail,
-      to: adminEmail,
-      replyTo: from || adminEmail,
-      subject: subject || 'Watch2Earn inbox message',
-      text: text || (typeof html === 'string' ? html.replace(/<[^>]+>/g, ' ') : ''),
-      html: html || `<p>${(text || '').replace(/\n/g, '<br>')}</p>`
-    });
-  } catch (e) {
-    console.warn('Inbox email forward failed:', e && e.message);
-    return null;
-  }
+  // SMTP disabled — do not forward inbox emails
+  return null;
 }
 
 async function readUserRecords() {
@@ -1145,21 +1122,28 @@ router.put('/users/:id', verifyAdminToken, async (req, res) => {
     }
 
     if (action === 'promote' || action === 'verified' || action === 'promoted') {
-      const code = Math.floor(1000 + Math.random() * 9000).toString();
+      // Direct admin promotion/verification without SMTP/email step
       if (isMongooseReady()) {
-        user.promoted = false;
-        user.promoteCode = code;
-        user.promoteRequestedAt = new Date();
-        user.promoteExpires = new Date(Date.now() + 24 * 3600 * 1000);
+        user.promoted = true;
+        user.promotedAt = new Date();
+        user.promoteCode = null;
+        user.promoteExpires = null;
+        user.verified = true;
+        user.verifiedAt = new Date();
         await user.save();
       } else {
         const usersPath = path.join(DATA_DIR, 'users.json');
         let users = []; try { users = JSON.parse(fs.readFileSync(usersPath, 'utf8') || '[]'); } catch (e) { users = []; }
         const idx = users.findIndex(u => String(u.id) === String(user.id || user.uid || user.firebaseUid) || String(u.uid) === String(user.uid || user.id || user.firebaseUid) || (u.email || '').toLowerCase() === String(user.email || '').toLowerCase());
         if (idx >= 0) {
-          users[idx].promoted = false; users[idx].promoteCode = code; users[idx].promoteRequestedAt = new Date().toISOString(); users[idx].promoteExpires = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+          users[idx].promoted = true;
+          users[idx].promotedAt = new Date().toISOString();
+          users[idx].promoteCode = null;
+          users[idx].promoteExpires = null;
+          users[idx].verified = true;
+          users[idx].verifiedAt = new Date().toISOString();
         } else {
-          user.promoteCode = code; user.promoted = false; user.promoteExpires = new Date(Date.now() + 24 * 3600 * 1000).toISOString(); users.push(user);
+          user.promoted = true; user.promotedAt = new Date().toISOString(); user.promoteCode = null; user.promoteExpires = null; user.verified = true; user.verifiedAt = new Date().toISOString(); users.push(user);
         }
         fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
       }
@@ -1167,64 +1151,13 @@ router.put('/users/:id', verifyAdminToken, async (req, res) => {
       await recordPromotionLog({
         userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
         email: user.email || null,
-        code,
-        status: 'pending',
-        method: 'email',
+        code: null,
+        status: 'promoted',
+        method: 'admin',
         adminEmail: req.user && req.user.email ? req.user.email : null
       });
 
-      const cfg = getSMTPConfig();
-      const FROM_EMAIL = process.env.FROM_EMAIL || process.env.SMTP_FROM || cfg.user || 'watch2earn@gmail.com';
-      if (nodemailer && cfg.host && cfg.user && cfg.pass) {
-        try {
-          const transporter = nodemailer.createTransport({ host: cfg.host, port: cfg.port, secure: cfg.secure, auth: { user: cfg.user, pass: cfg.pass } });
-          await transporter.sendMail({ from: FROM_EMAIL, to: user.email, subject: 'Your Watch2Earn verification code', text: `Your verification code is: ${code}` });
-          await recordPromotionLog({
-            userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
-            email: user.email || null,
-            code,
-            status: 'email_sent',
-            method: 'email',
-            adminEmail: req.user && req.user.email ? req.user.email : null
-          });
-          return res.json({ ok: true, message: 'Code generated and emailed' });
-        } catch (e) {
-          console.error('Failed to send promo email:', e && e.message);
-          if (isMongooseReady()) {
-            user.promoted = true;
-            user.promotedAt = new Date();
-            user.promoteCode = null;
-            user.promoteExpires = null;
-            await user.save();
-          }
-          await recordPromotionLog({
-            userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
-            email: user.email || null,
-            code,
-            status: 'auto_promoted',
-            method: 'fallback',
-            adminEmail: req.user && req.user.email ? req.user.email : null
-          });
-          return res.json({ ok: true, message: 'SMTP failed — user auto-promoted' });
-        }
-      }
-
-      if (isMongooseReady()) {
-        user.promoted = true;
-        user.promotedAt = new Date();
-        user.promoteCode = null;
-        user.promoteExpires = null;
-        await user.save();
-      }
-      await recordPromotionLog({
-        userId: user._id ? String(user._id) : user.uid || user.id || user.firebaseUid || null,
-        email: user.email || null,
-        code,
-        status: 'auto_promoted',
-        method: 'fallback',
-        adminEmail: req.user && req.user.email ? req.user.email : null
-      });
-      return res.json({ ok: true, message: 'No SMTP configured — user auto-promoted' });
+      return res.json({ ok: true, message: 'User promoted and verified (admin)' });
     }
 
     if (action === 'admin' || action === 'promote-admin') {

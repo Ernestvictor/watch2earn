@@ -1,9 +1,7 @@
 // config/notificationSystem.js
 // Unified notification system for audio, web push, and email
 
-const nodemailer = (() => {
-  try { return require('nodemailer'); } catch (e) { return null; }
-})();
+// Email transport (SMTP) removed — email functionality disabled by default
 
 class NotificationSystem {
   constructor(config = {}) {
@@ -28,7 +26,8 @@ class NotificationSystem {
         vapidSubject: config.vapidSubject || process.env.VAPID_SUBJECT || 'mailto:admin@watch2earn.com'
       },
       email: {
-        enabled: config.emailEnabled !== false,
+        // Disable email by default since SMTP is not used
+        enabled: false,
         provider: config.emailProvider || 'nodemailer',
         from: config.emailFrom || process.env.EMAIL_FROM,
         smtp: {
@@ -51,19 +50,8 @@ class NotificationSystem {
   }
 
   initializeEmailTransport() {
-    if (!this.config.email.enabled || !nodemailer) return;
-
-    try {
-      this.emailTransport = nodemailer.createTransport({
-        host: this.config.email.smtp.host,
-        port: this.config.email.smtp.port,
-        secure: this.config.email.smtp.secure,
-        auth: this.config.email.smtp.auth
-      });
-    } catch (error) {
-      console.error('Failed to initialize email transport:', error);
-      this.emailTransport = null;
-    }
+    // Email transport intentionally disabled — no SMTP usage
+    this.emailTransport = null;
   }
 
   // ===== AUDIO NOTIFICATIONS =====

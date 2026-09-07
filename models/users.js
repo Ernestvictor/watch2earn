@@ -134,6 +134,32 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Admin promotion / verification
+  promoted: {
+    type: Boolean,
+    default: false
+  },
+  promotedAt: {
+    type: Date,
+    default: null
+  },
+  promoteCode: {
+    type: String,
+    default: null
+  },
+  promoteExpires: {
+    type: Date,
+    default: null
+  },
+  // Admin verified flag
+  verified: {
+    type: Boolean,
+    default: false
+  },
+  verifiedAt: {
+    type: Date,
+    default: null
+  },
   suspendAppeal: {
     type: String,
     default: null,

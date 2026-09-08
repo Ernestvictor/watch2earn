@@ -161,39 +161,19 @@ app.get('/api/ads', (req, res) => {
 // /api/balance handled later (supports token-based native Mongo lookup)
 
 
-// GET /api/ad-check - Check if user should see aclib ad (100 seconds interval) - MongoDB only
+// GET /api/ad-check - ad availability check without any time-based throttling
 app.get('/api/ad-check', async (req, res) => {
   const email = req.query.email || (req.user && req.user.email) || null;
-  
+
   if (!email) {
     return res.status(400).json({ error: 'Email required', shouldShow: false });
   }
 
   try {
-    const now = new Date();
-    const AD_INTERVAL_MS = 100 * 1000; // 100 seconds
     const normalizedEmail = email.toLowerCase();
 
-    const user = await User.findOne({ email: normalizedEmail });
-    
-    let shouldShow = false;
-    if (!user || !user.lastAdShowTime) {
-      shouldShow = true; // First time
-    } else {
-      const timeSinceLastAd = now - new Date(user.lastAdShowTime);
-      shouldShow = timeSinceLastAd >= AD_INTERVAL_MS;
-    }
-
-    if (shouldShow) {
-      await User.findOneAndUpdate(
-        { email: normalizedEmail },
-        { lastAdShowTime: now },
-        { upsert: true, new: true }
-      );
-    }
-
     return res.json({
-      shouldShow,
+      shouldShow: true,
       sessionId: 'ad_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
       email: normalizedEmail
     });
@@ -543,50 +523,6 @@ app.post('/api/credit-ad', async (req, res) => {
   } catch (err) {
     console.error('Error in /api/credit-ad:', err);
     res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Auto-tag ad gate throttle: show once every 100 seconds per user/email (MongoDB only)
-const AUTO_TAG_INTERVAL_MS = 100000;
-
-app.get('/api/auto-tag/status', async (req, res) => {
-  try {
-    const email = (req.headers['x-user-email'] || req.body?.email || '').toString().trim().toLowerCase();
-    const key = email || ((req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').toString().split(',')[0].trim());
-    
-    if (!key) {
-      return res.json({ show: true });
-    }
-
-    const autoTagCollection = mongoNative.getCollection('auto_tag_throttle');
-    const record = await autoTagCollection.findOne({ key });
-    const now = Date.now();
-    const lastShown = record?.lastShown || 0;
-
-    res.json({
-      show: !lastShown || (now - lastShown >= AUTO_TAG_INTERVAL_MS)
-    });
-  } catch (err) {
-    console.error('Error in /api/auto-tag/status:', err);
-    res.json({ show: true }); // Fail open
-  }
-});
-
-app.post('/api/auto-tag/mark-shown', async (req, res) => {
-  try {
-    const email = (req.headers['x-user-email'] || req.body?.email || '').toString().trim().toLowerCase();
-    const key = email || ((req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').toString().split(',')[0].trim());
-    
-    if (!key) {
-      return res.json({ ok: false });
-    }
-
-    const autoTagCollection = mongoNative.getCollection('auto_tag_throttle');
-    await autoTagCollection.updateOne({ key }, { $set: { lastShown: Date.now() } }, { upsert: true });
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('Error in /api/auto-tag/mark-shown:', err);
-    res.status(500).json({ error: 'server error' });
   }
 });
 

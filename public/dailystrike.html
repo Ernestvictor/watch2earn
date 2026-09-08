@@ -43,24 +43,13 @@ body{background:#070709;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 <div class="container">
   <div class="card premium">
     <h1>🔥 Daily Strike</h1>
-    <p class="muted">Claim your daily bonus once every 24 hours. The more you earn, the more you can withdraw!</p>
     <div class="strike-icon">⚡</div>
     <div class="reward-display">
       <div class="amount">+$0.01</div>
       <div class="label">≈ ₦15 per claim</div>
     </div>
-    <button id="claimBtn" class="btn btn-primary" onclick="claimStrike()">Claim Daily Strike</button>
+    <button id="claimBtn" class="btn btn-primary" onclick="showClaimAdFlow()">Claim Daily Strike</button>
     <div id="status"></div>
-  </div>
-
-  <div class="card">
-    <b>How it works</b>
-    <p class="muted" style="margin-top:8px">
-      • Claim once per day<br>
-      • Maximum once per 24 hours<br>
-      • Instant credit to your balance<br>
-      • No tasks required!
-    </p>
   </div>
 </div>
 
@@ -106,6 +95,117 @@ async function loadStrikeStatus(user){
   }
 }
 
+function loadAdsenseScript() {
+  if (document.querySelector('script[src*="adsbygoogle.js"]')) return;
+  const script = document.createElement('script');
+  script.async = true;
+  script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3143201471546306';
+  script.crossOrigin = 'anonymous';
+  document.head.appendChild(script);
+}
+
+function showClaimAdFlow(){
+  const btn = document.getElementById('claimBtn');
+  const status = document.getElementById('status');
+  const overlay = document.createElement('div');
+  overlay.style.position = 'fixed';
+  overlay.style.inset = '0';
+  overlay.style.background = 'rgba(7,7,9,0.92)';
+  overlay.style.display = 'flex';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.style.zIndex = '9999';
+  overlay.style.padding = '20px';
+
+  const panel = document.createElement('div');
+  panel.style.width = '100%';
+  panel.style.maxWidth = '420px';
+  panel.style.background = '#121214';
+  panel.style.border = '1px solid #232326';
+  panel.style.borderRadius = '16px';
+  panel.style.padding = '18px';
+  panel.style.boxShadow = '0 12px 40px rgba(0,0,0,0.45)';
+
+  const timer = document.createElement('div');
+  timer.style.fontSize = '28px';
+  timer.style.fontWeight = '900';
+  timer.style.color = '#4CAF50';
+  timer.style.textAlign = 'center';
+  timer.style.marginBottom = '16px';
+  timer.innerText = '15';
+
+  const adWrap = document.createElement('div');
+  adWrap.style.marginBottom = '18px';
+  adWrap.style.minHeight = '120px';
+  adWrap.style.borderRadius = '12px';
+  adWrap.style.overflow = 'hidden';
+  adWrap.style.background = '#0f0f0f';
+  adWrap.style.border = '1px solid #2a2a2d';
+
+  const ad = document.createElement('ins');
+  ad.className = 'adsbygoogle';
+  ad.style.display = 'block';
+  ad.style.minHeight = '120px';
+  ad.setAttribute('data-ad-client', 'ca-pub-3143201471546306');
+  ad.setAttribute('data-ad-slot', '5101557479');
+  ad.setAttribute('data-ad-format', 'auto');
+  ad.setAttribute('data-full-width-responsive', 'true');
+  adWrap.appendChild(ad);
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.disabled = true;
+  cancelBtn.innerText = 'Cancel';
+  cancelBtn.style.width = '100%';
+  cancelBtn.style.padding = '12px';
+  cancelBtn.style.border = 'none';
+  cancelBtn.style.borderRadius = '12px';
+  cancelBtn.style.background = '#666';
+  cancelBtn.style.color = '#fff';
+  cancelBtn.style.fontWeight = '700';
+  cancelBtn.style.cursor = 'not-allowed';
+
+  panel.appendChild(timer);
+  panel.appendChild(adWrap);
+  panel.appendChild(cancelBtn);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  loadAdsenseScript();
+  try {
+    if (window.adsbygoogle) {
+      window.adsbygoogle = window.adsbygoogle || [];
+      window.adsbygoogle.push({});
+    }
+  } catch (e) {
+    console.warn('AdSense init failed', e);
+  }
+
+  btn.disabled = true;
+  btn.innerText = 'Processing...';
+  status.className = 'status';
+  status.innerText = 'Ad in progress';
+
+  let secondsLeft = 15;
+  const interval = setInterval(() => {
+    secondsLeft -= 1;
+    timer.innerText = String(secondsLeft);
+    if (secondsLeft <= 0) {
+      clearInterval(interval);
+      cancelBtn.disabled = false;
+      cancelBtn.style.background = '#4CAF50';
+      cancelBtn.style.cursor = 'pointer';
+      cancelBtn.innerText = 'Cancel';
+    }
+  }, 1000);
+
+  cancelBtn.onclick = async () => {
+    clearInterval(interval);
+    overlay.remove();
+    await claimStrike();
+  };
+}
+
 async function claimStrike(){
   const btn = document.getElementById('claimBtn');
   const status = document.getElementById('status');
@@ -140,8 +240,6 @@ async function claimStrike(){
 
 <head>
 <script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
-</head>
-</body>
 </head>
 </body>
 </body>

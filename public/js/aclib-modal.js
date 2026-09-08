@@ -1,11 +1,10 @@
 /**
  * aclib-modal.js - Display an ad with 5-second countdown
- * Calls /api/ad-check to determine if ad should show (100s interval per user)
+ * Calls /api/ad-check to determine if ad should show
  * Shows a modal with countdown, then allows user to skip or continue
  */
 
 let aclibAdShown = false;
-let aclibCheckInterval = null;
 
 async function checkAndShowAclibAd() {
   try {
@@ -142,7 +141,7 @@ function showAclibCountdownModal(sessionId) {
   skipBtn.onclick = () => {
     clearInterval(countdownInterval);
     modal.remove();
-    aclibAdShown = false; // Reset so next check can show ad again after interval
+    aclibAdShown = false; // Reset so the next page check can show again
   };
 
   modalContent.appendChild(title);
@@ -167,11 +166,8 @@ function showAclibCountdownModal(sessionId) {
 
 // Initialize ad checks when page loads
 function initAclibAdChecker() {
-  // Check immediately on page load
+  // Check immediately on page load without any 100-second throttling
   checkAndShowAclibAd();
-
-  // Check periodically (every 10 seconds)
-  aclibCheckInterval = setInterval(checkAndShowAclibAd, 10000);
 }
 
 // Start checking when DOM is ready

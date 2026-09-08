@@ -1,13 +1,10 @@
 /**
  * aclib-ad-wrapper.js
- * Integrates aclib ads with 100-second interval logic and 5-second countdown
+ * Integrates aclib ads without the 100-second interval gate
  */
 
 let aclibAdState = {
-  lastCheck: 0,
-  CHECK_INTERVAL: 15000, // Check every 15 seconds
   userEmail: null,
-  adShownCount: 0,
   initialized: false,
   blockedPaths: [
     '/index.html',
@@ -52,8 +49,6 @@ async function initAclibAd() {
 
     if (aclibAdState.userEmail) {
       checkAndShowAclibAd();
-      // Check periodically
-      setInterval(checkAndShowAclibAd, aclibAdState.CHECK_INTERVAL);
     }
   } catch (err) {
     console.warn('Error initializing aclib ad:', err);
@@ -64,13 +59,6 @@ async function checkAndShowAclibAd() {
   if (shouldBlockAclib() || document.getElementById('aclib-ad-overlay')) return;
 
   try {
-    const now = Date.now();
-    if (now - aclibAdState.lastCheck < aclibAdState.CHECK_INTERVAL / 2) {
-      return; // Skip if checked recently
-    }
-
-    aclibAdState.lastCheck = now;
-
     if (!aclibAdState.userEmail) return;
 
     const response = await fetch(`/api/ad-check?email=${encodeURIComponent(aclibAdState.userEmail)}`);
@@ -129,82 +117,77 @@ function showAclibAdWithCountdown() {
   const message = document.createElement('p');
   message.textContent = 'Watch an exclusive ad to earn rewards';
   message.style.cssText = `
-    font-size: 15px;
-    color: #ccc;
-    margin-bottom: 25px;
+    font-size: 16px;
+    color: #e0e0e0;
     line-height: 1.5;
-  `;
-
-  const countdownDiv = document.createElement('div');
-  countdownDiv.style.cssText = `
-    font-size: 72px;
-    font-weight: bold;
-    color: #4CAF50;
-    margin: 25px 0;
-    line-height: 1;
-    text-shadow: 0 2px 10px rgba(76, 175, 80, 0.3);
-  `;
-  countdownDiv.textContent = countdown;
-
-  const countdownLabel = document.createElement('p');
-  countdownLabel.textContent = 'seconds until you can skip';
-  countdownLabel.style.cssText = `
-    font-size: 13px;
-    color: #999;
     margin-bottom: 25px;
+  `;
+
+  const countdownEl = document.createElement('div');
+  countdownEl.id = 'aclib-countdown';
+  countdownEl.textContent = String(countdown);
+  countdownEl.style.cssText = `
+    font-size: 54px;
+    font-weight: 800;
+    color: #4CAF50;
+    margin-bottom: 18px;
+    line-height: 1;
+  `;
+
+  const hint = document.createElement('p');
+  hint.textContent = 'seconds until you can skip';
+  hint.style.cssText = `
+    color: #bbb;
+    font-size: 13px;
+    margin-bottom: 18px;
   `;
 
   const skipBtn = document.createElement('button');
   skipBtn.textContent = 'Skip';
   skipBtn.disabled = true;
   skipBtn.style.cssText = `
-    width: 100%;
-    padding: 14px;
-    background: #555;
-    color: #fff;
+    background: #666;
+    color: white;
+    padding: 12px 18px;
     border: none;
     border-radius: 10px;
-    font-weight: bold;
+    font-weight: 700;
     cursor: not-allowed;
+    width: 100%;
     font-size: 15px;
-    transition: all 0.3s ease;
   `;
 
-  let countdownInterval = setInterval(() => {
-    countdown--;
-    countdownDiv.textContent = countdown;
+  const timer = setInterval(() => {
+    countdown -= 1;
+    countdownEl.textContent = String(countdown);
 
     if (countdown <= 0) {
-      clearInterval(countdownInterval);
+      clearInterval(timer);
       skipBtn.disabled = false;
-      skipBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+      skipBtn.style.background = '#667eea';
       skipBtn.style.cursor = 'pointer';
-      countdownLabel.textContent = 'You can now skip';
+      hint.textContent = 'You can now skip';
     }
   }, 1000);
 
   skipBtn.onclick = () => {
-    clearInterval(countdownInterval);
-    window.__aclibVendorTriggered = false;
+    clearInterval(timer);
     overlay.remove();
-    aclibAdState.adShownCount++;
   };
 
   modal.appendChild(title);
   modal.appendChild(message);
-  modal.appendChild(countdownDiv);
-  modal.appendChild(countdownLabel);
+  modal.appendChild(countdownEl);
+  modal.appendChild(hint);
   modal.appendChild(skipBtn);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  const alreadyTriggered = vendorAutoTagAlreadyExists() || window.__aclibVendorTriggered;
-  if (typeof aclib !== 'undefined' && aclib.runAutoTag && !alreadyTriggered) {
-    window.__aclibVendorTriggered = true;
+  if (typeof aclib !== 'undefined' && aclib.runAutoTag) {
     try {
       aclib.runAutoTag({ zoneId: 'amqbk88f3h' });
-    } catch (e) {
-      console.warn('Error running aclib:', e);
+    } catch (err) {
+      console.warn('Error triggering aclib ad:', err);
     }
   }
 }

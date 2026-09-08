@@ -2,7 +2,6 @@
   if (window.__watch2earnAutoTagLoaded) return;
   window.__watch2earnAutoTagLoaded = true;
 
-  const SHOW_EVERY_MS = 100000;
   let countdownTimer = null;
   let isVisible = false;
 
@@ -99,12 +98,6 @@
     isVisible = true;
     overlay.hidden = false;
     startCountdown();
-    fetch('/api/auto-tag/mark-shown', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: getUserEmail() }),
-      cache: 'no-store'
-    }).catch(() => {});
   }
 
   async function checkStatus() {
@@ -129,6 +122,5 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     setTimeout(checkStatus, 1000);
-    setInterval(checkStatus, 30000);
   });
 })();

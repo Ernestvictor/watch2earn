@@ -142,15 +142,15 @@ function showClaimAdFlow(){
   adWrap.style.background = '#0f0f0f';
   adWrap.style.border = '1px solid #2a2a2d';
 
-  const ad = document.createElement('ins');
-  ad.className = 'adsbygoogle';
-  ad.style.display = 'block';
-  ad.style.minHeight = '120px';
-  ad.setAttribute('data-ad-client', 'ca-pub-3143201471546306');
-  ad.setAttribute('data-ad-slot', '5101557479');
-  ad.setAttribute('data-ad-format', 'auto');
-  ad.setAttribute('data-full-width-responsive', 'true');
-  adWrap.appendChild(ad);
+  const adIns = document.createElement('ins');
+  adIns.className = 'adsbygoogle';
+  adIns.style.display = 'block';
+  adIns.style.minHeight = '120px';
+  adIns.setAttribute('data-ad-client', 'ca-pub-3143201471546306');
+  adIns.setAttribute('data-ad-slot', '5101557479');
+  adIns.setAttribute('data-ad-format', 'auto');
+  adIns.setAttribute('data-full-width-responsive', 'true');
+  adWrap.appendChild(adIns);
 
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
@@ -172,14 +172,14 @@ function showClaimAdFlow(){
   document.body.appendChild(overlay);
 
   loadAdsenseScript();
-  try {
-    if (window.adsbygoogle) {
+  setTimeout(() => {
+    try {
       window.adsbygoogle = window.adsbygoogle || [];
       window.adsbygoogle.push({});
+    } catch (e) {
+      console.warn('AdSense init failed', e);
     }
-  } catch (e) {
-    console.warn('AdSense init failed', e);
-  }
+  }, 500);
 
   btn.disabled = true;
   btn.innerText = 'Processing...';
@@ -237,12 +237,6 @@ async function claimStrike(){
   }
 }
 </script>
-
-<head>
-<script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
-</head>
-</body>
-</body>
 <div>
   <script type="text/javascript">
     aclib.runBanner({

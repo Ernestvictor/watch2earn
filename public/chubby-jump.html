@@ -171,7 +171,7 @@
             </div>
 
             <div class="game-frame">
-                <iframe src="https://html5.gamemonetize.co/bqp870scog1zytubznmkveipim9jw8ok/" title="Chubby Jump game" allowfullscreen></iframe>
+                <iframe id="chubbyIframe" src="https://html5.gamemonetize.co/bqp870scog1zytubznmkveipim9jw8ok/" title="Chubby Jump game" allowfullscreen style="display:none"></iframe>
             </div>
 
             <div class="meta">
@@ -205,7 +205,11 @@
                         </div>
                     </div>
                     <div style="min-width:160px;text-align:right">
-                        <button id="gameClaimBtn" class="btn btn-primary" disabled style="opacity:0.65">Waiting...</button>
+                        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+                            <button id="startGameBtn" class="btn btn-secondary">Start</button>
+                            <button id="gameClaimBtn" class="btn btn-primary" disabled style="opacity:0.65">Waiting...</button>
+                            <div id="startTimer" style="font-size:12px;color:#9aa0a6;margin-top:6px;">Start the session to begin 60s</div>
+                        </div>
                         <div id="claimHelp" style="font-size:12px;color:#9aa0a6;margin-top:6px;text-align:right">Claims used: <span id="claimsUsed">0</span>/5</div>
                     </div>
                 </div>
@@ -398,5 +402,59 @@ window.addEventListener('load', async () => {
         if (e.target.disabled) return;
         showAdOverlayAndClaim();
     });
+});
+
+// START button logic: reveal iframe, start 60s server session and on-page countdown
+document.addEventListener('DOMContentLoaded', () => {
+    const startBtn = document.getElementById('startGameBtn');
+    const iframe = document.getElementById('chubbyIframe');
+    const timerEl = document.getElementById('startTimer');
+    const claimBtn = document.getElementById('gameClaimBtn');
+
+    let localTimer = null;
+
+    function setTimerText(s) {
+        if (!timerEl) return;
+        if (s > 0) timerEl.innerText = 'Waiting: ' + s + 's';
+        else timerEl.innerText = 'Ready to claim';
+    }
+
+    async function handleStartClick(e) {
+        e && e.preventDefault();
+        if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Started'; }
+        // reveal iframe/game script
+        if (iframe) iframe.style.display = 'block';
+
+        // start server session
+        try {
+            const user = firebase.auth().currentUser;
+            if (user) {
+                const token = await user.getIdToken();
+                await fetch('/api/transactions/game/session-start', {
+                    method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'chubby-jump' })
+                }).catch(() => {});
+            }
+        } catch (err) { /* ignore */ }
+
+        // start local 60s countdown and enable claim on finish
+        let seconds = 60;
+        setTimerText(seconds);
+        if (localTimer) clearInterval(localTimer);
+        localTimer = setInterval(() => {
+            seconds -= 1; setTimerText(seconds);
+            if (seconds <= 0) {
+                clearInterval(localTimer);
+                // enable claim button
+                if (claimBtn) { claimBtn.disabled = false; claimBtn.style.opacity = 1; claimBtn.innerText = 'Claim'; }
+                setTimerText(0);
+                // refresh status from server
+                try { pollStatus(); } catch(e){}
+            }
+        }, 1000);
+    }
+
+    if (startBtn) startBtn.addEventListener('click', handleStartClick);
+    // populate any existing local counter in game list (if opened directly)
+    try { const key = 'chubby_jump_session_starts'; const v = Number(localStorage.getItem(key) || 0); if(v>0){ const display = document.getElementById('chubbyJumpCount'); if(display) display.innerText = String(v);} } catch(e){}
 });
 </script>

@@ -9,6 +9,7 @@ const User = require('../models/users');
 const { ObjectId } = require('mongodb');
 const mongoose = require('mongoose');
 const { payReferralCommission } = require('../lib/referralHelpers');
+const Referral = require('../models/referral');
 
 // Simple in-memory rate limiter for bonus claims (per-process)
 const CLAIM_RATE = {};
@@ -195,7 +196,7 @@ async function creditLiveUserWallet(userId, amountNaira, options = {}) {
       ).lean();
 
       if (updated) {
-        try { await payReferralCommission(updated, amount, source); } catch (e) { console.warn('Referral commission (transactions mongoose) failed:', e && e.message); }
+        try { if (!options.skipReferral) await payReferralCommission(updated, amount, source); } catch (e) { console.warn('Referral commission (transactions mongoose) failed:', e && e.message); }
         console.log(`✅ Credited ${source}: userId=${safeUserId}, amount=₦${amount}, wallet=₦${Number(updated.wallet || 0)}`);
         return updated;
       }
@@ -234,7 +235,7 @@ async function creditLiveUserWallet(userId, amountNaira, options = {}) {
       );
 
       const doc = updated?.value || updated;
-      try { await payReferralCommission(doc, amount, source); } catch (e) { console.warn('Referral commission (transactions native) failed:', e && e.message); }
+      try { if (!options.skipReferral) await payReferralCommission(doc, amount, source); } catch (e) { console.warn('Referral commission (transactions native) failed:', e && e.message); }
       if (doc) {
         console.log(`✅ Credited ${source} (native): userId=${safeUserId}, amount=₦${amount}, wallet=₦${Number(doc.wallet || 0)}`);
         return doc;
@@ -815,29 +816,53 @@ router.post('/game/claim', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'User did not stay on page for required 60 seconds' });
     }
 
-    const credited = await creditLiveUserWallet(userId, nairaAmount, { email: req.user && req.user.email ? req.user.email : null, source: 'game' });
+    // credit user: 2 Naira per claim
+    const nairaAmount = 2;
+    const exchangeRate = Number(process.env.USD_TO_NAIRA_RATE || 1500);
+    const usdAmount = +(nairaAmount / exchangeRate).toFixed(6);
 
-    // Ensure referral commission is paid (10% of the naira amount) if there's a referrer.
-    try {
-      const paid = await payReferralCommission(user, nairaAmount, 'game');
-      if (!paid && user && user.firebaseUid) {
-        // Fallback: call Referral.addCommission directly if helper didn't run
-        const ReferralModel = require('../models/referral');
-        await ReferralModel.addCommission(user.firebaseUid, nairaAmount, { source: 'game' });
-      }
-    } catch (e) {
-      console.warn('Referral commission (game) failed:', e && e.message);
-    }
-    await creditLiveUserWallet(userId, 2, { email: req.user && req.user.email ? req.user.email : null, source: 'game' });
+    const tx = {
+      id: Date.now().toString(),
+      userId,
+      type: 'game',
+      source: 'chubby_jump',
+      title: 'Chubby Jump Reward',
+      amountUsd: usdAmount,
+      amountNaira: nairaAmount,
+      date: new Date().toISOString()
+    };
 
-    // referral commission: 10% of the full reward, paid by us, not deducted from the user reward
-    try {
-      const refUser = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }).lean();
-      if (refUser && refUser.referredBy) {
-        await payReferralCommission(refUser, 2, 'game');
-      }
-    } catch (e) {
-      console.warn('Game referral commission failed:', e && e.message);
+    // persist transaction
+    const txs = await loadTransactions();
+    txs.unshift(tx);
+    await saveTransactions(txs);
+    await insertTxMongo(tx).catch(() => {});
+
+    // credit live wallet to user (full 2 naira)
+    await creditLiveUserWallet(userId, nairaAmount, { email: req.user && req.user.email ? req.user.email : null, source: 'game' });
+
+    // Pay referrer 10% commission from company (not deducted from user's 2 naira)
+    if (user.referredBy) {
+      const commissionNaira = 0.20; // 10% of 2 naira
+      const commissionUsd = +(commissionNaira / exchangeRate).toFixed(6);
+      const referrerTx = {
+        id: Date.now().toString() + '_referral',
+        userId: user.referredBy,
+        type: 'game_referral',
+        source: 'game_referral',
+        title: `Game referral bonus from ${userId.slice(0, 8)}...`,
+        amountUsd: commissionUsd,
+        amountNaira: commissionNaira,
+        date: new Date().toISOString(),
+        referredUserId: userId
+      };
+      // persist referral transaction
+      txs.unshift(referrerTx);
+      await saveTransactions(txs);
+      await insertTxMongo(referrerTx).catch(() => {});
+      // credit referrer wallet
+      await creditLiveUserWallet(user.referredBy, commissionNaira, { email: null, source: 'game_referral' }).catch(e => console.warn('Referral credit failed:', e && e.message));
+      console.log(`✅ Game referral bonus: ₦${commissionNaira} paid to referrer ${user.referredBy}`);
     }
 
     // increment user counters
@@ -853,7 +878,7 @@ router.post('/game/claim', verifyToken, async (req, res) => {
       }
     } catch (e) { console.warn('Failed to update user claim counters', e && e.message); }
 
-    return res.json({ message: 'Claim successful', amountNaira: 2, amountUsd: +(2 / 1500).toFixed(6), claimsToday: Number(user.gameClaimsToday || 0) + 1 });
+    return res.json({ message: 'Claim successful', amountNaira, amountUsd: usdAmount, claimsToday: Number(user.gameClaimsToday || 0) + 1 });
   } catch (e) {
     console.error('game/claim failed:', e && e.message);
     return res.status(500).json({ error: 'Claim failed' });

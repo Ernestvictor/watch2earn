@@ -81,7 +81,8 @@ referralSchema.statics.addCommission = async function (referredUid, amount, opts
 
   if (!referredUid || !amount) return 0;
 
-  const commissionRate = Number(process.env.REFERRAL_RATE || 0.10);
+  // allow override via opts.rate, fallback to env or 0.10
+  const commissionRate = Number((opts && typeof opts.rate !== 'undefined') ? opts.rate : (process.env.REFERRAL_RATE || 0.10));
   // Commission is calculated from the earning itself, not deducted from the user reward.
   const rawCommission = Number(amount) * commissionRate;
   const commission = Number(Math.max(0, rawCommission).toFixed(2));

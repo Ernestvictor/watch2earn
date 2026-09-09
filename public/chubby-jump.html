@@ -210,7 +210,6 @@
                     </div>
                 </div>
             </div>
-            </div>
         </div>
     </div>
 </body>
@@ -218,6 +217,18 @@
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script>
+const firebaseConfig = {
+    apiKey: 'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',
+    authDomain: 'enable-authentication-1b56c.firebaseapp.com',
+    projectId: 'enable-authentication-1b56c',
+    storageBucket: 'enable-authentication-1b56c.firebasestorage.app',
+    messagingSenderId: '946417281410',
+    appId: '1:946417281410:web:7f4e06e3b4b03946d0079b'
+};
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+
 // Game session + claim client logic
 const API = {
     start: '/api/transactions/game/session-start',
@@ -260,13 +271,14 @@ async function pollStatus() {
         if (!res.ok) return;
         const data = await res.json();
         document.getElementById('claimsUsed').innerText = data.claimsToday || 0;
-        // update total claimed amount via balance endpoint
+
         const bal = await fetch(API.balance, { headers: { 'Authorization': 'Bearer ' + token } });
         if (bal.ok) {
             const b = await bal.json();
-            const naira = Math.round((Number(b.gameEarnUsd || 0) * Number(b.rate || (1500))).toFixed(0));
+            const naira = Number((Number(b.gameEarnUsd || 0) * Number(b.rate || 1500)).toFixed(0));
             document.getElementById('gameTotal').innerText = '₦' + naira.toLocaleString();
         }
+
         const btn = document.getElementById('gameClaimBtn');
         if (data.sessionReady && (data.claimsToday < 5)) {
             btn.disabled = false;
@@ -285,6 +297,34 @@ async function pollStatus() {
     } catch (e) { console.warn('status poll failed', e); }
 }
 
+function loadAdScript(url) {
+    return new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[src="' + url + '"]');
+        if (existing) {
+            if (existing.dataset.loaded === '1') return resolve();
+            existing.addEventListener('load', () => resolve(), { once: true });
+            existing.addEventListener('error', () => reject(new Error('Script failed: ' + url)), { once: true });
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = url;
+        script.async = true;
+        script.defer = false;
+        script.onload = () => {
+            script.dataset.loaded = '1';
+            resolve();
+        };
+        script.onerror = () => reject(new Error('Script failed: ' + url));
+        document.head.appendChild(script);
+    });
+}
+
+function getNextAdScript() {
+    const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
+    return CLAIM_AD_SCRIPTS[used % CLAIM_AD_SCRIPTS.length] || CLAIM_AD_SCRIPTS[0];
+}
+
 function showAdOverlayAndClaim() {
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed'; overlay.style.inset = '0'; overlay.style.background = 'rgba(0,0,0,0.9)'; overlay.style.display = 'flex'; overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center'; overlay.style.zIndex = 99999; overlay.style.padding = '20px';
@@ -292,25 +332,28 @@ function showAdOverlayAndClaim() {
     const timer = document.createElement('div'); timer.style.fontSize='28px'; timer.style.fontWeight='900'; timer.style.marginBottom='12px'; timer.innerText = '50';
     const adContainer = document.createElement('div'); adContainer.id = 'game-ad-container'; adContainer.style.minHeight='160px'; adContainer.style.marginBottom='12px'; adContainer.style.background='#0f0f0f'; adContainer.style.borderRadius='10px'; adContainer.style.padding='12px';
 
-    // Load a rotating ad script for this claim; each claim uses the next script in the list
-    const script = document.createElement('script');
-    script.src = getNextAdScript();
-    script.async = true;
-    script.setAttribute('data-cfasync', 'false');
-    adContainer.appendChild(script);
-
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className='btn btn-secondary';
+    cancelBtn.style.marginTop='8px';
+    cancelBtn.innerText='Cancel';
+    cancelBtn.disabled = true; cancelBtn.style.opacity=0.6;
     let canceled = false;
-    const cancelBtn = document.createElement('button'); cancelBtn.className='btn btn-secondary'; cancelBtn.style.marginTop='8px'; cancelBtn.innerText='Cancel'; cancelBtn.disabled = true; cancelBtn.style.opacity=0.6;
-    // Cancel should simply close the overlay and prevent auto-claim; claiming only occurs on ad click or auto-complete when not canceled
     cancelBtn.onclick = () => {
         canceled = true;
-        try { clearInterval(interval); } catch (e) {}
-        try { overlay.remove(); } catch (e) {}
+        clearInterval(interval);
+        overlay.remove();
     };
 
     panel.appendChild(timer); panel.appendChild(adContainer); panel.appendChild(cancelBtn); overlay.appendChild(panel); document.body.appendChild(overlay);
 
-    let seconds = 50; let allowCancelAfter = 15; const interval = setInterval(() => {
+    const url = getNextAdScript();
+    loadAdScript(url).catch(() => {
+        adContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:160px;color:#9aa0a6;font-size:14px;">Ad loading failed. Please continue.</div>';
+    });
+
+    let seconds = 50; let allowCancelAfter = 15;
+    const interval = setInterval(() => {
         seconds -= 1; timer.innerText = String(seconds);
         if (seconds <= 50 - allowCancelAfter) {
             cancelBtn.disabled = false; cancelBtn.style.opacity = 1; cancelBtn.classList.remove('btn-secondary'); cancelBtn.classList.add('btn-primary');
@@ -318,7 +361,7 @@ function showAdOverlayAndClaim() {
         if (seconds <= 0) {
             clearInterval(interval);
             if (!canceled) {
-                try { overlay.remove(); } catch (e) {}
+                overlay.remove();
                 cleanupAndClaim();
             }
         }
@@ -341,29 +384,18 @@ function showAdOverlayAndClaim() {
     }
 }
 
-function getNextAdScript() {
-    const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
-    return CLAIM_AD_SCRIPTS[used % CLAIM_AD_SCRIPTS.length];
-}
-
 window.addEventListener('load', async () => {
-    if (!firebase.apps.length) {
-        firebase.initializeApp({});
-    }
-    // start session once user is authenticated
     firebase.auth().onAuthStateChanged(async (user) => {
         if (!user) return window.location.href = 'login.html';
         try { await startSession(); } catch (e) {}
-        // ping every 10s
         setInterval(pingSession, 10 * 1000);
-        // poll status every 2s
-        pollStatus(); statusPoll = setInterval(pollStatus, 2000);
+        pollStatus();
+        statusPoll = setInterval(pollStatus, 2000);
     });
 
     document.getElementById('gameClaimBtn').addEventListener('click', (e) => {
         e.preventDefault();
         if (e.target.disabled) return;
-        // show ad overlay and then claim after flow
         showAdOverlayAndClaim();
     });
 });

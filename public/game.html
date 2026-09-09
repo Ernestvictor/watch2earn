@@ -87,7 +87,7 @@
             <div class="ad-card">
                 <h3>Chubby Jump</h3>
                 <p>Jump into a quick, fun challenge and keep the momentum going.</p>
-                <a href="chubby-jump.html" class="btn-watch">Open Game</a>
+                <a href="#" class="btn-watch" onclick="startGameAndNavigate(event, 'chubby-jump.html', 'chubby-jump')">Open Game</a>
             </div>
 
             
@@ -118,7 +118,48 @@
         <a href="account.html"><i class="fas fa-user"></i>Account</a>
     </div>
 
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
     <script>
+        // Ensure Firebase initialized (matches other pages)
+        const firebaseConfig = {
+            apiKey: 'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',
+            authDomain: 'enable-authentication-1b56c.firebaseapp.com',
+            projectId: 'enable-authentication-1b56c',
+            storageBucket: 'enable-authentication-1b56c.firebasestorage.app',
+            messagingSenderId: '946417281410',
+            appId: '1:946417281410:web:7f4e06e3b4b03946d0079b'
+        };
+        if (!window.firebase) {
+            console.warn('Firebase not loaded');
+        } else if (!firebase.apps.length) {
+            try { firebase.initializeApp(firebaseConfig); } catch(e){ /* already initialized elsewhere */ }
+        }
+
+        async function startGameAndNavigate(e, href, page) {
+            e && e.preventDefault();
+            // Try to start session on server before navigating.
+            try {
+                const user = firebase.auth().currentUser;
+                if (!user) return window.location.href = href; // not signed in -> just navigate
+                const token = await user.getIdToken();
+                // fire-and-forget but wait briefly for response to ensure server records start
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 2500);
+                await fetch('/api/transactions/game/session-start', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ page }),
+                    signal: controller.signal
+                }).catch(() => {});
+                clearTimeout(timeout);
+            } catch (err) {
+                // ignore errors and navigate anyway
+            }
+            // navigate after attempting to start session
+            window.location.href = href;
+        }
+
         window.addEventListener('load', () => {
             const watchAdBtn = document.getElementById('watchAdBtn');
             if (watchAdBtn) {

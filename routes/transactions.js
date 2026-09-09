@@ -678,6 +678,188 @@ router.get('/history', verifyToken, async (req, res) => {
   res.json(transactions);
 });
 
+// --- Game session & claim API for chubby-jump ---
+// POST /api/transactions/game/session-start
+router.post('/game/session-start', verifyToken, async (req, res) => {
+  const userId = req.user.uid || req.user.id;
+  const page = (req.body && req.body.page) || 'chubby-jump';
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 60 * 1000); // 60s
+
+  try {
+    // Update user currentGameSession
+    if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+      await User.updateOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }, {
+        $set: {
+          'currentGameSession.page': page,
+          'currentGameSession.startedAt': now,
+          'currentGameSession.lastSeen': now,
+          'currentGameSession.expiresAt': expiresAt
+        }
+      }, { upsert: true });
+    }
+    if (mongoNative && typeof mongoNative.getUsersCollection === 'function') {
+      const col = mongoNative.getUsersCollection();
+      await col.updateOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }, {
+        $set: {
+          'currentGameSession.page': page,
+          'currentGameSession.startedAt': now,
+          'currentGameSession.lastSeen': now,
+          'currentGameSession.expiresAt': expiresAt
+        }
+      }, { upsert: true });
+    }
+    return res.json({ message: 'session started', startedAt: now.toISOString(), expiresAt: expiresAt.toISOString() });
+  } catch (e) {
+    console.error('session-start failed:', e && e.message);
+    return res.status(500).json({ error: 'Failed to start session' });
+  }
+});
+
+// POST /api/transactions/game/session-ping
+router.post('/game/session-ping', verifyToken, async (req, res) => {
+  const userId = req.user.uid || req.user.id;
+  const now = new Date();
+  try {
+    if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+      await User.updateOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }, { $set: { 'currentGameSession.lastSeen': now } });
+    }
+    if (mongoNative && typeof mongoNative.getUsersCollection === 'function') {
+      const col = mongoNative.getUsersCollection();
+      await col.updateOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }, { $set: { 'currentGameSession.lastSeen': now } });
+    }
+    return res.json({ message: 'pong', lastSeen: now.toISOString() });
+  } catch (e) {
+    console.error('session-ping failed:', e && e.message);
+    return res.status(500).json({ error: 'Failed to ping session' });
+  }
+});
+
+// GET /api/transactions/game/status
+router.get('/game/status', verifyToken, async (req, res) => {
+  const userId = req.user.uid || req.user.id;
+  try {
+    let user = null;
+    if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }).lean();
+    if (!user && mongoNative && typeof mongoNative.getUsersCollection === 'function') {
+      const col = mongoNative.getUsersCollection();
+      user = await col.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] });
+    }
+
+    const now = new Date();
+    let sessionReady = false;
+    let secondsLeft = null;
+    if (user && user.currentGameSession && user.currentGameSession.startedAt) {
+      const started = new Date(user.currentGameSession.startedAt);
+      const expiresAt = new Date(started.getTime() + 60 * 1000);
+      const lastSeen = user.currentGameSession.lastSeen ? new Date(user.currentGameSession.lastSeen) : null;
+      // consider user present if lastSeen within 30s
+      const present = lastSeen && (now - lastSeen) <= 30 * 1000;
+      const elapsed = now - started;
+      sessionReady = present && elapsed >= 60 * 1000;
+      secondsLeft = Math.max(0, Math.ceil((60 * 1000 - elapsed) / 1000));
+    }
+
+    // reset daily count if date is not today
+    let claimsToday = 0;
+    if (user && user.gameClaimsDate) {
+      const d = new Date(user.gameClaimsDate);
+      if (d.toDateString() !== new Date().toDateString()) {
+        claimsToday = 0;
+      } else {
+        claimsToday = Number(user.gameClaimsToday || 0);
+      }
+    }
+
+    return res.json({ sessionReady, secondsLeft, claimsToday, maxPerDay: 5 });
+  } catch (e) {
+    console.error('game/status failed:', e && e.message);
+    return res.status(500).json({ error: 'Failed to read status' });
+  }
+});
+
+// POST /api/transactions/game/claim
+router.post('/game/claim', verifyToken, async (req, res) => {
+  const userId = req.user.uid || req.user.id;
+  try {
+    // load user
+    let user = null;
+    if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] });
+    if (!user && mongoNative && typeof mongoNative.getUsersCollection === 'function') {
+      const col = mongoNative.getUsersCollection();
+      user = await col.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] });
+    }
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // reset daily count if needed
+    const today = new Date();
+    if (!user.gameClaimsDate || new Date(user.gameClaimsDate).toDateString() !== today.toDateString()) {
+      user.gameClaimsToday = 0;
+      user.gameClaimsDate = today;
+    }
+
+    if (Number(user.gameClaimsToday || 0) >= 5) {
+      return res.status(403).json({ error: 'Daily game claim limit reached' });
+    }
+
+    // validate session presence and 60s requirement
+    if (!user.currentGameSession || !user.currentGameSession.startedAt) {
+      return res.status(400).json({ error: 'No active game session' });
+    }
+    const started = new Date(user.currentGameSession.startedAt);
+    const lastSeen = user.currentGameSession.lastSeen ? new Date(user.currentGameSession.lastSeen) : null;
+    const now = new Date();
+    const present = lastSeen && (now - lastSeen) <= 30 * 1000;
+    const elapsed = now - started;
+    if (!present || elapsed < 60 * 1000) {
+      return res.status(400).json({ error: 'User did not stay on page for required 60 seconds' });
+    }
+
+    const credited = await creditLiveUserWallet(userId, nairaAmount, { email: req.user && req.user.email ? req.user.email : null, source: 'game' });
+
+    // Ensure referral commission is paid (10% of the naira amount) if there's a referrer.
+    try {
+      const paid = await payReferralCommission(user, nairaAmount, 'game');
+      if (!paid && user && user.firebaseUid) {
+        // Fallback: call Referral.addCommission directly if helper didn't run
+        const ReferralModel = require('../models/referral');
+        await ReferralModel.addCommission(user.firebaseUid, nairaAmount, { source: 'game' });
+      }
+    } catch (e) {
+      console.warn('Referral commission (game) failed:', e && e.message);
+    }
+    await creditLiveUserWallet(userId, 2, { email: req.user && req.user.email ? req.user.email : null, source: 'game' });
+
+    // referral commission: 10% of the full reward, paid by us, not deducted from the user reward
+    try {
+      const refUser = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }).lean();
+      if (refUser && refUser.referredBy) {
+        await payReferralCommission(refUser, 2, 'game');
+      }
+    } catch (e) {
+      console.warn('Game referral commission failed:', e && e.message);
+    }
+
+    // increment user counters
+    try {
+      if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
+        user.gameClaimsToday = Number(user.gameClaimsToday || 0) + 1;
+        user.gameClaimsDate = today;
+        await user.save();
+      }
+      if (mongoNative && typeof mongoNative.getUsersCollection === 'function') {
+        const col = mongoNative.getUsersCollection();
+        await col.updateOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }, { $inc: { gameClaimsToday: 1 }, $set: { gameClaimsDate: today } }, { upsert: true });
+      }
+    } catch (e) { console.warn('Failed to update user claim counters', e && e.message); }
+
+    return res.json({ message: 'Claim successful', amountNaira: 2, amountUsd: +(2 / 1500).toFixed(6), claimsToday: Number(user.gameClaimsToday || 0) + 1 });
+  } catch (e) {
+    console.error('game/claim failed:', e && e.message);
+    return res.status(500).json({ error: 'Claim failed' });
+  }
+});
+
 // POST /api/transactions/signup-bonus - Award signup bonus once and referral small bonus
 router.post('/signup-bonus', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;

@@ -82,9 +82,9 @@ referralSchema.statics.addCommission = async function (referredUid, amount, opts
   if (!referredUid || !amount) return 0;
 
   const commissionRate = Number(process.env.REFERRAL_RATE || 0.10);
-  // Calculate commission and round to integer (Naira) to avoid floating errors
+  // Commission is calculated from the earning itself, not deducted from the user reward.
   const rawCommission = Number(amount) * commissionRate;
-  const commission = Math.round(rawCommission);
+  const commission = Number(Math.max(0, rawCommission).toFixed(2));
 
   // Find referral mapping
   const referral = await Referral.findOne({ referredUid: referredUid });

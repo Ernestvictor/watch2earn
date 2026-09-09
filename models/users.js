@@ -73,6 +73,22 @@ const userSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  // Game claim tracking (per-day) and live session
+  gameClaimsToday: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  gameClaimsDate: {
+    type: Date,
+    default: null
+  },
+  currentGameSession: {
+    page: { type: String, default: null },
+    startedAt: { type: Date, default: null },
+    lastSeen: { type: Date, default: null },
+    expiresAt: { type: Date, default: null }
+  },
   fromBonus: {
     type: Number,
     default: 0,

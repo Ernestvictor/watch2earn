@@ -227,6 +227,12 @@ const API = {
     balance: '/api/transactions/balance'
 };
 
+const CLAIM_AD_SCRIPTS = [
+    'https://pl30708908.profitableratecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js',
+    'https://www.highrevenueformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js',
+    'https://pl30708908.profitableratecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js'
+];
+
 function authToken() {
     const user = firebase && firebase.auth && firebase.auth().currentUser;
     return user ? user.getIdToken() : Promise.reject(new Error('Not signed in'));
@@ -284,12 +290,14 @@ function showAdOverlayAndClaim() {
     overlay.style.position = 'fixed'; overlay.style.inset = '0'; overlay.style.background = 'rgba(0,0,0,0.9)'; overlay.style.display = 'flex'; overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center'; overlay.style.zIndex = 99999; overlay.style.padding = '20px';
     const panel = document.createElement('div'); panel.style.maxWidth = '520px'; panel.style.width='100%'; panel.style.background='#121214'; panel.style.padding='18px'; panel.style.borderRadius='12px'; panel.style.textAlign='center'; panel.style.color='#fff';
     const timer = document.createElement('div'); timer.style.fontSize='28px'; timer.style.fontWeight='900'; timer.style.marginBottom='12px'; timer.innerText = '50';
-    const adContainer = document.createElement('div'); adContainer.id = 'game-ad-container'; adContainer.style.minHeight='160px'; adContainer.style.marginBottom='12px';
-    // insert third-party script + container
-    const third = document.createElement('script'); third.async = true; third.src = 'https://pl30708907.profitableratecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js'; third.setAttribute('data-cfasync','false');
-    const containerDiv = document.createElement('div'); containerDiv.id = 'container-4b1cf630fa653f9661f13acbf3b9bcf9';
-    adContainer.appendChild(containerDiv);
-    adContainer.appendChild(third);
+    const adContainer = document.createElement('div'); adContainer.id = 'game-ad-container'; adContainer.style.minHeight='160px'; adContainer.style.marginBottom='12px'; adContainer.style.background='#0f0f0f'; adContainer.style.borderRadius='10px'; adContainer.style.padding='12px';
+
+    // Load a rotating ad script for this claim; each claim uses the next script in the list
+    const script = document.createElement('script');
+    script.src = getNextAdScript();
+    script.async = true;
+    script.setAttribute('data-cfasync', 'false');
+    adContainer.appendChild(script);
 
     let canceled = false;
     const cancelBtn = document.createElement('button'); cancelBtn.className='btn btn-secondary'; cancelBtn.style.marginTop='8px'; cancelBtn.innerText='Cancel'; cancelBtn.disabled = true; cancelBtn.style.opacity=0.6;
@@ -331,12 +339,11 @@ function showAdOverlayAndClaim() {
             }
         } catch (e) { console.error('claim error', e); alert('Claim error'); }
     }
-    // If user clicks inside the ad container, treat as ad click and trigger claim
-    containerDiv.addEventListener('click', (e) => {
-        if (cleaned || canceled) return;
-        try { clearInterval(interval); } catch (er) {}
-        cleanupAndClaim();
-    });
+}
+
+function getNextAdScript() {
+    const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
+    return CLAIM_AD_SCRIPTS[used % CLAIM_AD_SCRIPTS.length];
 }
 
 window.addEventListener('load', async () => {

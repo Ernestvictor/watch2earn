@@ -391,7 +391,7 @@ function showAdOverlayAndClaim() {
 window.addEventListener('load', async () => {
     firebase.auth().onAuthStateChanged(async (user) => {
         if (!user) return window.location.href = 'login.html';
-        try { await startSession(); } catch (e) {}
+        // Manual start only: do not begin the 60s session automatically on page load
         setInterval(pingSession, 10 * 1000);
         pollStatus();
         statusPoll = setInterval(pollStatus, 2000);
@@ -405,6 +405,7 @@ window.addEventListener('load', async () => {
 });
 
 // START button logic: reveal iframe, start 60s server session and on-page countdown
+// Manual claim only: user must click Start, wait 60s, then click Claim Ad.
 document.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('startGameBtn');
     const iframe = document.getElementById('chubbyIframe');
@@ -419,24 +420,48 @@ document.addEventListener('DOMContentLoaded', () => {
         else timerEl.innerText = 'Ready to claim';
     }
 
+    function refreshStartButton() {
+        const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
+        if (startBtn) {
+            if (used >= 5) {
+                startBtn.disabled = true;
+                startBtn.innerText = 'Daily limit reached';
+            } else {
+                startBtn.disabled = false;
+                startBtn.innerText = 'Start';
+            }
+        }
+    }
+
     async function handleStartClick(e) {
         e && e.preventDefault();
+        const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
+        if (used >= 5) {
+            if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Daily limit reached'; }
+            return;
+        }
+
         if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Started'; }
-        // reveal iframe/game script
         if (iframe) iframe.style.display = 'block';
 
-        // start server session
         try {
             const user = firebase.auth().currentUser;
             if (user) {
                 const token = await user.getIdToken();
                 await fetch('/api/transactions/game/session-start', {
-                    method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'chubby-jump' })
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ page: 'chubby-jump' })
                 }).catch(() => {});
             }
         } catch (err) { /* ignore */ }
 
-        // start local 60s countdown and enable claim on finish
+        if (claimBtn) {
+            claimBtn.disabled = true;
+            claimBtn.style.opacity = 0.65;
+            claimBtn.innerText = 'Waiting...';
+        }
+
         let seconds = 60;
         setTimerText(seconds);
         if (localTimer) clearInterval(localTimer);
@@ -444,17 +469,33 @@ document.addEventListener('DOMContentLoaded', () => {
             seconds -= 1; setTimerText(seconds);
             if (seconds <= 0) {
                 clearInterval(localTimer);
-                // enable claim button
-                if (claimBtn) { claimBtn.disabled = false; claimBtn.style.opacity = 1; claimBtn.innerText = 'Claim'; }
+                if (claimBtn) {
+                    claimBtn.disabled = false;
+                    claimBtn.style.opacity = 1;
+                    claimBtn.innerText = 'Claim Ad';
+                }
                 setTimerText(0);
-                // refresh status from server
-                try { pollStatus(); } catch(e){}
+                try { pollStatus(); } catch (e) {}
             }
         }, 1000);
     }
 
     if (startBtn) startBtn.addEventListener('click', handleStartClick);
-    // populate any existing local counter in game list (if opened directly)
-    try { const key = 'chubby_jump_session_starts'; const v = Number(localStorage.getItem(key) || 0); if(v>0){ const display = document.getElementById('chubbyJumpCount'); if(display) display.innerText = String(v);} } catch(e){}
+
+    const refreshInterval = setInterval(refreshStartButton, 1500);
+    refreshStartButton();
+
+    try {
+      const key = 'chubby_jump_session_starts';
+      const v = Number(localStorage.getItem(key) || 0);
+      if (v > 0) {
+        const display = document.getElementById('chubbyJumpCount');
+        if (display) display.innerText = String(v);
+      }
+    } catch (e) {}
+
+    // stop any previous polling from auto-enabling claim without user action
+    if (window.__gameManualStartRefresh) clearInterval(window.__gameManualStartRefresh);
+    window.__gameManualStartRefresh = refreshInterval;
 });
 </script>

@@ -387,7 +387,7 @@ function showAdOverlayAndClaim() {
             const headers = { 'Authorization': 'Bearer ' + token };
             if (!manualServerSessionOk) headers['X-Force-Claim'] = '1';
             const res = await fetch(API.claim, { method: 'POST', headers });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (res.ok) {
                 manualSessionActive = false;
                 manualSessionReady = false;
@@ -399,7 +399,8 @@ function showAdOverlayAndClaim() {
                 pollStatus();
                 alert('✅ Claimed: ₦' + (data.amountNaira || 2) + '');
             } else {
-                alert(data.error || 'Claim failed');
+                console.error('Claim failed:', res.status, data);
+                alert((data && data.error) ? data.error : 'Claim failed (' + res.status + ')');
             }
         } catch (e) { console.error('claim error', e); alert('Claim error'); }
     }

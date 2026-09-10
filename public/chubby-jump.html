@@ -157,6 +157,8 @@
         }
     </style>
 </head>
+<!-- Ad exchange script required for next actions -->
+<script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
 <body>
     <div class="top-bar">
         <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
@@ -172,6 +174,9 @@
 
             <div class="game-frame">
                 <iframe id="chubbyIframe" src="https://html5.gamemonetize.co/bqp870scog1zytubznmkveipim9jw8ok/" title="Chubby Jump game" allowfullscreen style="display:none"></iframe>
+                <div id="inGameAdSlot" style="margin-top:12px;display:flex;justify-content:center;
+                    align-items:center;min-height:90px;
+                    border-radius:8px;overflow:hidden"></div>
             </div>
 
             <div class="meta">
@@ -502,21 +507,71 @@ document.addEventListener('DOMContentLoaded', () => {
             claimBtn.innerText = 'Waiting...';
         }
 
-        let seconds = 60;
-        setTimerText(seconds);
+        // Two-stage countdown with ads: 60s first ad, then 40s second ad, then enable Claim
+        const adSlot = document.getElementById('inGameAdSlot');
+
+        // helper: load aclib and run banner
+        function showFirstBanner() {
+            try {
+                if (window.aclib && typeof window.aclib.runBanner === 'function') {
+                    window.aclib.runBanner({ zoneId: '12127470' });
+                } else {
+                    const s = document.createElement('script');
+                    s.src = '//acscdn.com/script/aclib.js';
+                    s.id = 'aclib-script';
+                    s.async = true;
+                    s.onload = () => { try { window.aclib && window.aclib.runBanner({ zoneId: '12127470' }); } catch(e){} };
+                    document.head.appendChild(s);
+                }
+            } catch (e) { console.warn('aclib banner failed', e); }
+        }
+
+        // helper: show second ad via iframe (youradexchange)
+        function showSecondAd() {
+            try {
+                if (!adSlot) return;
+                adSlot.innerHTML = '';
+                const frame = document.createElement('iframe');
+                frame.src = 'https://youradexchange.com/video/select.php?r=12127466';
+                frame.width = '300'; frame.height = '250'; frame.style.border = '0';
+                adSlot.appendChild(frame);
+            } catch (e) { console.warn('second ad failed', e); }
+        }
+
+        // start first ad + 60s
+        if (adSlot) adSlot.innerHTML = '';
+        showFirstBanner();
+        let first = 60;
+        setTimerText(first);
         if (localTimer) clearInterval(localTimer);
         localTimer = setInterval(() => {
-            seconds -= 1; setTimerText(seconds);
-            if (seconds <= 0) {
+            first -= 1; if (timerEl) timerEl.innerText = 'Ad1: ' + first + 's';
+            if (first <= 0) {
                 clearInterval(localTimer);
-                manualSessionReady = true;
-                if (claimBtn) {
-                    claimBtn.disabled = false;
-                    claimBtn.style.opacity = 1;
-                    claimBtn.innerText = 'Claim';
-                }
-                setTimerText(0);
-                try { pollStatus(); } catch (e) {}
+                // switch to second ad
+                if (adSlot) adSlot.innerHTML = '';
+                showSecondAd();
+
+                // start second 40s countdown
+                let second = 40;
+                if (timerEl) timerEl.innerText = 'Ad2: ' + second + 's';
+                localTimer = setInterval(() => {
+                    second -= 1; if (timerEl) timerEl.innerText = 'Ad2: ' + second + 's';
+                    if (second <= 0) {
+                        clearInterval(localTimer);
+                        // ready to claim
+                        manualSessionReady = true;
+                        if (claimBtn) {
+                            claimBtn.disabled = false;
+                            claimBtn.style.opacity = 1;
+                            claimBtn.innerText = 'Claim';
+                        }
+                        if (timerEl) timerEl.innerText = 'Ready to claim';
+                        // notify user
+                        try { alert('your bonus is ready to be claimed'); } catch(e){}
+                        try { pollStatus(); } catch (e) {}
+                    }
+                }, 1000);
             }
         }, 1000);
     }

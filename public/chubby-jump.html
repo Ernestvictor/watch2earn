@@ -461,17 +461,34 @@ document.addEventListener('DOMContentLoaded', () => {
         if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Started'; }
         if (iframe) iframe.style.display = 'block';
 
+        // Start server session and wait for confirmation
         try {
             const user = firebase.auth().currentUser;
-            if (user) {
-                const token = await user.getIdToken();
-                await fetch('/api/transactions/game/session-start', {
-                    method: 'POST',
-                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ page: 'chubby-jump' })
-                }).catch(() => {});
+            if (!user) {
+                alert('Not signed in');
+                return;
             }
-        } catch (err) { /* ignore */ }
+            const token = await user.getIdToken();
+            const res = await fetch('/api/transactions/game/session-start', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ page: 'chubby-jump' })
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                console.error('Session start failed:', errData);
+                alert('Failed to start session: ' + (errData.error || 'Unknown error'));
+                if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
+                manualSessionActive = false;
+                return;
+            }
+        } catch (err) {
+            console.error('Session start error:', err);
+            alert('Failed to start session');
+            if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
+            manualSessionActive = false;
+            return;
+        }
 
         if (claimBtn) {
             claimBtn.disabled = true;

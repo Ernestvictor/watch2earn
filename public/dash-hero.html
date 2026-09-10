@@ -260,25 +260,37 @@ function showAdOverlayAndClaim() {
 const adContainer = document.createElement('div'); adContainer.id = 'game-ad-container'; adContainer.style.minHeight='clamp(200px, 40vh, 300px)'; adContainer.style.marginBottom='16px'; adContainer.style.background='#0f0f0f'; adContainer.style.borderRadius='12px'; adContainer.style.padding='16px'; adContainer.style.display = 'flex'; adContainer.style.alignItems = 'center'; adContainer.style.justifyContent = 'center';
 
   const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button'; cancelBtn.className='btn btn-secondary'; cancelBtn.style.marginTop='12px'; cancelBtn.style.padding = '12px 24px'; cancelBtn.style.fontSize = 'clamp(14px, 2vw, 16px)'; cancelBtn.innerText='Cancel'; cancelBtn.disabled = true; cancelBtn.style.opacity=0.6;
+    cancelBtn.type = 'button';
+    cancelBtn.className='btn btn-secondary';
+    cancelBtn.style.marginTop='12px';
+    cancelBtn.style.padding = '12px 24px';
+    cancelBtn.style.fontSize = 'clamp(14px, 2vw, 16px)';
+    cancelBtn.innerText='Cancel';
+    cancelBtn.disabled = true;
+    cancelBtn.style.opacity=0.6;
     let canceled = false;
     cancelBtn.onclick = () => {
-        if (cancelBtn.disabled) return; canceled = true; try { clearInterval(interval); } catch(e){}; try { overlay.remove(); } catch(e){}; try { cleanupAndClaim(true); } catch(e){}
+        if (cancelBtn.disabled) return;
+        canceled = true;
+        try { clearInterval(interval); } catch (e) {}
+        try { overlay.remove(); } catch (e) {}
+        try { cleanupAndClaim(true); } catch (e) {}
+    };
 
-  panel.appendChild(timer); panel.appendChild(adContainer); panel.appendChild(cancelBtn); overlay.appendChild(panel); document.body.appendChild(overlay);
+    panel.appendChild(timer); panel.appendChild(adContainer); panel.appendChild(cancelBtn); overlay.appendChild(panel); document.body.appendChild(overlay);
 
-  // Inject banner ad script into container
-  window.atOptions = { 'key' : '457f65cbe904e42fea908d570f00bbb2', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };
-  const adScript = document.createElement('script'); adScript.src = 'https://www.highrevenueformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js'; adScript.async = true; adContainer.appendChild(adScript);
+    // Inject banner ad script into container
+    window.atOptions = { 'key' : '457f65cbe904e42fea908d570f00bbb2', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };
+    const adScript = document.createElement('script'); adScript.src = 'https://www.highrevenueformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js'; adScript.async = true; adContainer.appendChild(adScript);
 
-  let seconds = 50; let allowCancelAfter = 15; const interval = setInterval(() => {
+    let seconds = 50; let allowCancelAfter = 15; const interval = setInterval(() => {
     seconds -= 1; timer.innerText = String(seconds);
     if (seconds <= 50 - allowCancelAfter) { cancelBtn.disabled = false; cancelBtn.style.opacity = 1; cancelBtn.classList.remove('btn-secondary'); cancelBtn.classList.add('btn-primary'); }
         if (seconds <= 0) { clearInterval(interval); if (!canceled) { overlay.remove(); const popupMsg = document.createElement('div'); popupMsg.style.position = 'fixed'; popupMsg.style.top = '50%'; popupMsg.style.left = '50%'; popupMsg.style.transform = 'translate(-50%, -50%)'; popupMsg.style.zIndex = '100000'; popupMsg.style.background = '#121214'; popupMsg.style.padding = 'clamp(20px, 5vw, 40px)'; popupMsg.style.borderRadius = '16px'; popupMsg.style.color = '#fff'; popupMsg.style.textAlign = 'center'; popupMsg.style.fontSize = 'clamp(16px, 4vw, 20px)'; popupMsg.style.fontWeight = '700'; popupMsg.style.maxWidth = '90vw'; popupMsg.innerText = 'ur bonus is ready to claim\nscroll down and claim'; document.body.appendChild(popupMsg); setTimeout(() => { try { popupMsg.remove(); } catch(e){} }, 2000); cleanupAndClaim(); } }
   }, 1000);
 
   let cleaned = false;
-  async function cleanupAndClaim() {
+  async function cleanupAndClaim(shouldRestart = false) {
     if (cleaned) return; cleaned = true;
     try {
       const token = await authToken();
@@ -287,10 +299,20 @@ const adContainer = document.createElement('div'); adContainer.id = 'game-ad-con
       const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'dash-hero' }) });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        manualSessionActive = false; manualSessionReady = false; const startBtn = document.getElementById('startGameBtn'); if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
-        pollStatus(); alert('✅ Claimed: ₦' + (data.amountNaira || 2) + '');
+        alert('✅ Successfully claimed: ₦' + (data.amountNaira || 2) + '');
+        pollStatus();
+        if (shouldRestart && data.claimsToday < 5) {
+          manualSessionReady = false;
+          setTimeout(() => { showAdOverlayAndClaim(); }, 1000);
+        } else {
+          manualSessionActive = false; manualSessionReady = false; const startBtn = document.getElementById('startGameBtn'); if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
+        }
       } else {
         console.error('Claim failed:', res.status, data); alert((data && data.error) ? data.error : 'Claim failed (' + res.status + ')');
+        if (shouldRestart && data.claimsToday < 5) {
+          manualSessionReady = false;
+          setTimeout(() => { showAdOverlayAndClaim(); }, 1000);
+        }
       }
     } catch (e) { console.error('claim error', e); alert('Claim error'); }
   }

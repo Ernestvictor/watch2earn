@@ -254,17 +254,16 @@ async function pollStatus() {
 
 function showAdOverlayAndClaim() {
   const overlay = document.createElement('div');
-  overlay.style.position = 'fixed'; overlay.style.inset = '0'; overlay.style.background = 'rgba(0,0,0,0.9)'; overlay.style.display = 'flex'; overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center'; overlay.style.zIndex = 99999; overlay.style.padding = '20px';
-  const panel = document.createElement('div'); panel.style.maxWidth = '520px'; panel.style.width='100%'; panel.style.background='#121214'; panel.style.padding='18px'; panel.style.borderRadius='12px'; panel.style.textAlign='center'; panel.style.color='#fff';
-  const timer = document.createElement('div'); timer.style.fontSize='28px'; timer.style.fontWeight='900'; timer.style.marginBottom='12px'; timer.innerText = '50';
-  const adContainer = document.createElement('div'); adContainer.id = 'game-ad-container'; adContainer.style.minHeight='160px'; adContainer.style.marginBottom='12px'; adContainer.style.background='#0f0f0f'; adContainer.style.borderRadius='10px'; adContainer.style.padding='12px';
+    overlay.style.position = 'fixed'; overlay.style.inset = '0'; overlay.style.background = 'rgba(0,0,0,0.95)'; overlay.style.display = 'flex'; overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center'; overlay.style.zIndex = 99999; overlay.style.padding = '0'; overlay.style.width = '100vw'; overlay.style.height = '100vh';
+    const panel = document.createElement('div'); panel.style.maxWidth = '95vw'; panel.style.width='90%'; panel.style.maxHeight = '90vh'; panel.style.background='#121214'; panel.style.padding='20px'; panel.style.borderRadius='16px'; panel.style.textAlign='center'; panel.style.color='#fff'; panel.style.overflowY = 'auto';
+    const timer = document.createElement('div'); timer.style.fontSize='clamp(24px, 5vw, 32px)'; timer.style.fontWeight='900'; timer.style.marginBottom='16px'; timer.innerText = '50';
+const adContainer = document.createElement('div'); adContainer.id = 'game-ad-container'; adContainer.style.minHeight='clamp(200px, 40vh, 300px)'; adContainer.style.marginBottom='16px'; adContainer.style.background='#0f0f0f'; adContainer.style.borderRadius='12px'; adContainer.style.padding='16px'; adContainer.style.display = 'flex'; adContainer.style.alignItems = 'center'; adContainer.style.justifyContent = 'center';
 
   const cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button'; cancelBtn.className='btn btn-secondary'; cancelBtn.style.marginTop='8px'; cancelBtn.innerText='Cancel'; cancelBtn.disabled = true; cancelBtn.style.opacity=0.6;
-  let canceled = false;
-  cancelBtn.onclick = () => {
-    if (cancelBtn.disabled) return; canceled = true; try { clearInterval(interval); } catch(e){}; try { overlay.remove(); } catch(e){}; try { cleanupAndClaim(); } catch(e){}
-  };
+    cancelBtn.type = 'button'; cancelBtn.className='btn btn-secondary'; cancelBtn.style.marginTop='12px'; cancelBtn.style.padding = '12px 24px'; cancelBtn.style.fontSize = 'clamp(14px, 2vw, 16px)'; cancelBtn.innerText='Cancel'; cancelBtn.disabled = true; cancelBtn.style.opacity=0.6;
+    let canceled = false;
+    cancelBtn.onclick = () => {
+        if (cancelBtn.disabled) return; canceled = true; try { clearInterval(interval); } catch(e){}; try { overlay.remove(); } catch(e){}; try { cleanupAndClaim(true); } catch(e){}
 
   panel.appendChild(timer); panel.appendChild(adContainer); panel.appendChild(cancelBtn); overlay.appendChild(panel); document.body.appendChild(overlay);
 
@@ -275,7 +274,7 @@ function showAdOverlayAndClaim() {
   let seconds = 50; let allowCancelAfter = 15; const interval = setInterval(() => {
     seconds -= 1; timer.innerText = String(seconds);
     if (seconds <= 50 - allowCancelAfter) { cancelBtn.disabled = false; cancelBtn.style.opacity = 1; cancelBtn.classList.remove('btn-secondary'); cancelBtn.classList.add('btn-primary'); }
-    if (seconds <= 0) { clearInterval(interval); if (!canceled) { overlay.remove(); cleanupAndClaim(); } }
+        if (seconds <= 0) { clearInterval(interval); if (!canceled) { overlay.remove(); const popupMsg = document.createElement('div'); popupMsg.style.position = 'fixed'; popupMsg.style.top = '50%'; popupMsg.style.left = '50%'; popupMsg.style.transform = 'translate(-50%, -50%)'; popupMsg.style.zIndex = '100000'; popupMsg.style.background = '#121214'; popupMsg.style.padding = 'clamp(20px, 5vw, 40px)'; popupMsg.style.borderRadius = '16px'; popupMsg.style.color = '#fff'; popupMsg.style.textAlign = 'center'; popupMsg.style.fontSize = 'clamp(16px, 4vw, 20px)'; popupMsg.style.fontWeight = '700'; popupMsg.style.maxWidth = '90vw'; popupMsg.innerText = 'ur bonus is ready to claim\nscroll down and claim'; document.body.appendChild(popupMsg); setTimeout(() => { try { popupMsg.remove(); } catch(e){} }, 2000); cleanupAndClaim(); } }
   }, 1000);
 
   let cleaned = false;

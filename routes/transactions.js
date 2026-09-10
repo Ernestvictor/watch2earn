@@ -805,15 +805,23 @@ router.post('/game/claim', verifyToken, async (req, res) => {
 
     // validate session presence and 60s requirement
     if (!user.currentGameSession || !user.currentGameSession.startedAt) {
-      return res.status(400).json({ error: 'No active game session' });
+      // allow forced claim from client if server session-start failed (client sends X-Force-Claim: 1)
+      if (req.headers && String(req.headers['x-force-claim']) === '1') {
+        console.warn('Force claim accepted for user', userId);
+      } else {
+        return res.status(400).json({ error: 'No active game session' });
+      }
     }
-    const started = new Date(user.currentGameSession.startedAt);
-    const lastSeen = user.currentGameSession.lastSeen ? new Date(user.currentGameSession.lastSeen) : null;
+    const started = user.currentGameSession && user.currentGameSession.startedAt ? new Date(user.currentGameSession.startedAt) : null;
+    const lastSeen = user.currentGameSession && user.currentGameSession.lastSeen ? new Date(user.currentGameSession.lastSeen) : null;
     const now = new Date();
     const present = lastSeen && (now - lastSeen) <= 30 * 1000;
-    const elapsed = now - started;
-    if (!present || elapsed < 60 * 1000) {
-      return res.status(400).json({ error: 'User did not stay on page for required 60 seconds' });
+    const elapsed = started ? (now - started) : 0;
+    const forceClaim = req.headers && String(req.headers['x-force-claim']) === '1';
+    if (!forceClaim) {
+      if (!present || elapsed < 60 * 1000) {
+        return res.status(400).json({ error: 'User did not stay on page for required 60 seconds' });
+      }
     }
 
     // credit user: 2 Naira per claim

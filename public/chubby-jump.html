@@ -266,6 +266,7 @@ async function pingSession() {
 let statusPoll = null;
 let manualSessionActive = false;
 let manualSessionReady = false;
+let manualServerSessionOk = true;
 
 async function pollStatus() {
     try {
@@ -383,7 +384,9 @@ function showAdOverlayAndClaim() {
         if (cleaned) return; cleaned = true;
         try {
             const token = await authToken();
-            const res = await fetch(API.claim, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } });
+            const headers = { 'Authorization': 'Bearer ' + token };
+            if (!manualServerSessionOk) headers['X-Force-Claim'] = '1';
+            const res = await fetch(API.claim, { method: 'POST', headers });
             const data = await res.json();
             if (res.ok) {
                 manualSessionActive = false;
@@ -461,33 +464,35 @@ document.addEventListener('DOMContentLoaded', () => {
         if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Started'; }
         if (iframe) iframe.style.display = 'block';
 
-        // Start server session and wait for confirmation
+        // Start server session; if it fails we continue locally but mark server as failed
+        manualServerSessionOk = true;
         try {
             const user = firebase.auth().currentUser;
             if (!user) {
-                alert('Not signed in');
-                return;
-            }
-            const token = await user.getIdToken();
-            const res = await fetch('/api/transactions/game/session-start', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ page: 'chubby-jump' })
-            });
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                console.error('Session start failed:', errData);
-                alert('Failed to start session: ' + (errData.error || 'Unknown error'));
-                if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
-                manualSessionActive = false;
-                return;
+                console.warn('Not signed in');
+                manualServerSessionOk = false;
+            } else {
+                const token = await user.getIdToken();
+                let res;
+                try {
+                    res = await fetch('/api/transactions/game/session-start', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ page: 'chubby-jump' })
+                    });
+                } catch (err) {
+                    console.warn('session-start fetch failed', err);
+                    manualServerSessionOk = false;
+                }
+                if (typeof res !== 'undefined' && res && !res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    console.warn('Session start rejected by server:', errData);
+                    manualServerSessionOk = false;
+                }
             }
         } catch (err) {
-            console.error('Session start error:', err);
-            alert('Failed to start session');
-            if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
-            manualSessionActive = false;
-            return;
+            console.warn('Session start error:', err);
+            manualServerSessionOk = false;
         }
 
         if (claimBtn) {

@@ -242,11 +242,7 @@ const API = {
     balance: '/api/transactions/balance'
 };
 
-const CLAIM_AD_SCRIPTS = [
-    'https://pl30708908.profitableratecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js',
-    'https://www.highrevenueformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js',
-    'https://pl30708908.profitableratecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js'
-];
+
 
 function authToken() {
     const user = firebase && firebase.auth && firebase.auth().currentUser;
@@ -297,7 +293,7 @@ async function pollStatus() {
             if (manualSessionReady) {
                 btn.disabled = false;
                 btn.style.opacity = 1;
-                btn.innerText = 'Claim Ad';
+                btn.innerText = 'Claim';
                 return;
             }
             btn.disabled = true;
@@ -323,33 +319,7 @@ async function pollStatus() {
     } catch (e) { console.warn('status poll failed', e); }
 }
 
-function loadAdScript(url) {
-    return new Promise((resolve, reject) => {
-        const existing = document.querySelector('script[src="' + url + '"]');
-        if (existing) {
-            if (existing.dataset.loaded === '1') return resolve();
-            existing.addEventListener('load', () => resolve(), { once: true });
-            existing.addEventListener('error', () => reject(new Error('Script failed: ' + url)), { once: true });
-            return;
-        }
 
-        const script = document.createElement('script');
-        script.src = url;
-        script.async = true;
-        script.defer = false;
-        script.onload = () => {
-            script.dataset.loaded = '1';
-            resolve();
-        };
-        script.onerror = () => reject(new Error('Script failed: ' + url));
-        document.head.appendChild(script);
-    });
-}
-
-function getNextAdScript() {
-    const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
-    return CLAIM_AD_SCRIPTS[used % CLAIM_AD_SCRIPTS.length] || CLAIM_AD_SCRIPTS[0];
-}
 
 function showAdOverlayAndClaim() {
     const overlay = document.createElement('div');
@@ -373,10 +343,18 @@ function showAdOverlayAndClaim() {
 
     panel.appendChild(timer); panel.appendChild(adContainer); panel.appendChild(cancelBtn); overlay.appendChild(panel); document.body.appendChild(overlay);
 
-    const url = getNextAdScript();
-    loadAdScript(url).catch(() => {
-        adContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:160px;color:#9aa0a6;font-size:14px;">Ad loading failed. Please continue.</div>';
-    });
+    // Inject banner ad script into container
+    window.atOptions = {
+        'key' : '457f65cbe904e42fea908d570f00bbb2',
+        'format' : 'iframe',
+        'height' : 250,
+        'width' : 300,
+        'params' : {}
+    };
+    const adScript = document.createElement('script');
+    adScript.src = 'https://www.highrevenueformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js';
+    adScript.async = true;
+    adContainer.appendChild(adScript);
 
     let seconds = 50; let allowCancelAfter = 15;
     const interval = setInterval(() => {
@@ -434,7 +412,7 @@ window.addEventListener('load', async () => {
 });
 
 // START button logic: reveal iframe, start 60s server session and on-page countdown
-// Manual claim only: user must click Start, wait 60s, then click Claim Ad.
+// Manual claim only: user must click Start, wait 60s, then click Claim.
 document.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('startGameBtn');
     const iframe = document.getElementById('chubbyIframe');
@@ -505,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (claimBtn) {
                     claimBtn.disabled = false;
                     claimBtn.style.opacity = 1;
-                    claimBtn.innerText = 'Claim Ad';
+                    claimBtn.innerText = 'Claim';
                 }
                 setTimerText(0);
                 try { pollStatus(); } catch (e) {}

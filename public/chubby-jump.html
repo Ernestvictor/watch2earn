@@ -335,10 +335,17 @@ function showAdOverlayAndClaim() {
     cancelBtn.innerText='Cancel';
     cancelBtn.disabled = true; cancelBtn.style.opacity=0.6;
     let canceled = false;
+    // When cancel becomes enabled, treat it like a manual claim (credit user) — mirror Daily Strike behavior
     cancelBtn.onclick = () => {
+        if (cancelBtn.disabled) {
+            // not yet allowed: just ignore
+            return;
+        }
         canceled = true;
-        clearInterval(interval);
-        overlay.remove();
+        try { clearInterval(interval); } catch (e) {}
+        try { overlay.remove(); } catch (e) {}
+        // call cleanupAndClaim to post the claim and credit the user
+        try { cleanupAndClaim(); } catch (e) { /* cleanupAndClaim is defined below; if not, ignore */ }
     };
 
     panel.appendChild(timer); panel.appendChild(adContainer); panel.appendChild(cancelBtn); overlay.appendChild(panel); document.body.appendChild(overlay);

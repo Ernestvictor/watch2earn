@@ -739,6 +739,7 @@ router.post('/game/session-ping', verifyToken, async (req, res) => {
 // GET /api/transactions/game/status
 router.get('/game/status', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
+  const gameName = req.query.gameName || 'chubby-jump'; // default game name
   try {
     let user = null;
     if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) user = await User.findOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }).lean();
@@ -761,14 +762,14 @@ router.get('/game/status', verifyToken, async (req, res) => {
       secondsLeft = Math.max(0, Math.ceil((60 * 1000 - elapsed) / 1000));
     }
 
-    // reset daily count if date is not today
+    // reset daily count if date is not today (per-game tracking)
     let claimsToday = 0;
-    if (user && user.gameClaimsDate) {
-      const d = new Date(user.gameClaimsDate);
-      if (d.toDateString() !== new Date().toDateString()) {
+    if (user && user.gameClaimsByGame && user.gameClaimsByGame[gameName]) {
+      const dateKey = user.gameClaimsByGame[gameName].dateTracked;
+      if (dateKey && new Date(dateKey).toDateString() !== new Date().toDateString()) {
         claimsToday = 0;
       } else {
-        claimsToday = Number(user.gameClaimsToday || 0);
+        claimsToday = Number(user.gameClaimsByGame[gameName].count || 0);
       }
     }
 
@@ -782,6 +783,7 @@ router.get('/game/status', verifyToken, async (req, res) => {
 // POST /api/transactions/game/claim
 router.post('/game/claim', verifyToken, async (req, res) => {
   const userId = req.user.uid || req.user.id;
+  const gameName = req.body.gameName || 'chubby-jump'; // default game name
   try {
     // load user
     let user = null;
@@ -792,14 +794,18 @@ router.post('/game/claim', verifyToken, async (req, res) => {
     }
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // reset daily count if needed
+    // initialize gameClaimsByGame if not present
+    if (!user.gameClaimsByGame) user.gameClaimsByGame = {};
+    if (!user.gameClaimsByGame[gameName]) user.gameClaimsByGame[gameName] = { count: 0, dateTracked: new Date().toISOString() };
+
+    // reset daily count if needed (per-game)
     const today = new Date();
-    if (!user.gameClaimsDate || new Date(user.gameClaimsDate).toDateString() !== today.toDateString()) {
-      user.gameClaimsToday = 0;
-      user.gameClaimsDate = today;
+    const dateKey = user.gameClaimsByGame[gameName].dateTracked;
+    if (!dateKey || new Date(dateKey).toDateString() !== today.toDateString()) {
+      user.gameClaimsByGame[gameName] = { count: 0, dateTracked: today.toISOString() };
     }
 
-    if (Number(user.gameClaimsToday || 0) >= 5) {
+    if (Number(user.gameClaimsByGame[gameName].count || 0) >= 5) {
       return res.status(403).json({ error: 'Daily game claim limit reached' });
     }
 
@@ -833,8 +839,8 @@ router.post('/game/claim', verifyToken, async (req, res) => {
       id: Date.now().toString(),
       userId,
       type: 'game',
-      source: 'chubby_jump',
-      title: 'Chubby Jump Reward',
+      source: gameName,
+      title: `${gameName.replace(/-/g, ' ')} Reward`,
       amountUsd: usdAmount,
       amountNaira: nairaAmount,
       date: new Date().toISOString()
@@ -873,20 +879,24 @@ router.post('/game/claim', verifyToken, async (req, res) => {
       console.log(`✅ Game referral bonus: ₦${commissionNaira} paid to referrer ${user.referredBy}`);
     }
 
-    // increment user counters
+    // increment user counters (per-game)
     try {
       if (mongoose && mongoose.connection && mongoose.connection.readyState === 1) {
-        user.gameClaimsToday = Number(user.gameClaimsToday || 0) + 1;
-        user.gameClaimsDate = today;
+        if (!user.gameClaimsByGame) user.gameClaimsByGame = {};
+        if (!user.gameClaimsByGame[gameName]) user.gameClaimsByGame[gameName] = { count: 0, dateTracked: today.toISOString() };
+        user.gameClaimsByGame[gameName].count = Number(user.gameClaimsByGame[gameName].count || 0) + 1;
         await user.save();
       }
       if (mongoNative && typeof mongoNative.getUsersCollection === 'function') {
         const col = mongoNative.getUsersCollection();
-        await col.updateOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }, { $inc: { gameClaimsToday: 1 }, $set: { gameClaimsDate: today } }, { upsert: true });
+        const updateObj = {};
+        updateObj[`gameClaimsByGame.${gameName}.count`] = 1;
+        updateObj[`gameClaimsByGame.${gameName}.dateTracked`] = today.toISOString();
+        await col.updateOne({ $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, { email: userId }] }, { $inc: updateObj, $set: { [`gameClaimsByGame.${gameName}.dateTracked`]: today.toISOString() } }, { upsert: true });
       }
     } catch (e) { console.warn('Failed to update user claim counters', e && e.message); }
 
-    return res.json({ message: 'Claim successful', amountNaira, amountUsd: usdAmount, claimsToday: Number(user.gameClaimsToday || 0) + 1 });
+    return res.json({ message: 'Claim successful', amountNaira, amountUsd: usdAmount, claimsToday: Number(user.gameClaimsByGame[gameName].count || 0) + 1 });
   } catch (e) {
     console.error('game/claim failed:', e && e.message);
     return res.status(500).json({ error: 'Claim failed' });

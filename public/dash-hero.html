@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chubby Jump - Dash Hero</title>
+    <title>Dash Hero - Watch2Earn</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * { box-sizing: border-box; }
@@ -117,14 +117,12 @@
   <div class="page">
     <div class="game-shell">
       <div class="game-header">
-        <h1>Chubby Jump</h1>
-        <span class="game-tag">Playable</span>
+                <h1>Dash Hero</h1>
       </div>
 
       <div class="game-frame">
-        <!-- keep iframe but omit external gamemonetize video loader and related script -->
-        <iframe id="chubbyIframe" src="https://html5.gamemonetize.co/bqp870scog1zytubznmkveipim9jw8ok/" title="Chubby Jump game" allowfullscreen style="display:none"></iframe>
-        <div id="inGameAdSlot" style="margin-top:12px;display:flex;justify-content:center;align-items:center;min-height:90px;border-radius:8px;overflow:hidden"></div>
+                <!-- Original dash-hero GameMonetize iframe with new behavioral logic -->
+                <iframe id="dashHeroIframe" src="https://html5.gamemonetize.co/rrq98w912s5jferm6uxtvf13efrmv8d2/" title="Dash Hero game" allowfullscreen style="display:none"></iframe>
       </div>
 
       <div class="meta">
@@ -222,7 +220,7 @@ let manualServerSessionOk = true;
 async function pollStatus() {
   try {
     const token = await authToken();
-    const res = await fetch(API.status, { headers: { 'Authorization': 'Bearer ' + token } });
+    const res = await fetch(API.status + '?gameName=dash-hero', { headers: { 'Authorization': 'Bearer ' + token } });
     if (!res.ok) return;
     const data = await res.json();
     document.getElementById('claimsUsed').innerText = data.claimsToday || 0;
@@ -285,9 +283,9 @@ function showAdOverlayAndClaim() {
     if (cleaned) return; cleaned = true;
     try {
       const token = await authToken();
-      const headers = { 'Authorization': 'Bearer ' + token };
+      const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
       if (!manualServerSessionOk) headers['X-Force-Claim'] = '1';
-      const res = await fetch(API.claim, { method: 'POST', headers });
+      const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'dash-hero' }) });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         manualSessionActive = false; manualSessionReady = false; const startBtn = document.getElementById('startGameBtn'); if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
@@ -313,7 +311,7 @@ window.addEventListener('load', async () => {
 
 document.addEventListener('DOMContentLoaded', () => {
   const startBtn = document.getElementById('startGameBtn');
-  const iframe = document.getElementById('chubbyIframe');
+    const iframe = document.getElementById('dashHeroIframe');
   const timerEl = document.getElementById('startTimer');
   const claimBtn = document.getElementById('gameClaimBtn');
 
@@ -338,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const user = firebase.auth().currentUser; if (!user) { console.warn('Not signed in'); manualServerSessionOk = false; } else {
         const token = await user.getIdToken(); let res;
         try {
-          res = await fetch('/api/transactions/game/session-start', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'dash-hero' }) });
+          res = await fetch('/api/transactions/game/session-start', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'dash-hero', gameName: 'dash-hero' }) });
         } catch (err) { console.warn('session-start fetch failed', err); manualServerSessionOk = false; }
         if (typeof res !== 'undefined' && res && !res.ok) { const errData = await res.json().catch(() => ({})); console.warn('Session start rejected by server:', errData); manualServerSessionOk = false; }
       }

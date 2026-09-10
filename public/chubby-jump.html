@@ -276,7 +276,7 @@ let manualServerSessionOk = true;
 async function pollStatus() {
     try {
         const token = await authToken();
-        const res = await fetch(API.status, { headers: { 'Authorization': 'Bearer ' + token } });
+        const res = await fetch(API.status + '?gameName=chubby-jump', { headers: { 'Authorization': 'Bearer ' + token } });
         if (!res.ok) return;
         const data = await res.json();
         document.getElementById('claimsUsed').innerText = data.claimsToday || 0;
@@ -389,9 +389,9 @@ function showAdOverlayAndClaim() {
         if (cleaned) return; cleaned = true;
         try {
             const token = await authToken();
-            const headers = { 'Authorization': 'Bearer ' + token };
+            const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
             if (!manualServerSessionOk) headers['X-Force-Claim'] = '1';
-            const res = await fetch(API.claim, { method: 'POST', headers });
+            const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'chubby-jump' }) });
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
                 manualSessionActive = false;
@@ -484,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     res = await fetch('/api/transactions/game/session-start', {
                         method: 'POST',
                         headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ page: 'chubby-jump' })
+                        body: JSON.stringify({ page: 'chubby-jump', gameName: 'chubby-jump' })
                     });
                 } catch (err) {
                     console.warn('session-start fetch failed', err);

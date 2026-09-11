@@ -213,7 +213,7 @@
                         <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
                             <button id="startGameBtn" class="btn btn-secondary">Start</button>
                             <button id="gameClaimBtn" class="btn btn-primary" disabled style="opacity:0.65">Waiting...</button>
-                            <div id="startTimer" style="font-size:12px;color:#9aa0a6;margin-top:6px;">Start the session to begin 60s</div>
+                            <div id="startTimer" style="display:none;font-size:12px;color:#9aa0a6;margin-top:6px;">Start the session to begin 60s</div>
                         </div>
                         <div id="claimHelp" style="font-size:12px;color:#9aa0a6;margin-top:6px;text-align:right">Claims used: <span id="claimsUsed">0</span>/5</div>
                     </div>
@@ -238,7 +238,6 @@ if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
 
-// Game session + claim client logic
 const API = {
     start: '/api/transactions/game/session-start',
     ping: '/api/transactions/game/session-ping',
@@ -247,9 +246,68 @@ const API = {
     balance: '/api/transactions/balance'
 };
 
+let statusPoll = null;
+let manualSessionActive = false;
+let manualSessionReady = false;
+let manualServerSessionOk = true;
+let postClaimCooldownTimer = null;
+let postClaimCooldownRemaining = 0;
 
+function stopPostClaimCooldown() {
+    if (postClaimCooldownTimer) clearInterval(postClaimCooldownTimer);
+    postClaimCooldownTimer = null;
+    postClaimCooldownRemaining = 0;
+}
 
-function authToken() {
+function beginPostClaimCooldown() {
+    stopPostClaimCooldown();
+    const btn = document.getElementById('gameClaimBtn');
+    const startBtn = document.getElementById('startGameBtn');
+    const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
+    if (used >= 5) return;
+
+    postClaimCooldownRemaining = 40;
+    if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = 0.65;
+        btn.innerText = 'Next in 40s';
+    }
+    if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.innerText = 'Wait 40s';
+    }
+
+    postClaimCooldownTimer = setInterval(() => {
+        postClaimCooldownRemaining -= 1;
+        const remaining = Math.max(postClaimCooldownRemaining, 0);
+        if (btn) {
+            btn.innerText = 'Next in ' + remaining + 's';
+        }
+        if (startBtn) {
+            startBtn.innerText = 'Wait ' + remaining + 's';
+        }
+
+        if (remaining <= 0) {
+            clearInterval(postClaimCooldownTimer);
+            postClaimCooldownTimer = null;
+            postClaimCooldownRemaining = 0;
+            const usedAfter = Number(document.getElementById('claimsUsed')?.innerText || 0);
+            if (usedAfter < 5) {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.style.opacity = 1;
+                    btn.innerText = 'Claim';
+                }
+                if (startBtn) {
+                    startBtn.disabled = false;
+                    startBtn.innerText = 'Start';
+                }
+            }
+        }
+    }, 1000);
+}
+
+async function authToken() {
     const user = firebase && firebase.auth && firebase.auth().currentUser;
     return user ? user.getIdToken() : Promise.reject(new Error('Not signed in'));
 }
@@ -268,11 +326,6 @@ async function pingSession() {
     } catch (e) { /* ignore */ }
 }
 
-let statusPoll = null;
-let manualSessionActive = false;
-let manualSessionReady = false;
-let manualServerSessionOk = true;
-
 async function pollStatus() {
     try {
         const token = await authToken();
@@ -281,6 +334,16 @@ async function pollStatus() {
         const data = await res.json();
         document.getElementById('claimsUsed').innerText = data.claimsToday || 0;
 
+        const btn = document.getElementById('gameClaimBtn');
+        if (postClaimCooldownRemaining > 0) {
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = 'Next in ' + postClaimCooldownRemaining + 's';
+                btn.style.opacity = 0.65;
+            }
+            return;
+        }
+
         const bal = await fetch(API.balance, { headers: { 'Authorization': 'Bearer ' + token } });
         if (bal.ok) {
             const b = await bal.json();
@@ -288,44 +351,23 @@ async function pollStatus() {
             document.getElementById('gameTotal').innerText = '₦' + naira.toLocaleString();
         }
 
-        const btn = document.getElementById('gameClaimBtn');
         if (manualSessionActive) {
             if (data.claimsToday >= 5) {
-                btn.disabled = true;
-                btn.innerText = 'Daily limit reached';
-                btn.style.opacity = 0.6;
-                return;
+                btn.disabled = true; btn.innerText = 'Daily limit reached'; btn.style.opacity = 0.6; return;
             }
-            if (manualSessionReady) {
-                btn.disabled = false;
-                btn.style.opacity = 1;
-                btn.innerText = 'Claim';
-                return;
-            }
-            btn.disabled = true;
-            btn.innerText = 'Waiting...';
-            btn.style.opacity = 0.65;
-            return;
+            if (manualSessionReady) { btn.disabled = false; btn.style.opacity = 1; btn.innerText = 'Claim'; return; }
+            btn.disabled = true; btn.innerText = 'Waiting...'; btn.style.opacity = 0.65; return;
         }
 
         if (data.sessionReady && (data.claimsToday < 5)) {
-            btn.disabled = false;
-            btn.style.opacity = 1;
-            btn.innerText = 'Claim';
-            btn.classList.add('btn-primary');
+            btn.disabled = false; btn.style.opacity = 1; btn.innerText = 'Claim'; btn.classList.add('btn-primary');
         } else if (data.claimsToday >= 5) {
-            btn.disabled = true;
-            btn.innerText = 'Daily limit reached';
-            btn.style.opacity = 0.6;
+            btn.disabled = true; btn.innerText = 'Daily limit reached'; btn.style.opacity = 0.6;
         } else {
-            btn.disabled = true;
-            btn.innerText = data.secondsLeft ? 'Wait ' + data.secondsLeft + 's' : 'Waiting...';
-            btn.style.opacity = 0.65;
+            btn.disabled = true; btn.innerText = data.secondsLeft ? 'Wait ' + data.secondsLeft + 's' : 'Waiting...'; btn.style.opacity = 0.65;
         }
     } catch (e) { console.warn('status poll failed', e); }
 }
-
-
 
 function showAdOverlayAndClaim() {
     const overlay = document.createElement('div');
@@ -343,18 +385,16 @@ function showAdOverlayAndClaim() {
     cancelBtn.innerText='Cancel';
     cancelBtn.disabled = true; cancelBtn.style.opacity=0.6;
     let canceled = false;
-    // When cancel is clicked, claim and check if limit exhausted; if not, restart
     cancelBtn.onclick = () => {
         if (cancelBtn.disabled) return;
         canceled = true;
         try { clearInterval(interval); } catch (e) {}
         try { overlay.remove(); } catch (e) {}
-        try { cleanupAndClaim(true); } catch (e) { /* cleanupAndClaim is defined below; if not, ignore */ }
+        try { cleanupAndClaim(true); } catch (e) {}
     };
 
     panel.appendChild(timer); panel.appendChild(adContainer); panel.appendChild(cancelBtn); overlay.appendChild(panel); document.body.appendChild(overlay);
 
-    // Inject banner ad script into container
     window.atOptions = {
         'key' : '457f65cbe904e42fea908d570f00bbb2',
         'format' : 'iframe',
@@ -398,9 +438,9 @@ function showAdOverlayAndClaim() {
             if (res.ok) {
                 alert('✅ Successfully claimed: ₦' + (data.amountNaira || 2) + '');
                 pollStatus();
-                if (shouldRestart && data.claimsToday < 5) {
-                    manualSessionReady = false;
-                    setTimeout(() => { showAdOverlayAndClaim(); }, 1000);
+                const usedAfter = Number(data.claimsToday || 0);
+                if (usedAfter < 5) {
+                    beginPostClaimCooldown();
                 } else {
                     manualSessionActive = false;
                     manualSessionReady = false;
@@ -419,10 +459,36 @@ function showAdOverlayAndClaim() {
     }
 }
 
+function showFirstBanner() {
+    try {
+        if (window.aclib && typeof window.aclib.runBanner === 'function') {
+            window.aclib.runBanner({ zoneId: '12127470' });
+        } else {
+            const s = document.createElement('script');
+            s.src = '//acscdn.com/script/aclib.js';
+            s.id = 'aclib-script';
+            s.async = true;
+            s.onload = () => { try { window.aclib && window.aclib.runBanner({ zoneId: '12127470' }); } catch(e){} };
+            document.head.appendChild(s);
+        }
+    } catch (e) { console.warn('aclib banner failed', e); }
+}
+
+function showSecondAd() {
+    const adSlot = document.getElementById('inGameAdSlot');
+    try {
+        if (!adSlot) return;
+        adSlot.innerHTML = '';
+        const frame = document.createElement('iframe');
+        frame.src = 'https://youradexchange.com/video/select.php?r=12127466';
+        frame.width = '300'; frame.height = '250'; frame.style.border = '0';
+        adSlot.appendChild(frame);
+    } catch (e) { console.warn('second ad failed', e); }
+}
+
 window.addEventListener('load', async () => {
     firebase.auth().onAuthStateChanged(async (user) => {
         if (!user) return window.location.href = 'login.html';
-        // Manual start only: do not begin the 60s session automatically on page load
         setInterval(pingSession, 10 * 1000);
         pollStatus();
         statusPoll = setInterval(pollStatus, 2000);
@@ -435,8 +501,7 @@ window.addEventListener('load', async () => {
     });
 });
 
-// START button logic: reveal iframe, start 60s server session and on-page countdown
-// Manual claim only: user must click Start, wait 60s, then click Claim.
+// START button logic
 document.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('startGameBtn');
     const iframe = document.getElementById('chubbyIframe');
@@ -457,6 +522,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (used >= 5) {
                 startBtn.disabled = true;
                 startBtn.innerText = 'Daily limit reached';
+            } else if (postClaimCooldownRemaining > 0) {
+                startBtn.disabled = true;
+                startBtn.innerText = 'Wait ' + postClaimCooldownRemaining + 's';
             } else {
                 startBtn.disabled = false;
                 startBtn.innerText = 'Start';
@@ -467,10 +535,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleStartClick(e) {
         e && e.preventDefault();
         const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
-        if (used >= 5) {
-            if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Daily limit reached'; }
-            return;
-        }
+        if (used >= 5) { if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Daily limit reached'; } return; }
+        if (postClaimCooldownRemaining > 0) return;
 
         manualSessionActive = true;
         manualSessionReady = false;
@@ -478,7 +544,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Started'; }
         if (iframe) iframe.style.display = 'block';
 
-        // Start server session; if it fails we continue locally but mark server as failed
         manualServerSessionOk = true;
         try {
             const user = firebase.auth().currentUser;
@@ -515,37 +580,6 @@ document.addEventListener('DOMContentLoaded', () => {
             claimBtn.innerText = 'Waiting...';
         }
 
-        // Two-stage countdown with ads: 60s first ad, then 40s second ad, then enable Claim
-        const adSlot = document.getElementById('inGameAdSlot');
-
-        // helper: load aclib and run banner
-        function showFirstBanner() {
-            try {
-                if (window.aclib && typeof window.aclib.runBanner === 'function') {
-                    window.aclib.runBanner({ zoneId: '12127470' });
-                } else {
-                    const s = document.createElement('script');
-                    s.src = '//acscdn.com/script/aclib.js';
-                    s.id = 'aclib-script';
-                    s.async = true;
-                    s.onload = () => { try { window.aclib && window.aclib.runBanner({ zoneId: '12127470' }); } catch(e){} };
-                    document.head.appendChild(s);
-                }
-            } catch (e) { console.warn('aclib banner failed', e); }
-        }
-
-        // helper: show second ad via iframe (youradexchange)
-        function showSecondAd() {
-            try {
-                if (!adSlot) return;
-                adSlot.innerHTML = '';
-                const frame = document.createElement('iframe');
-                frame.src = 'https://youradexchange.com/video/select.php?r=12127466';
-                frame.width = '300'; frame.height = '250'; frame.style.border = '0';
-                adSlot.appendChild(frame);
-            } catch (e) { console.warn('second ad failed', e); }
-        }
-
         // start first ad + 60s
         if (adSlot) adSlot.innerHTML = '';
         showFirstBanner();
@@ -556,18 +590,15 @@ document.addEventListener('DOMContentLoaded', () => {
             first -= 1; if (timerEl) timerEl.innerText = 'Ad1: ' + first + 's';
             if (first <= 0) {
                 clearInterval(localTimer);
-                // switch to second ad
                 if (adSlot) adSlot.innerHTML = '';
                 showSecondAd();
 
-                // start second 40s countdown
                 let second = 40;
                 if (timerEl) timerEl.innerText = 'Ad2: ' + second + 's';
                 localTimer = setInterval(() => {
                     second -= 1; if (timerEl) timerEl.innerText = 'Ad2: ' + second + 's';
                     if (second <= 0) {
                         clearInterval(localTimer);
-                        // ready to claim
                         manualSessionReady = true;
                         if (claimBtn) {
                             claimBtn.disabled = false;
@@ -575,7 +606,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             claimBtn.innerText = 'Claim';
                         }
                         if (timerEl) timerEl.innerText = 'Ready to claim';
-                        // notify user
                         try { alert('your bonus is ready to be claimed'); } catch(e){}
                         try { pollStatus(); } catch (e) {}
                     }
@@ -589,16 +619,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshInterval = setInterval(refreshStartButton, 1500);
     refreshStartButton();
 
-    try {
-      const key = 'chubby_jump_session_starts';
-      const v = Number(localStorage.getItem(key) || 0);
-      if (v > 0) {
-        const display = document.getElementById('chubbyJumpCount');
-        if (display) display.innerText = String(v);
-      }
-    } catch (e) {}
-
-    // stop any previous polling from auto-enabling claim without user action
     if (window.__gameManualStartRefresh) clearInterval(window.__gameManualStartRefresh);
     window.__gameManualStartRefresh = refreshInterval;
 });

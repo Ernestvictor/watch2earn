@@ -3,9 +3,618 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Taxi Rush - Watch2Earn</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; }
+        html, body { margin: 0; padding: 0; }
+        body {
+            background: #050505;
+            color: #fff;
+            font-family: Segoe UI, Arial, sans-serif;
+            min-height: 100vh;
+        }
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            background: #0f0f0f;
+            border-bottom: 1px solid #222;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+        .logo {
+            font-size: 20px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #fff;
+        }
+        .logo span { color: #4CAF50; }
+        .site-logo { height: 36px; }
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid #2a2a2a;
+            background: #1a1a1a;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+        .page {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px 16px 32px;
+        }
+        .game-shell {
+            background: linear-gradient(135deg, #111, #1a2e1a);
+            border: 1px solid #2a4a2a;
+            border-radius: 20px;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+        }
+        .game-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+        .game-header h1 {
+            margin: 0;
+            font-size: clamp(1.5rem, 2.3vw, 2.5rem);
+            color: #4CAF50;
+        }
+        .game-tag {
+            background: rgba(76, 175, 80, 0.12);
+            color: #9fe3a5;
+            border: 1px solid rgba(76, 175, 80, 0.5);
+            padding: 7px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .game-frame {
+            width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #000;
+            border: 1px solid #2a2a2a;
+        }
+        .game-frame iframe {
+            display: block;
+            width: 100%;
+            height: 620px;
+            border: 0;
+            background: #000;
+        }
+        .meta {
+            margin-top: 16px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .meta-box {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 12px;
+        }
+        .meta-label {
+            display: block;
+            color: #9aa0a6;
+            font-size: 11px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .meta-value {
+            color: #fff;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        .actions {
+            margin-top: 18px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            padding: 12px 18px;
+            border-radius: 10px;
+            font-weight: 700;
+            transition: 0.2s ease;
+        }
+        .btn-primary {
+            background: #4CAF50;
+            color: #fff;
+        }
+        .btn-secondary {
+            background: #111;
+            color: #fff;
+            border: 1px solid #2a2a2a;
+        }
+        @media (max-width: 700px) {
+            .page { padding: 18px 12px 28px; }
+            .game-shell { padding: 12px; }
+            .game-frame iframe { height: 420px; }
+            .meta { grid-template-columns: 1fr; }
+            .actions { flex-direction: column; }
+            .btn { width: 100%; }
+        }
+    </style>
 </head>
+<script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
 <body>
-    
+    <div class="top-bar">
+        <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
+        <a href="game.html" class="icon-btn" aria-label="Back to games"><i class="fas fa-arrow-left"></i></a>
+    </div>
+
+    <div class="page">
+        <div class="game-shell">
+            <div class="game-header">
+                <h1>Taxi Rush</h1>
+                <span class="game-tag">Playable</span>
+            </div>
+
+            <div class="game-frame">
+                <iframe id="taxiRushIframe" src="https://html5.gamemonetize.co/5jzzwvgh5ljmtvgawdsjtio83tpqry6f/" title="Taxi Rush game" allowfullscreen style="display:none"></iframe>
+                <div id="inGameAdSlot" style="margin-top:12px;display:flex;justify-content:center;align-items:center;min-height:90px;border-radius:8px;overflow:hidden"></div>
+            </div>
+
+            <div class="meta">
+                <div class="meta-box">
+                    <span class="meta-label">Genre</span>
+                    <span class="meta-value">Driving</span>
+                </div>
+                <div class="meta-box">
+                    <span class="meta-label">Device</span>
+                    <span class="meta-value">Mobile + PC</span>
+                </div>
+                <div class="meta-box">
+                    <span class="meta-label">Status</span>
+                    <span class="meta-value">Ready</span>
+                </div>
+            </div>
+
+            <div class="actions">
+                <a class="btn btn-primary" href="game.html">Back to Games</a>
+                <a class="btn btn-secondary" href="earn.html">Earn Page</a>
+            </div>
+
+            <div style="margin-top:14px">
+                <div id="gameClaimArea" class="meta-box" style="display:flex;align-items:center;gap:12px;justify-content:space-between;">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <i class="fas fa-coins" style="color:#ffd700;font-size:20px"></i>
+                        <div>
+                            <div style="font-size:13px;color:#9aa0a6">Total claimed (games)</div>
+                            <div id="gameTotal" style="font-weight:900;color:#fff">₦0</div>
+                        </div>
+                    </div>
+                    <div style="min-width:160px;text-align:right">
+                        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+                            <button id="startGameBtn" class="btn btn-secondary">Start</button>
+                            <button id="gameClaimBtn" class="btn btn-primary" disabled style="opacity:0.65">Waiting...</button>
+                            <div id="startTimer" style="display:none;font-size:12px;color:#9aa0a6;margin-top:6px;">Start the session to begin 60s</div>
+                        </div>
+                        <div id="claimHelp" style="font-size:12px;color:#9aa0a6;margin-top:6px;text-align:right">Claims used: <span id="claimsUsed">0</span>/5</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+<script>
+const firebaseConfig = {
+    apiKey: 'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',
+    authDomain: 'enable-authentication-1b56c.firebaseapp.com',
+    projectId: 'enable-authentication-1b56c',
+    storageBucket: 'enable-authentication-1b56c.firebasestorage.app',
+    messagingSenderId: '946417281410',
+    appId: '1:946417281410:web:7f4e06e3b4b03946d0079b'
+};
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
+
+const API = {
+    start: '/api/transactions/game/session-start',
+    ping: '/api/transactions/game/session-ping',
+    status: '/api/transactions/game/status',
+    claim: '/api/transactions/game/claim',
+    balance: '/api/transactions/balance'
+};
+
+let statusPoll = null;
+let manualSessionActive = false;
+let manualSessionReady = false;
+let manualServerSessionOk = true;
+let postClaimCooldownTimer = null;
+let postClaimCooldownRemaining = 0;
+
+function stopPostClaimCooldown() {
+    if (postClaimCooldownTimer) clearInterval(postClaimCooldownTimer);
+    postClaimCooldownTimer = null;
+    postClaimCooldownRemaining = 0;
+}
+
+function beginPostClaimCooldown() {
+    stopPostClaimCooldown();
+    const btn = document.getElementById('gameClaimBtn');
+    const startBtn = document.getElementById('startGameBtn');
+    const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
+    if (used >= 5) return;
+
+    postClaimCooldownRemaining = 40;
+    if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = 0.65;
+        btn.innerText = 'Next in 40s';
+    }
+    if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.innerText = 'Wait 40s';
+    }
+
+    postClaimCooldownTimer = setInterval(() => {
+        postClaimCooldownRemaining -= 1;
+        const remaining = Math.max(postClaimCooldownRemaining, 0);
+        if (btn) {
+            btn.innerText = 'Next in ' + remaining + 's';
+        }
+        if (startBtn) {
+            startBtn.innerText = 'Wait ' + remaining + 's';
+        }
+
+        if (remaining <= 0) {
+            clearInterval(postClaimCooldownTimer);
+            postClaimCooldownTimer = null;
+            postClaimCooldownRemaining = 0;
+            const usedAfter = Number(document.getElementById('claimsUsed')?.innerText || 0);
+            if (usedAfter < 5) {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.style.opacity = 1;
+                    btn.innerText = 'Claim';
+                }
+                if (startBtn) {
+                    startBtn.disabled = false;
+                    startBtn.innerText = 'Start';
+                }
+            }
+        }
+    }, 1000);
+}
+
+async function authToken() {
+    const user = firebase && firebase.auth && firebase.auth().currentUser;
+    return user ? user.getIdToken() : Promise.reject(new Error('Not signed in'));
+}
+
+async function startSession() {
+    try {
+        const token = await authToken();
+        await fetch(API.start, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'taxi-rush' }) });
+    } catch (e) { console.warn('session start failed', e); }
+}
+
+async function pingSession() {
+    try {
+        const token = await authToken();
+        await fetch(API.ping, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } });
+    } catch (e) { /* ignore */ }
+}
+
+async function pollStatus() {
+    try {
+        const token = await authToken();
+        const res = await fetch(API.status + '?gameName=taxi-rush', { headers: { 'Authorization': 'Bearer ' + token } });
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('claimsUsed').innerText = data.claimsToday || 0;
+
+        const btn = document.getElementById('gameClaimBtn');
+        if (postClaimCooldownRemaining > 0) {
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = 'Next in ' + postClaimCooldownRemaining + 's';
+                btn.style.opacity = 0.65;
+            }
+            return;
+        }
+
+        const bal = await fetch(API.balance, { headers: { 'Authorization': 'Bearer ' + token } });
+        if (bal.ok) {
+            const b = await bal.json();
+            const naira = Number((Number(b.gameEarnUsd || 0) * Number(b.rate || 1500)).toFixed(0));
+            document.getElementById('gameTotal').innerText = '₦' + naira.toLocaleString();
+        }
+
+        if (manualSessionActive) {
+            if (data.claimsToday >= 5) {
+                btn.disabled = true; btn.innerText = 'Daily limit reached'; btn.style.opacity = 0.6; return;
+            }
+            if (manualSessionReady) { btn.disabled = false; btn.style.opacity = 1; btn.innerText = 'Claim'; return; }
+            btn.disabled = true; btn.innerText = 'Waiting...'; btn.style.opacity = 0.65; return;
+        }
+
+        if (data.sessionReady && (data.claimsToday < 5)) {
+            btn.disabled = false; btn.style.opacity = 1; btn.innerText = 'Claim'; btn.classList.add('btn-primary');
+        } else if (data.claimsToday >= 5) {
+            btn.disabled = true; btn.innerText = 'Daily limit reached'; btn.style.opacity = 0.6;
+        } else {
+            btn.disabled = true; btn.innerText = data.secondsLeft ? 'Wait ' + data.secondsLeft + 's' : 'Waiting...'; btn.style.opacity = 0.65;
+        }
+    } catch (e) { console.warn('status poll failed', e); }
+}
+
+function showAdOverlayAndClaim() {
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed'; overlay.style.inset = '0'; overlay.style.background = 'rgba(0,0,0,0.95)'; overlay.style.display = 'flex'; overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center'; overlay.style.zIndex = 99999; overlay.style.padding = '0'; overlay.style.width = '100vw'; overlay.style.height = '100vh';
+    const panel = document.createElement('div'); panel.style.maxWidth = '95vw'; panel.style.width='90%'; panel.style.maxHeight = '90vh'; panel.style.background='#121214'; panel.style.padding='20px'; panel.style.borderRadius='16px'; panel.style.textAlign='center'; panel.style.color='#fff'; panel.style.overflowY = 'auto';
+    const timer = document.createElement('div'); timer.style.fontSize='clamp(24px, 5vw, 32px)'; timer.style.fontWeight='900'; timer.style.marginBottom='16px'; timer.innerText = '50';
+    const adContainer = document.createElement('div'); adContainer.id = 'game-ad-container'; adContainer.style.minHeight='clamp(200px, 40vh, 300px)'; adContainer.style.marginBottom='16px'; adContainer.style.background='#0f0f0f'; adContainer.style.borderRadius='12px'; adContainer.style.padding='16px'; adContainer.style.display = 'flex'; adContainer.style.alignItems = 'center'; adContainer.style.justifyContent = 'center';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className='btn btn-secondary';
+    cancelBtn.style.marginTop='12px';
+    cancelBtn.style.padding = '12px 24px';
+    cancelBtn.style.fontSize = 'clamp(14px, 2vw, 16px)';
+    cancelBtn.innerText='Cancel';
+    cancelBtn.disabled = true; cancelBtn.style.opacity=0.6;
+    let canceled = false;
+    cancelBtn.onclick = () => {
+        if (cancelBtn.disabled) return;
+        canceled = true;
+        try { clearInterval(interval); } catch (e) {}
+        try { overlay.remove(); } catch (e) {}
+        try { cleanupAndClaim(true); } catch (e) {}
+    };
+
+    panel.appendChild(timer); panel.appendChild(adContainer); panel.appendChild(cancelBtn); overlay.appendChild(panel); document.body.appendChild(overlay);
+
+    window.atOptions = {
+        'key' : '457f65cbe904e42fea908d570f00bbb2',
+        'format' : 'iframe',
+        'height' : 250,
+        'width' : 300,
+        'params' : {}
+    };
+    const adScript = document.createElement('script');
+    adScript.src = 'https://www.highrevenueformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js';
+    adScript.async = true;
+    adContainer.appendChild(adScript);
+
+    let seconds = 50; let allowCancelAfter = 15;
+    const interval = setInterval(() => {
+        seconds -= 1; timer.innerText = String(seconds);
+        if (seconds <= 50 - allowCancelAfter) {
+            cancelBtn.disabled = false; cancelBtn.style.opacity = 1; cancelBtn.classList.remove('btn-secondary'); cancelBtn.classList.add('btn-primary');
+        }
+        if (seconds <= 0) {
+            clearInterval(interval);
+            if (!canceled) {
+                overlay.remove();
+                const popupMsg = document.createElement('div');
+                popupMsg.style.position = 'fixed'; popupMsg.style.top = '50%'; popupMsg.style.left = '50%'; popupMsg.style.transform = 'translate(-50%, -50%)'; popupMsg.style.zIndex = '100000'; popupMsg.style.background = '#121214'; popupMsg.style.padding = 'clamp(20px, 5vw, 40px)'; popupMsg.style.borderRadius = '16px'; popupMsg.style.color = '#fff'; popupMsg.style.textAlign = 'center'; popupMsg.style.fontSize = 'clamp(16px, 4vw, 20px)'; popupMsg.style.fontWeight = '700'; popupMsg.style.maxWidth = '90vw'; popupMsg.innerText = 'ur bonus is ready to claim\nscroll down and claim';
+                document.body.appendChild(popupMsg);
+                setTimeout(() => { try { popupMsg.remove(); } catch(e){} }, 2000);
+                cleanupAndClaim();
+            }
+        }
+    }, 1000);
+
+    let cleaned = false;
+    async function cleanupAndClaim(shouldRestart = false) {
+        if (cleaned) return; cleaned = true;
+        try {
+            const token = await authToken();
+            const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+            if (!manualServerSessionOk) headers['X-Force-Claim'] = '1';
+            const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'taxi-rush' }) });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                alert('✅ Successfully claimed: ₦' + (data.amountNaira || 2) + '');
+                pollStatus();
+                const usedAfter = Number(data.claimsToday || 0);
+                if (usedAfter < 5) {
+                    beginPostClaimCooldown();
+                } else {
+                    manualSessionActive = false;
+                    manualSessionReady = false;
+                    const startBtn = document.getElementById('startGameBtn');
+                    if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
+                }
+            } else {
+                console.error('Claim failed:', res.status, data);
+                alert((data && data.error) ? data.error : 'Claim failed (' + res.status + ')');
+                if (shouldRestart && data.claimsToday < 5) {
+                    manualSessionReady = false;
+                    setTimeout(() => { showAdOverlayAndClaim(); }, 1000);
+                }
+            }
+        } catch (e) { console.error('claim error', e); alert('Claim error'); }
+    }
+}
+
+function showFirstBanner() {
+    try {
+        if (window.aclib && typeof window.aclib.runBanner === 'function') {
+            window.aclib.runBanner({ zoneId: '12127470' });
+        } else {
+            const s = document.createElement('script');
+            s.src = '//acscdn.com/script/aclib.js';
+            s.id = 'aclib-script';
+            s.async = true;
+            s.onload = () => { try { window.aclib && window.aclib.runBanner({ zoneId: '12127470' }); } catch(e){} };
+            document.head.appendChild(s);
+        }
+    } catch (e) { console.warn('aclib banner failed', e); }
+}
+
+function showSecondAd() {
+    const adSlot = document.getElementById('inGameAdSlot');
+    try {
+        if (!adSlot) return;
+        adSlot.innerHTML = '';
+        const frame = document.createElement('iframe');
+        frame.src = 'https://youradexchange.com/video/select.php?r=12127466';
+        frame.width = '300'; frame.height = '250'; frame.style.border = '0';
+        adSlot.appendChild(frame);
+    } catch (e) { console.warn('second ad failed', e); }
+}
+
+window.addEventListener('load', async () => {
+    firebase.auth().onAuthStateChanged(async (user) => {
+        if (!user) return window.location.href = 'login.html';
+        setInterval(pingSession, 10 * 1000);
+        pollStatus();
+        statusPoll = setInterval(pollStatus, 2000);
+    });
+
+    document.getElementById('gameClaimBtn').addEventListener('click', (e) => {
+        e.preventDefault();
+        if (e.target.disabled) return;
+        showAdOverlayAndClaim();
+    });
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const startBtn = document.getElementById('startGameBtn');
+    const iframe = document.getElementById('taxiRushIframe');
+    const timerEl = document.getElementById('startTimer');
+    const claimBtn = document.getElementById('gameClaimBtn');
+    const adSlot = document.getElementById('inGameAdSlot');
+
+    let localTimer = null;
+
+    function setTimerText(s) {
+        if (!timerEl) return;
+        if (s > 0) timerEl.innerText = 'Waiting: ' + s + 's';
+        else timerEl.innerText = 'Ready to claim';
+    }
+
+    function refreshStartButton() {
+        const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
+        if (startBtn) {
+            if (used >= 5) {
+                startBtn.disabled = true;
+                startBtn.innerText = 'Daily limit reached';
+            } else if (postClaimCooldownRemaining > 0) {
+                startBtn.disabled = true;
+                startBtn.innerText = 'Wait ' + postClaimCooldownRemaining + 's';
+            } else {
+                startBtn.disabled = false;
+                startBtn.innerText = 'Start';
+            }
+        }
+    }
+
+    async function handleStartClick(e) {
+        e && e.preventDefault();
+        const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
+        if (used >= 5) { if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Daily limit reached'; } return; }
+        if (postClaimCooldownRemaining > 0) return;
+
+        manualSessionActive = true;
+        manualSessionReady = false;
+
+        if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Started'; }
+        if (iframe) iframe.style.display = 'block';
+
+        manualServerSessionOk = true;
+        try {
+            const user = firebase.auth().currentUser;
+            if (!user) {
+                console.warn('Not signed in');
+                manualServerSessionOk = false;
+            } else {
+                const token = await user.getIdToken();
+                let res;
+                try {
+                    res = await fetch('/api/transactions/game/session-start', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ page: 'taxi-rush', gameName: 'taxi-rush' })
+                    });
+                } catch (err) {
+                    console.warn('session-start fetch failed', err);
+                    manualServerSessionOk = false;
+                }
+                if (typeof res !== 'undefined' && res && !res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    console.warn('Session start rejected by server:', errData);
+                    manualServerSessionOk = false;
+                }
+            }
+        } catch (err) {
+            console.warn('Session start error:', err);
+            manualServerSessionOk = false;
+        }
+
+        if (claimBtn) {
+            claimBtn.disabled = true;
+            claimBtn.style.opacity = 0.65;
+            claimBtn.innerText = 'Waiting...';
+        }
+
+        if (adSlot) adSlot.innerHTML = '';
+        showFirstBanner();
+        let first = 60;
+        setTimerText(first);
+        if (localTimer) clearInterval(localTimer);
+        localTimer = setInterval(() => {
+            first -= 1; if (timerEl) timerEl.innerText = 'Ad1: ' + first + 's';
+            if (first <= 0) {
+                clearInterval(localTimer);
+                if (adSlot) adSlot.innerHTML = '';
+                showSecondAd();
+
+                let second = 40;
+                if (timerEl) timerEl.innerText = 'Ad2: ' + second + 's';
+                localTimer = setInterval(() => {
+                    second -= 1; if (timerEl) timerEl.innerText = 'Ad2: ' + second + 's';
+                    if (second <= 0) {
+                        clearInterval(localTimer);
+                        manualSessionReady = true;
+                        if (claimBtn) {
+                            claimBtn.disabled = false;
+                            claimBtn.style.opacity = 1;
+                            claimBtn.innerText = 'Claim';
+                        }
+                        if (timerEl) timerEl.innerText = 'Ready to claim';
+                        try { alert('your bonus is ready to be claimed'); } catch(e){}
+                        try { pollStatus(); } catch (e) {}
+                    }
+                }, 1000);
+            }
+        }, 1000);
+    }
+
+    if (startBtn) startBtn.addEventListener('click', handleStartClick);
+
+    const refreshInterval = setInterval(refreshStartButton, 1500);
+    refreshStartButton();
+
+    if (window.__gameManualStartRefresh) clearInterval(window.__gameManualStartRefresh);
+    window.__gameManualStartRefresh = refreshInterval;
+});
+</script>

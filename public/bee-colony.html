@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slash Night - Watch2Earn</title>
+    <title>Bee Colony - Watch2Earn</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { box-sizing: border-box; }
@@ -167,19 +167,19 @@
     <div class="page">
         <div class="game-shell">
             <div class="game-header">
-                <h1>Slash Night</h1>
+                <h1>Bee Colony</h1>
                 <span class="game-tag">Playable</span>
             </div>
 
             <div class="game-frame">
-                <iframe id="slashNightIframe" src="https://html5.gamemonetize.co/4bdyumz6cccpj9basc07ir2eyerbmum0/" title="Slash Night game" allowfullscreen style="display:none"></iframe>
+                <iframe id="beeColonyIframe" src="https://html5.gamemonetize.co/qa6jx58nm4mcswfhncw9vxizjn8gyb87/" title="Bee Colony game" allowfullscreen style="display:none"></iframe>
                 <div id="inGameAdSlot" style="margin-top:12px;display:flex;justify-content:center;align-items:center;min-height:90px;border-radius:8px;overflow:hidden"></div>
             </div>
 
             <div class="meta">
                 <div class="meta-box">
                     <span class="meta-label">Genre</span>
-                    <span class="meta-value">Action</span>
+                    <span class="meta-value">Strategy</span>
                 </div>
                 <div class="meta-box">
                     <span class="meta-label">Device</span>
@@ -311,7 +311,7 @@ async function authToken() {
 async function startSession() {
     try {
         const token = await authToken();
-        await fetch(API.start, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'slash-night' }) });
+        await fetch(API.start, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ page: 'bee-colony' }) });
     } catch (e) { console.warn('session start failed', e); }
 }
 
@@ -325,7 +325,7 @@ async function pingSession() {
 async function pollStatus() {
     try {
         const token = await authToken();
-        const res = await fetch(API.status + '?gameName=slash-night', { headers: { 'Authorization': 'Bearer ' + token } });
+        const res = await fetch(API.status + '?gameName=bee-colony', { headers: { 'Authorization': 'Bearer ' + token } });
         if (!res.ok) return;
         const data = await res.json();
         document.getElementById('claimsUsed').innerText = data.claimsToday || 0;
@@ -429,7 +429,7 @@ function showAdOverlayAndClaim() {
             const token = await authToken();
             const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
             if (!manualServerSessionOk) headers['X-Force-Claim'] = '1';
-            const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'slash-night' }) });
+            const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'bee-colony' }) });
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
                 alert('✅ Successfully claimed: ₦' + (data.amountNaira || 2) + '');
@@ -499,7 +499,7 @@ window.addEventListener('load', async () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     const startBtn = document.getElementById('startGameBtn');
-    const iframe = document.getElementById('slashNightIframe');
+    const iframe = document.getElementById('beeColonyIframe');
     const timerEl = document.getElementById('startTimer');
     const claimBtn = document.getElementById('gameClaimBtn');
     const adSlot = document.getElementById('inGameAdSlot');
@@ -553,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     res = await fetch('/api/transactions/game/session-start', {
                         method: 'POST',
                         headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ page: 'slash-night', gameName: 'slash-night' })
+                        body: JSON.stringify({ page: 'bee-colony', gameName: 'bee-colony' })
                     });
                 } catch (err) {
                     console.warn('session-start fetch failed', err);

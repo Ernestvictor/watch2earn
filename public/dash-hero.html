@@ -216,6 +216,57 @@ let statusPoll = null;
 let manualSessionActive = false;
 let manualSessionReady = false;
 let manualServerSessionOk = true;
+let postClaimCooldownTimer = null;
+let postClaimCooldownRemaining = 0;
+
+function stopPostClaimCooldown() {
+  if (postClaimCooldownTimer) clearInterval(postClaimCooldownTimer);
+  postClaimCooldownTimer = null;
+  postClaimCooldownRemaining = 0;
+}
+
+function beginPostClaimCooldown() {
+  stopPostClaimCooldown();
+  const btn = document.getElementById('gameClaimBtn');
+  const startBtn = document.getElementById('startGameBtn');
+  const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
+  if (used >= 5) return;
+
+  postClaimCooldownRemaining = 40;
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = 0.65;
+    btn.innerText = 'Next in 40s';
+  }
+  if (startBtn) {
+    startBtn.disabled = true;
+    startBtn.innerText = 'Wait 40s';
+  }
+
+  postClaimCooldownTimer = setInterval(() => {
+    postClaimCooldownRemaining -= 1;
+    const remaining = Math.max(postClaimCooldownRemaining, 0);
+    if (btn) btn.innerText = 'Next in ' + remaining + 's';
+    if (startBtn) startBtn.innerText = 'Wait ' + remaining + 's';
+    if (remaining <= 0) {
+      clearInterval(postClaimCooldownTimer);
+      postClaimCooldownTimer = null;
+      postClaimCooldownRemaining = 0;
+      const usedAfter = Number(document.getElementById('claimsUsed')?.innerText || 0);
+      if (usedAfter < 5) {
+        if (btn) {
+          btn.disabled = false;
+          btn.style.opacity = 1;
+          btn.innerText = 'Claim';
+        }
+        if (startBtn) {
+          startBtn.disabled = false;
+          startBtn.innerText = 'Start';
+        }
+      }
+    }
+  }, 1000);
+}
 
 async function pollStatus() {
   try {
@@ -233,6 +284,15 @@ async function pollStatus() {
     }
 
     const btn = document.getElementById('gameClaimBtn');
+    if (postClaimCooldownRemaining > 0) {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Next in ' + postClaimCooldownRemaining + 's';
+        btn.style.opacity = 0.65;
+      }
+      return;
+    }
+
     if (manualSessionActive) {
       if (data.claimsToday >= 5) {
         btn.disabled = true; btn.innerText = 'Daily limit reached'; btn.style.opacity = 0.6; return;
@@ -301,9 +361,9 @@ const adContainer = document.createElement('div'); adContainer.id = 'game-ad-con
       if (res.ok) {
         alert('✅ Successfully claimed: ₦' + (data.amountNaira || 2) + '');
         pollStatus();
-        if (shouldRestart && data.claimsToday < 5) {
-          manualSessionReady = false;
-          setTimeout(() => { showAdOverlayAndClaim(); }, 1000);
+        const usedAfter = Number(data.claimsToday || 0);
+        if (usedAfter < 5) {
+          beginPostClaimCooldown();
         } else {
           manualSessionActive = false; manualSessionReady = false; const startBtn = document.getElementById('startGameBtn'); if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
         }
@@ -335,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const iframe = document.getElementById('dashHeroIframe');
   const timerEl = document.getElementById('startTimer');
   const claimBtn = document.getElementById('gameClaimBtn');
+  const adSlot = document.getElementById('inGameAdSlot');
 
   let localTimer = null;
 
@@ -344,11 +405,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function refreshStartButton() {
     const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
-    if (startBtn) { if (used >= 5) { startBtn.disabled = true; startBtn.innerText = 'Daily limit reached'; } else { startBtn.disabled = false; startBtn.innerText = 'Start'; } }
+    if (startBtn) {
+      if (used >= 5) { startBtn.disabled = true; startBtn.innerText = 'Daily limit reached'; }
+      else if (postClaimCooldownRemaining > 0) { startBtn.disabled = true; startBtn.innerText = 'Wait ' + postClaimCooldownRemaining + 's'; }
+      else { startBtn.disabled = false; startBtn.innerText = 'Start'; }
+    }
   }
 
   async function handleStartClick(e) {
     e && e.preventDefault(); const used = Number(document.getElementById('claimsUsed')?.innerText || 0); if (used >= 5) { if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Daily limit reached'; } return; }
+    if (postClaimCooldownRemaining > 0) return;
 
     manualSessionActive = true; manualSessionReady = false; if (startBtn) { startBtn.disabled = true; startBtn.innerText = 'Started'; } if (iframe) iframe.style.display = 'block';
 
@@ -364,9 +430,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) { console.warn('Session start error:', err); manualServerSessionOk = false; }
 
     if (claimBtn) { claimBtn.disabled = true; claimBtn.style.opacity = 0.65; claimBtn.innerText = 'Waiting...'; }
-
-    // Two-stage countdown with ads: 60s first ad, then 40s second ad, then enable Claim
-    const adSlot = document.getElementById('inGameAdSlot');
 
     function showFirstBanner() {
       try { if (window.aclib && typeof window.aclib.runBanner === 'function') { window.aclib.runBanner({ zoneId: '12127470' }); } else { const s = document.createElement('script'); s.src = '//acscdn.com/script/aclib.js'; s.id = 'aclib-script'; s.async = true; s.onload = () => { try { window.aclib && window.aclib.runBanner({ zoneId: '12127470' }); } catch(e){} }; document.head.appendChild(s); } } catch (e) { console.warn('aclib banner failed', e); }

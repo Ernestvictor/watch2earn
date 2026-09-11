@@ -9,68 +9,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #0b0c0f; color: #e0e0e0; font-family: 'Segoe UI', Inter, Arial, sans-serif; padding-bottom: 90px; }
     
-    .top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 20px;
-      background: #121214;
-      border-bottom: 1px solid #232326;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    
-    .logo { font-weight: 900; font-size: 20px; color: #2196F3; }
-    
-    .inbox-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 38px;
-      height: 38px;
-      border-radius: 50%;
-      background: #18181b;
-      border: 1px solid #2f2f32;
-      color: #fff;
-      text-decoration: none;
-      cursor: pointer;
-    }
-    .container { max-width: 1000px; margin: 0 auto; padding: 16px; }
-    
-    h2 { margin-bottom: 20px; color: #2196F3; }
-    h3 { margin: 20px 0 12px; color: #ffd700; font-size: 16px; }
-    
-    /* Tab Navigation */
-    .tabs {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 20px;
-      border-bottom: 2px solid #232326;
-      overflow-x: auto;
-    }
-    
-    .tab-btn {
-      padding: 12px 20px;
-      background: none;
-      border: none;
-      color: #888;
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: all 0.3s;
-      white-space: nowrap;
-    }
-    
-    .tab-btn.active {
-      color: #2196F3;
-      border-bottom-color: #2196F3;
-    }
-    
-    .tab-btn:hover { color: #e0e0e0; }
-    
-    /* Status Badges */
-    .status-badge {
-      display: inline-block;
+  
       padding: 6px 12px;
       border-radius: 4px;
       font-size: 12px;
@@ -381,6 +320,14 @@
     <!-- Withdrawals Tab -->
     <div id="withdrawals-tab" class="tab-content">
       <h3>Withdrawal Requests</h3>
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+        <div id="bulkToolbar" style="display:none;align-items:center;gap:8px;">
+          <div style="color:#ffd700;font-weight:700;">Selected: <span id="selectedCount">0</span></div>
+          <button class="btn-approve" onclick="approveSelected()"><i class="fas fa-check"></i> Approve Selected</button>
+          <button class="btn-reject" onclick="rejectSelected()"><i class="fas fa-times"></i> Reject Selected</button>
+          <button style="background:#666;color:#fff;" onclick="clearSelection()"><i class="fas fa-times-circle"></i> Clear</button>
+        </div>
+      </div>
       <div class="approval-list" id="withdrawalsList"></div>
     </div>
 
@@ -522,6 +469,7 @@
     let currentAction = null;
     let currentTab = 'withdrawals';
     let allApprovals = [];
+    const selectedIds = new Set();
 
     document.addEventListener('DOMContentLoaded', () => {
       loadApprovals();
@@ -530,10 +478,9 @@
     function showTab(tabName) {
       document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
       document.getElementById(tabName + '-tab').style.display = 'block';
-      
       document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-      event.target.classList.add('active');
-      
+      // event may be undefined when called programmatically
+      try{ event.target.classList.add('active'); }catch(e){}
       currentTab = tabName;
     }
 
@@ -566,44 +513,54 @@
 
     function renderApprovals() {
       const withdrawals = allApprovals.filter(a => a.type === 'withdrawal');
-      
+
       const html = withdrawals.map(item => `
-        <div class="approval-card">
+        <div class="approval-card" id="card-${item.id}">
+          <div style="display:flex;align-items:center;gap:12px;margin-right:12px;">
+            <input type="checkbox" id="select-${item.id}" onchange="toggleSelection('${item.id}')" ${selectedIds.has(item.id) ? 'checked' : ''} />
+          </div>
           <div class="card-left">
-            <div class="card-title">${item.userName}</div>
+            <div class="card-title">${item.userName} <small style="color:#999">${item.userEmail || ''}</small></div>
             <div class="card-info">
-              <div class="info-item">
-                <span class="info-label">Email:</span>
-                <span class="info-value">${item.userEmail}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Amount:</span>
-                <span class="info-value">$${item.amount}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Method:</span>
-                <span class="info-value">${item.method}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Requested:</span>
-                <span class="info-value">${new Date(item.requestedAt).toLocaleString()}</span>
-              </div>
+              <div class="info-item"><div class="info-label">Amount</div><div class="info-value">$${item.amount}</div></div>
+              <div class="info-item"><div class="info-label">Method</div><div class="info-value">${item.method}</div></div>
+              <div class="info-item"><div class="info-label">Requested</div><div class="info-value">${new Date(item.requestedAt).toLocaleString()}</div></div>
+              <div class="info-item"><div class="info-label">Previous Withdrawals</div><div class="info-value">${item.previousWithdrawals || 0}</div></div>
             </div>
-            <div style="margin-top: 8px;">
-              <span class="status-badge badge-${item.status}">${item.status.toUpperCase()}</span>
-            </div>
+            <div style="margin-top: 8px;"><span class="status-badge badge-${item.status}">${(item.status||'').toUpperCase()}</span></div>
           </div>
           <div class="card-actions">
             <button class="btn-view" onclick="viewApprovalDetails('${item.id}')"><i class="fas fa-eye"></i> View</button>
             ${item.status === 'pending' ? `
-              <button class="btn-reject" onclick="rejectAction('${item.id}')"><i class="fas fa-times"></i> Reject</button>
-              <button class="btn-approve" onclick="approveAction('${item.id}')"><i class="fas fa-check"></i> Approve</button>
+              <button id="reject-${item.id}" class="btn-reject" onclick="rejectAction('${item.id}')"><i class="fas fa-times"></i> Reject</button>
+              <button id="approve-${item.id}" class="btn-approve" onclick="approveAction('${item.id}')"><i class="fas fa-check"></i> Approve</button>
             ` : ''}
           </div>
         </div>
       `).join('');
 
       document.getElementById('withdrawalsList').innerHTML = html || '<div class="empty-state"><i class="fas fa-inbox"></i><p>No pending withdrawals</p></div>';
+      updateBulkUI();
+    }
+
+    function toggleSelection(id){
+      if(selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
+      document.getElementById('selectedCount').textContent = selectedIds.size;
+      updateBulkUI();
+    }
+
+    function updateBulkUI(){
+      const toolbar = document.getElementById('bulkToolbar');
+      const countEl = document.getElementById('selectedCount');
+      if(!toolbar || !countEl) return;
+      countEl.textContent = selectedIds.size;
+      toolbar.style.display = selectedIds.size > 0 ? 'flex' : 'none';
+    }
+
+    function clearSelection(){
+      selectedIds.clear();
+      document.querySelectorAll('[id^="select-"]').forEach(cb => cb.checked = false);
+      updateBulkUI();
     }
 
     function viewApprovalDetails(id) {
@@ -612,97 +569,54 @@
 
       const modalBody = document.getElementById('withdrawalModalBody');
       
-      modalBody.innerHTML = `
-        <div class="section">
-          <div class="section-title">General Information</div>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <div class="detail-label">Request ID</div>
-              <div class="detail-value">${item.id}</div>
-            </div>
-            <div class="detail-item">
-              <div class="detail-label">Status</div>
-              <div class="detail-value"><span class="status-badge badge-${item.status}">${item.status}</span></div>
-            </div>
-            <div class="detail-item">
-              <div class="detail-label">User Name</div>
-              <div class="detail-value">${item.userName}</div>
-            </div>
-            <div class="detail-item">
-              <div class="detail-label">Email</div>
-              <div class="detail-value">${item.userEmail}</div>
-            </div>
-            <div class="detail-item">
-              <div class="detail-label">Amount</div>
-              <div class="detail-value">$${item.amount}</div>
-            </div>
-            <div class="detail-item">
-              <div class="detail-label">Withdrawal Method</div>
-              <div class="detail-value">${item.method}</div>
-            </div>
-          </div>
-        </div>
+      modalBody.innerHTML = `...`;
+      // reuse previous detailed markup for brevity, preserve existing modal content composition
+      // build full markup as before
+      let detailHtml = '';
+      detailHtml += `<div class="section"><div class="section-title">General Information</div><div class="detail-grid">`;
+      detailHtml += `<div class="detail-item"><div class="detail-label">Request ID</div><div class="detail-value">${item.id}</div></div>`;
+      detailHtml += `<div class="detail-item"><div class="detail-label">Status</div><div class="detail-value"><span class="status-badge badge-${item.status}">${item.status}</span></div></div>`;
+      detailHtml += `<div class="detail-item"><div class="detail-label">User Name</div><div class="detail-value">${item.userName}</div></div>`;
+      detailHtml += `<div class="detail-item"><div class="detail-label">Email</div><div class="detail-value">${item.userEmail}</div></div>`;
+      detailHtml += `<div class="detail-item"><div class="detail-label">Amount</div><div class="detail-value">$${item.amount}</div></div>`;
+      detailHtml += `<div class="detail-item"><div class="detail-label">Withdrawal Method</div><div class="detail-value">${item.method}</div></div>`;
+      detailHtml += `</div></div>`;
 
-        <div class="section">
-          <div class="section-title">Account Information</div>
-          <div class="detail-grid">
-            <div class="detail-item">
-              <div class="detail-label">Account Age</div>
-              <div class="detail-value">${item.accountAge}</div>
-            </div>
-            <div class="detail-item">
-              <div class="detail-label">Total Earnings</div>
-              <div class="detail-value">$${item.totalEarnings}</div>
-            </div>
-            <div class="detail-item">
-              <div class="detail-label">Previous Withdrawals</div>
-              <div class="detail-value">${item.previousWithdrawals}</div>
-            </div>
-            <div class="detail-item">
-              <div class="detail-label">Requested Date</div>
-              <div class="detail-value">${new Date(item.requestedAt).toLocaleString()}</div>
-            </div>
-          </div>
-        </div>
+      detailHtml += `<div class="section"><div class="section-title">Account Information</div><div class="detail-grid">`;
+      detailHtml += `<div class="detail-item"><div class="detail-label">Account Age</div><div class="detail-value">${item.accountAge || 'N/A'}</div></div>`;
+      detailHtml += `<div class="detail-item"><div class="detail-label">Total Earnings</div><div class="detail-value">$${item.totalEarnings || 0}</div></div>`;
+      detailHtml += `<div class="detail-item"><div class="detail-label">Previous Withdrawals</div><div class="detail-value">${item.previousWithdrawals || 0}</div></div>`;
+      detailHtml += `<div class="detail-item"><div class="detail-label">Requested Date</div><div class="detail-value">${new Date(item.requestedAt).toLocaleString()}</div></div>`;
+      detailHtml += `</div></div>`;
 
-        ${item.bankDetails ? `
-          <div class="section">
-            <div class="section-title">Bank Details</div>
-            <div class="detail-grid">
-              <div class="detail-item">
-                <div class="detail-label">Account Name</div>
-                <div class="detail-value">${item.bankDetails.accountName}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Account Number</div>
-                <div class="detail-value">${item.bankDetails.accountNumber}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Bank Name</div>
-                <div class="detail-value">${item.bankDetails.bankName}</div>
-              </div>
-            </div>
-          </div>
-        ` : ''}
+      if(item.bankDetails){
+        detailHtml += `<div class="section"><div class="section-title">Bank Details</div><div class="detail-grid">`;
+        detailHtml += `<div class="detail-item"><div class="detail-label">Account Name</div><div class="detail-value">${item.bankDetails.accountName}</div></div>`;
+        detailHtml += `<div class="detail-item"><div class="detail-label">Account Number</div><div class="detail-value">${item.bankDetails.accountNumber}</div></div>`;
+        detailHtml += `<div class="detail-item"><div class="detail-label">Bank Name</div><div class="detail-value">${item.bankDetails.bankName}</div></div>`;
+        detailHtml += `</div></div>`;
+      }
 
-        <div class="section">
-          <div class="section-title">Risk Assessment</div>
-          <p style="color: #4CAF50; margin: 8px 0;">✓ Account verified</p>
-          <p style="color: #4CAF50; margin: 8px 0;">✓ Email verified</p>
-          <p style="color: #4CAF50; margin: 8px 0;">✓ No fraud flags</p>
-        </div>
-      `;
+      detailHtml += `<div class="section"><div class="section-title">Risk Assessment</div><p style="color: #4CAF50; margin: 8px 0;">✓ Account verified</p><p style="color: #4CAF50; margin: 8px 0;">✓ Email verified</p><p style="color: #4CAF50; margin: 8px 0;">✓ No fraud flags</p></div>`;
+
+      modalBody.innerHTML = detailHtml;
 
       currentAction = { type: 'withdrawal', id };
       document.getElementById('withdrawalModal').classList.add('active');
     }
 
     function approveAction(id) {
+      // hide reject button for the same card while action in progress
+      const rejectBtn = document.getElementById(`reject-${id}`);
+      if(rejectBtn) rejectBtn.style.display = 'none';
       currentAction = { type: 'approval', id };
       document.getElementById('reasonModal').classList.add('active');
     }
 
     function rejectAction(id) {
+      // hide approve button for the same card while action in progress
+      const approveBtn = document.getElementById(`approve-${id}`);
+      if(approveBtn) approveBtn.style.display = 'none';
       currentAction = { type: 'rejection', id };
       document.getElementById('reasonModal').classList.add('active');
     }
@@ -714,8 +628,27 @@
         return;
       }
 
-      const action = currentAction.type === 'approval' ? 'approve' : 'reject';
-      
+      // determine if single or bulk
+      if(currentAction && currentAction.type && (currentAction.type === 'bulk-approval' || currentAction.type === 'bulk-rejection')){
+        const action = currentAction.type === 'bulk-approval' ? 'approve' : 'reject';
+        const ids = Array.from(selectedIds);
+        if(ids.length === 0) { alert('No items selected'); return; }
+        try{
+          await Promise.all(ids.map(id => fetch(`${API_BASE}/approvals/${encodeURIComponent(id)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` },
+            body: JSON.stringify({ action, reason })
+          })));
+          closeModal('reasonModal');
+          clearSelection();
+          await loadApprovals();
+          alert(`Bulk ${action} completed`);
+        }catch(e){ console.error(e); alert('Bulk action failed'); }
+        return;
+      }
+
+      // single
+      const action = currentAction && currentAction.type === 'approval' ? 'approve' : 'reject';
       try {
         const response = await fetch(`${API_BASE}/approvals/${currentAction.id}`, {
           method: 'PUT',
@@ -723,16 +656,15 @@
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
           },
-          body: JSON.stringify({
-            action,
-            reason
-          })
+          body: JSON.stringify({ action, reason })
         });
 
         if (response.ok) {
           closeModal('reasonModal');
-          loadApprovals();
+          await loadApprovals();
           alert(`Request ${action}d successfully`);
+        } else {
+          alert('Action failed');
         }
       } catch (error) {
         console.error('Error updating approval:', error);
@@ -740,19 +672,33 @@
     }
 
     function approveWithdrawal() {
+      currentAction = currentAction || {};
       currentAction.type = 'approval';
       document.getElementById('reasonModal').classList.add('active');
       closeModal('withdrawalModal');
     }
 
     function rejectWithdrawal() {
+      currentAction = currentAction || {};
       currentAction.type = 'rejection';
       document.getElementById('reasonModal').classList.add('active');
       closeModal('withdrawalModal');
     }
 
+    // Bulk actions
+    function approveSelected(){
+      if(selectedIds.size === 0) return alert('No items selected');
+      currentAction = { type: 'bulk-approval' };
+      document.getElementById('reasonModal').classList.add('active');
+    }
+
+    function rejectSelected(){
+      if(selectedIds.size === 0) return alert('No items selected');
+      currentAction = { type: 'bulk-rejection' };
+      document.getElementById('reasonModal').classList.add('active');
+    }
+
     function filterApprovals() {
-      // Implement filtering logic
       renderApprovals();
     }
 

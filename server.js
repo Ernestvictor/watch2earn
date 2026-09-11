@@ -53,6 +53,51 @@ mongoNative.connectDB().then(() => {
   }
 }).catch(err => { /* already logged in module */ });
 
+// After native mongo connects, attempt to load persisted settings and apply exchange rate
+mongoNative.connectDB().then(async () => {
+  try {
+    const exchange = require('./config/exchange');
+    if (exchange && typeof exchange.setRate === 'function') {
+      try {
+        const col = mongoNative.getCollection('settings');
+        const doc = await col.findOne({ key: { $in: ['usd_to_naira_rate', 'USD_TO_NAIRA_RATE'] } });
+        if (doc && (doc.value || doc.value === 0)) {
+          exchange.setRate(doc.value);
+          console.log('ℹ️ Loaded USD rate from settings:', doc.value);
+        } else {
+          // try to read any numeric field in single settings doc
+          const all = await col.findOne({});
+          if (all) {
+            const v = all.usd_to_naira_rate || all.USD_TO_NAIRA_RATE || (all.value && all.key && (all.key.toLowerCase().includes('usd') && Number(all.value))) || null;
+            if (v) { exchange.setRate(v); console.log('ℹ️ Loaded USD rate from fallback settings:', v); }
+          }
+        }
+      } catch (e) { console.warn('Settings load skipped or failed:', e && e.message); }
+    }
+  } catch (e) { console.warn('Exchange module not available at startup:', e && e.message); }
+}).catch(e=>{});
+
+// Load persisted settings (e.g., USD rate) into runtime exchange config if available
+const exchange = require('./config/exchange');
+async function loadPersistedSettings() {
+  try {
+    const col = (mongoose && mongoose.connection && mongoose.connection.readyState === 1) ? mongoose.connection.collection('settings') : null;
+    if (!col) return;
+    const doc = await col.findOne({ key: { $exists: true } }) || await col.findOne({});
+    if (!doc) return;
+    // Support either { key, value } docs or a single doc with fields
+    if (doc.key && (String(doc.key).toLowerCase().includes('usd') && String(doc.key).toLowerCase().includes('rate'))) {
+      try { exchange.setRate(doc.value); console.log('ℹ️ USD rate loaded from settings:', doc.value); } catch (e) { console.warn('Failed to set exchange rate from settings:', e && e.message); }
+    } else if (doc.usd_to_naira_rate || doc.USD_TO_NAIRA_RATE) {
+      const v = doc.usd_to_naira_rate || doc.USD_TO_NAIRA_RATE;
+      try { exchange.setRate(v); console.log('ℹ️ USD rate loaded from settings:', v); } catch (e) { console.warn('Failed to set exchange rate from settings:', e && e.message); }
+    }
+  } catch (e) { console.warn('Failed to load persisted settings:', e && e.message); }
+}
+
+// attempt to load settings shortly after DB connects
+setTimeout(loadPersistedSettings, 2000);
+
 const authMiddleware = require('./middleware/auth');
 const User = require('./models/users');
 

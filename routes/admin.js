@@ -963,6 +963,58 @@ router.get('/bonuses', async (req, res) => {
   }
 });
 
+// GET /api/admin/settings - read server settings (single doc)
+router.get('/settings', verifyAdminToken, async (req, res) => {
+  try {
+    const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('settings') : mongoose.connection.collection('settings');
+    const doc = await col.findOne({}) || {};
+    return res.json(doc);
+  } catch (e) {
+    console.error('Failed to read settings:', e && e.message);
+    return res.status(500).json({ error: 'Failed to read settings' });
+  }
+});
+
+// POST /api/admin/settings - update or create a setting and optionally broadcast a reason
+router.post('/settings', verifyAdminToken, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const key = String(body.key || '').trim();
+    const value = body.value;
+    const reason = String(body.reason || '').trim();
+
+    if (!key) return res.status(400).json({ error: 'key required' });
+
+    const col = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('settings') : mongoose.connection.collection('settings');
+
+    // Upsert a single key document (we store settings as key/value documents)
+    await col.updateOne({ key }, { $set: { key, value, updatedAt: new Date() } }, { upsert: true });
+
+    // If key is usd rate, try to update runtime exchange rate
+    try {
+      if (String(key).toLowerCase().includes('usd') && String(key).toLowerCase().includes('rate')) {
+        const exchange = require('../config/exchange');
+        if (exchange && typeof exchange.setRate === 'function') {
+          exchange.setRate(value);
+        }
+      }
+    } catch (e) { console.warn('Failed to update runtime exchange rate:', e && e.message); }
+
+    // If a reason was provided, broadcast it to admin_messages so users/admins can see it
+    if (reason) {
+      try {
+        const msgs = (mongoNative && typeof mongoNative.getCollection === 'function') ? mongoNative.getCollection('admin_messages') : mongoose.connection.collection('admin_messages');
+        await msgs.insertOne({ title: `Config updated: ${key}`, message: reason, type: 'admin', key: key, createdAt: new Date().toISOString() });
+      } catch (e) { console.warn('Failed to insert admin message for setting change:', e && e.message); }
+    }
+
+    return res.json({ ok: true, key, value });
+  } catch (e) {
+    console.error('Failed to update settings:', e);
+    return res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
 router.post('/send-bonus', verifyAdminToken, async (req, res) => {
   try {
     if (!isMongooseReady()) {
@@ -999,6 +1051,11 @@ router.post('/send-bonus', verifyAdminToken, async (req, res) => {
     try {
       const bonusCol = mongoNative.getCollection('bonuses');
       await bonusCol.insertOne(entry);
+      // Also insert an admin message so users see the bonus description in their inbox
+      try {
+        const msgs = mongoNative.getCollection('admin_messages');
+        await msgs.insertOne({ title: entry.title || 'Bonus', message: entry.description || '', type: 'admin', related: { bonusId: entry.id }, createdAt: new Date().toISOString(), status: 'unread' });
+      } catch (e) { console.warn('Failed to create admin message for bonus:', e && e.message); }
     } catch (e) {
       console.error('Failed to save bonus to MongoDB:', e && e.message);
       return res.status(500).json({ error: 'Failed to save bonus to database' });

@@ -108,6 +108,24 @@
       <h4 style="margin-top:20px;margin-bottom:12px">Sent Bonuses</h4>
       <div id="bonusList" style="max-height:300px;overflow-y:auto"></div>
     </div>
+    
+    <div class="card">
+      <h3><i class="fas fa-exchange-alt" style="color:#2196F3;margin-right:8px"></i>Market USD Rate</h3>
+      <p style="color:#aaa;margin-bottom:12px;font-size:13px">Set the USD → Naira conversion used by the system. Add a reason for the change so it appears in the inbox.</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div>
+          <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Current Rate (₦ per $1)</label>
+          <input type="number" id="usdRate" placeholder="1500" step="1" min="1" style="width:100%;padding:10px;background:#222326;border:1px solid #333;border-radius:8px;color:#fff">
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:6px;font-weight:600;font-size:13px">Reason</label>
+          <input type="text" id="rateReason" placeholder="e.g., market movement" style="width:100%;padding:10px;background:#222326;border:1px solid #333;border-radius:8px;color:#fff">
+        </div>
+      </div>
+      <button onclick="saveUsdRate()" style="width:100%;padding:12px;background:#2196F3;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px"><i class="fas fa-save"></i> Save USD Rate</button>
+      <div id="rateStatus" style="margin-top:12px;padding:12px;border-radius:8px;display:none"></div>
+    </div>
   </div>
   <div class="bottom-nav">
     <a href="/admin-panel/carbinate.html" class="active"><i class="fas fa-house"></i>Home</a>
@@ -262,9 +280,44 @@
     if (checkAuth()) {
       loadDashboard();
       loadBonuses();
+      loadSettings();
       setInterval(loadBonuses, 30000);
       // hide leading overlay when admin page is ready
       window.addEventListener('load', ()=>{ document.body.setAttribute('data-ready','true'); setTimeout(()=>{ const el=document.getElementById('leading'); if(el) el.style.display='none'; },300); });
+    }
+
+    // Load current settings (usd rate etc.)
+    async function loadSettings() {
+      try {
+        const token = localStorage.getItem('adminToken');
+        const res = await fetch('/api/admin/settings', { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) return console.warn('Failed to load settings');
+        const s = await res.json();
+        // settings stored as individual key docs or single doc; try common keys
+        if (s && typeof s === 'object') {
+          // if s.key exists it's a single key returned earlier; otherwise treat as doc map
+          if (s.usd_to_naira_rate) document.getElementById('usdRate').value = s.usd_to_naira_rate;
+          if (s.USD_TO_NAIRA_RATE) document.getElementById('usdRate').value = s.USD_TO_NAIRA_RATE;
+          if (s.value && s.key && (s.key === 'usd_to_naira_rate' || s.key === 'USD_TO_NAIRA_RATE')) document.getElementById('usdRate').value = s.value;
+        }
+      } catch (e) { console.warn('Load settings error', e); }
+    }
+
+    async function saveUsdRate() {
+      const rate = Number(document.getElementById('usdRate').value);
+      const reason = String(document.getElementById('rateReason').value || '').trim();
+      const status = document.getElementById('rateStatus');
+      if (!rate || rate <= 0) return alert('Enter valid rate');
+      status.style.display = 'block'; status.style.background = '#222'; status.style.borderLeft = '4px solid #2196F3'; status.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving rate...';
+      try {
+        const token = localStorage.getItem('adminToken');
+        const payload = { key: 'usd_to_naira_rate', value: rate, reason };
+        const res = await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(payload) });
+        if (!res.ok) throw new Error('Save failed');
+        const data = await res.json();
+        status.style.background = '#08331a'; status.style.borderLeft = '4px solid #2196F3'; status.innerHTML = `<i class="fas fa-check-circle"></i> Rate saved: ₦${data.value}`;
+        setTimeout(()=>{ status.style.display='none'; }, 4000);
+      } catch (e) { status.style.background = '#331111'; status.style.borderLeft = '4px solid #ff6b6b'; status.innerHTML = `<i class="fas fa-exclamation-circle"></i> Save failed: ${e.message || e}`; }
     }
   </script>
 </body>

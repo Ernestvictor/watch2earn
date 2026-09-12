@@ -237,67 +237,122 @@ async function loadBonuses(){
   const user = window.w2e.getCurrentUser();
   if(!user) return;
 
+  const bonusCard = document.getElementById('bonusCard');
+  const bonusDesc = document.getElementById('bonusDesc');
+  const claimBtn = document.getElementById('claimBtn');
+
   try{
     const headers = await window.w2e.getAuthHeaders();
     const res = await fetch('/api/transactions/bonuses', { headers });
     if(res.ok){
       const data = await res.json();
-      const bonuses = data.bonuses || [];
-      const unclaimed = bonuses.filter(b => !b.claimed);
+      const bonuses = Array.isArray(data.bonuses) ? data.bonuses : [];
+      const unclaimed = bonuses.filter(b => {
+        const claimed = b.claimed === true || b.claimed === 1 || b.claimed === 'true';
+        const hasValue = Number(b.amountUsd || b.amount || 0) > 0 || !!b.id || !!b.title;
+        return hasValue && !claimed;
+      });
 
-      if(unclaimed.length > 0){
+      if (unclaimed.length > 0) {
         const first = unclaimed[0];
-        document.getElementById('bonusCard').style.display = 'block';
-        document.getElementById('bonusDesc').innerText = `$${first.amountUsd?.toFixed(2) || '0'} ${first.title || 'bonus'} available!`;
+        const amount = Number(first.amountUsd ?? first.amount ?? 0);
+        bonusCard.style.display = 'block';
+        bonusDesc.innerText = `$${amount > 0 ? amount.toFixed(2) : '0.00'} ${first.title || 'bonus'} available!`;
+        if (claimBtn) {
+          claimBtn.disabled = false;
+        }
       } else {
-        document.getElementById('bonusCard').style.display = 'none';
+        bonusCard.style.display = 'none';
+        if (bonusDesc) bonusDesc.innerText = 'You have a bonus waiting!';
+        if (claimBtn) claimBtn.disabled = true;
       }
+      return;
     }
-  }catch(e){ console.warn('Bonus fetch failed:', e); }
+  }catch(e){
+    console.warn('Bonus fetch failed:', e);
+  }
+
+  bonusCard.style.display = 'none';
+  if (bonusDesc) bonusDesc.innerText = 'You have a bonus waiting!';
+  if (claimBtn) claimBtn.disabled = true;
 }
 
 async function claimBonus(){
   const user = window.w2e.getCurrentUser();
   if(!user) return alert('Login required');
+
   const btn = document.getElementById('claimBtn');
+  const bonusCard = document.getElementById('bonusCard');
   const origText = btn.innerHTML;
-  try{
-    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Claiming...';
-    const headers = await window.w2e.getAuthHeaders();
-    const available = await fetch('/api/transactions/bonuses', { headers });
-    const availableData = await available.json();
-    const bonus = (availableData.bonuses || [])[0];
-    if(!bonus) return showToast('No bonus available', 'warn');
+  const statusText = btn.innerText;
 
-    const res = await fetch('/api/transactions/bonuses/claim', {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: bonus.id })
+  bonusCard.style.display = 'none';
+  btn.disabled = true; 
+  btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Ad in progress...';
+
+  if (typeof window.showAclibAdWithCountdown === 'function') {
+    window.showAclibAdWithCountdown({
+      initialSeconds: 15,
+      mainSeconds: 34,
+      adClickUrl: '/ads.html'
     });
-
-    const result = await res.json().catch(() => ({}));
-    if(res.ok){
-      showToast(result.message || (`Bonus claimed! You received $${(bonus.amountUsd || 0).toFixed ? bonus.amountUsd.toFixed(2) : (bonus.amountUsd||0)}`), 'success');
-      
-      // Update balance immediately from response
-      if(result.newWalletUsd !== undefined) {
-        document.getElementById('usd').innerText = result.newWalletUsd.toFixed(2);
-        document.getElementById('naira').innerText = Math.round(result.newWalletUsd * 1500).toLocaleString();
-        document.getElementById('nairaTop').innerText = Math.round(result.newWalletUsd * 1500).toLocaleString();
-      }
-      
-      // Then fetch fresh data from server
-      await load();
-      await loadBonuses();
-    } else {
-      showToast(result.error || result.message || 'Failed to claim bonus', 'error');
-    }
-  }catch(e){
-    console.error('Claim bonus error:', e);
-    showToast('Error claiming bonus', 'error');
-  } finally {
-    btn.disabled = false; btn.innerHTML = origText;
   }
+
+  const claimAfterAd = async () => {
+    try {
+      const headers = await window.w2e.getAuthHeaders();
+      const available = await fetch('/api/transactions/bonuses', { headers });
+      const availableData = await available.json();
+      const bonus = (availableData.bonuses || []).find(b => !b.claimed) || (availableData.bonuses || [])[0];
+      if(!bonus) {
+        bonusCard.style.display = 'none';
+        return showToast('No bonus available', 'warn');
+      }
+
+      const res = await fetch('/api/transactions/bonuses/claim', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: bonus.id })
+      });
+
+      const result = await res.json().catch(() => ({}));
+      if(res.ok){
+        bonusCard.style.display = 'none';
+        showToast(result.message || (`Bonus claimed! You received $${(bonus.amountUsd || 0).toFixed ? bonus.amountUsd.toFixed(2) : (bonus.amountUsd||0)}`), 'success');
+
+        if(result.newWalletUsd !== undefined) {
+          document.getElementById('usd').innerText = result.newWalletUsd.toFixed(2);
+          document.getElementById('naira').innerText = Math.round(result.newWalletUsd * 1500).toLocaleString();
+          document.getElementById('nairaTop').innerText = Math.round(result.newWalletUsd * 1500).toLocaleString();
+        }
+
+        await load();
+        await loadBonuses();
+      } else {
+        showToast(result.error || result.message || 'Failed to claim bonus', 'error');
+      }
+    } catch (e) {
+      console.error('Claim bonus error:', e);
+      showToast('Error claiming bonus', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origText;
+      btn.innerText = statusText;
+    }
+  };
+
+  const claimTimer = setTimeout(claimAfterAd, 49000);
+
+  const observer = new MutationObserver(() => {
+    const overlay = document.getElementById('aclib-ad-overlay');
+    if (!overlay) {
+      clearTimeout(claimTimer);
+      observer.disconnect();
+      claimAfterAd();
+    }
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 // small toast helper

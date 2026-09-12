@@ -242,6 +242,33 @@ const API = {
     balance: '/api/transactions/balance'
 };
 
+const gameName = 'taxi-rush';
+const gameNoticeStore = window.__watch2earnGameNotices || (window.__watch2earnGameNotices = {});
+
+function showToast(msg, timeout = 3000) {
+    try {
+        const t = document.createElement('div');
+        t.className = 'w2e-toast';
+        t.style.position = 'fixed'; t.style.right = '16px'; t.style.bottom = '16px'; t.style.zIndex = '100001';
+        t.style.background = '#121214'; t.style.color = '#fff'; t.style.padding = '10px 14px';
+        t.style.borderRadius = '8px'; t.style.boxShadow = '0 6px 18px rgba(0,0,0,0.4)'; t.style.fontWeight = '700';
+        t.innerText = msg;
+        document.body.appendChild(t);
+        setTimeout(() => { try { t.remove(); } catch (e) {} }, timeout);
+    } catch (e) { /* ignore */ }
+}
+
+function notifyGameUser(message, key) {
+    const noticeKey = key || gameName;
+    if (gameNoticeStore[noticeKey]) return;
+    gameNoticeStore[noticeKey] = true;
+    try { showToast(message); } catch (e) { try { alert(message); } catch (e2) {} }
+}
+
+function resetGameNotice(key) { const noticeKey = key || gameName; delete gameNoticeStore[noticeKey]; }
+
+function hideCountdownUI() { const timerEl = document.getElementById('startTimer'); if (timerEl) timerEl.style.display = 'none'; }
+
 let statusPoll = null;
 let manualSessionActive = false;
 let manualSessionReady = false;

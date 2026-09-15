@@ -259,9 +259,6 @@ function showToast(msg, timeout = 3000) {
 }
 
 function notifyGameUser(message, key) {
-    const noticeKey = key || gameName;
-    if (gameNoticeStore[noticeKey]) return;
-    gameNoticeStore[noticeKey] = true;
     try { showToast(message); } catch (e) { try { alert(message); } catch (e2) {} }
 }
 
@@ -394,6 +391,54 @@ async function pollStatus() {
                 return;
             }
             if (btn) {
+                btn.disabled = true; btn.innerText = 'Waiting...'; btn.style.opacity = 0.65;
+            }
+            return;
+        }
+
+        if (data.sessionReady) {
+            notifyGameUser('Your bonus is ready to claim for ' + gameName + '.', 'bonus-ready-' + gameName);
+            if (btn) {
+                btn.disabled = false; btn.style.opacity = 1; btn.innerText = 'Claim';
+            }
+        } else {
+            if (btn) {
+                btn.disabled = true; btn.innerText = 'Waiting...'; btn.style.opacity = 0.65;
+            }
+        }
+    } catch (e) { console.warn('status poll failed', e); }
+}
+
+async function claimSessionBonus() {
+    try {
+        const token = await authToken();
+        const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+        if (!manualServerSessionOk) headers['X-Force-Claim'] = '1';
+        const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'slash-night' }) });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            alert('✅ Successfully claimed: ₦' + (data.amountNaira || 2));
+            resetGameNotice('bonus-ready-slash-night');
+            pollStatus();
+            const usedAfter = Number(data.claimsToday || 0);
+            if (usedAfter < 5) {
+                beginPostClaimCooldown();
+            } else {
+                manualSessionActive = false;
+                manualSessionReady = false;
+                notifyGameUser('Daily limit reached for ' + gameName + '. You can claim 5 times per game per day.', 'daily-limit-' + gameName);
+                const startBtn = document.getElementById('startGameBtn');
+                if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
+            }
+        } else {
+            console.error('Claim failed:', res.status, data);
+            alert((data && data.error) ? data.error : 'Claim failed (' + res.status + ')');
+        }
+    } catch (e) { console.error('claim error', e); alert('Claim error'); }
+}
+
+function showAdOverlayAndClaim() {
+    claimSessionBonus();
 }
 
 window.addEventListener('load', async () => {

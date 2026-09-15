@@ -313,7 +313,54 @@ async function pollStatus() {
 
 
 function showAdOverlayAndClaim() {
-    claimSessionBonus();
+  // If ad wrapper exists, show it first and then claim when it's dismissed.
+  if (typeof window.showAclibAdWithCountdown === 'function') {
+    // show the ad overlay with default timings; when overlay removed, trigger claim
+    window.showAclibAdWithCountdown({ initialSeconds: 15, mainSeconds: 34, adClickUrl: '/ads.html' });
+
+    const observer = new MutationObserver(() => {
+      const overlay = document.getElementById('aclib-ad-overlay');
+      if (!overlay) {
+        observer.disconnect();
+        // small delay to allow UI settle
+        setTimeout(() => claimSessionBonus(), 150);
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return;
+  }
+
+  // fallback: directly claim
+  claimSessionBonus();
+}
+
+// Claim implementation (mirrors other game pages)
+async function claimSessionBonus() {
+  try {
+    const token = await authToken();
+    const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+    if (!manualServerSessionOk) headers['X-Force-Claim'] = '1';
+    const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'dash-hero' }) });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      alert('✅ Successfully claimed: ₦' + (data.amountNaira || 2));
+      resetGameNotice('bonus-ready-dash-hero');
+      pollStatus();
+      const usedAfter = Number(data.claimsToday || 0);
+      if (usedAfter < 5) {
+        beginPostClaimCooldown();
+      } else {
+        manualSessionActive = false;
+        manualSessionReady = false;
+        notifyGameUser('Daily limit reached for ' + gameName + '. You can claim 5 times per game per day.', 'daily-limit-' + gameName);
+        const startBtn = document.getElementById('startGameBtn');
+        if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
+      }
+    } else {
+      console.error('Claim failed:', res.status, data);
+      alert((data && data.error) ? data.error : 'Claim failed (' + res.status + ')');
+    }
+  } catch (e) { console.error('claim error', e); alert('Claim error'); }
 }
 
 window.addEventListener('load', async () => {
@@ -342,6 +389,24 @@ document.addEventListener('DOMContentLoaded', () => {
     function setTimerText() {
         if (timerEl) timerEl.style.display = 'none';
     }
+
+    // Make iframe resize to viewport for smoother mobile play and handle orientation
+    function adjustIframeSize() {
+      try {
+        const viewportH = window.innerHeight;
+        const topBarH = document.querySelector('.top-bar') ? document.querySelector('.top-bar').offsetHeight : 0;
+        const padding = 40; // safety padding
+        const targetH = Math.max(320, viewportH - topBarH - padding);
+        if (iframe) iframe.style.height = targetH + 'px';
+        if (iframe && /Mobi|Android/i.test(navigator.userAgent)) {
+          iframe.style.width = '100%';
+        }
+      } catch (e) { }
+    }
+
+    window.addEventListener('orientationchange', adjustIframeSize);
+    window.addEventListener('resize', adjustIframeSize);
+    adjustIframeSize();
 
     function refreshStartButton() {
         const used = Number(document.getElementById('claimsUsed')?.innerText || 0);
@@ -437,6 +502,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimerText();
     hideCountdownUI();
 
+  // ensure iframe fits mobile screens
+  adjustIframeSize();
+
     if (window.__gameManualStartRefresh) clearInterval(window.__gameManualStartRefresh);
     window.__gameManualStartRefresh = refreshInterval;
 });
@@ -459,9 +527,6 @@ function showToast(msg, timeout = 3000) {
 }
 
 function notifyGameUser(message, key) {
-  const noticeKey = key || gameName;
-  if (gameNoticeStore[noticeKey]) return;
-  gameNoticeStore[noticeKey] = true;
   try { showToast(message); } catch (e) { try { alert(message); } catch (e2) {} }
 }
 

@@ -206,9 +206,6 @@ function showToast(msg, timeout = 3000) {
 }
 
 function notifyGameUser(message, key) {
-  const noticeKey = key || gameName;
-  if (gameNoticeStore[noticeKey]) return;
-  gameNoticeStore[noticeKey] = true;
   try { showToast(message); } catch (e) { try { alert(message); } catch (e2) {} }
 }
 

@@ -342,13 +342,15 @@ async function claimSessionBonus() {
         if (res.ok) {
             showToast('✅ Successfully claimed: ₦' + (data.amountNaira || 2));
             resetGameNotice('bonus-ready-taxi-rush');
+            manualSessionActive = false;
+            manualSessionReady = false;
+            const iframe = document.getElementById('taxiRushIframe');
+            if (iframe) iframe.style.display = 'none';
             pollStatus();
             const usedAfter = Number(data.claimsToday || 0);
             if (usedAfter < 5) {
                 beginPostClaimCooldown();
             } else {
-                manualSessionActive = false;
-                manualSessionReady = false;
                 notifyGameUser('Daily limit reached for ' + gameName + '. You can claim 5 times per game per day.', 'daily-limit-' + gameName);
                 const startBtn = document.getElementById('startGameBtn');
                 if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }

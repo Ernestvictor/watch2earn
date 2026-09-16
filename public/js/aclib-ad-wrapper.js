@@ -154,10 +154,12 @@ function showAclibAdWithCountdown(options = {}) {
     margin-bottom: 10px;
   `;
 
+  let skipAllowed = false;
+
   const skipBtn = document.createElement('button');
   skipBtn.id = 'aclib-skip-btn';
   skipBtn.textContent = 'Skip';
-  skipBtn.disabled = true;
+  skipBtn.type = 'button';
   skipBtn.style.cssText = `
     position: absolute;
     left: 14px;
@@ -176,6 +178,7 @@ function showAclibAdWithCountdown(options = {}) {
   const goAdFreeBtn = document.createElement('button');
   goAdFreeBtn.id = 'aclib-goadfree-btn';
   goAdFreeBtn.textContent = 'Go ad-free';
+  goAdFreeBtn.type = 'button';
   goAdFreeBtn.style.cssText = `
     position: absolute;
     right: 14px;
@@ -188,14 +191,15 @@ function showAclibAdWithCountdown(options = {}) {
     font-weight: 700;
     cursor: pointer;
     font-size: 14px;
-    z-index: 100001;
+    z-index: 100002;
   `;
 
   function finishOverlay() {
     if (completed) return;
     completed = true;
     if (timer) clearInterval(timer);
-    overlay.remove();
+    try { overlay.remove(); } catch (e) {}
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
   }
 
   function getCurrentUserEmail() {
@@ -247,9 +251,10 @@ function showAclibAdWithCountdown(options = {}) {
         phase = 'main';
         countdown = mainSeconds;
         countdownEl.textContent = String(countdown);
-        skipBtn.disabled = false;
+        skipAllowed = true;
         skipBtn.style.background = '#667eea';
         skipBtn.style.cursor = 'pointer';
+        skipBtn.title = 'Click to skip ad';
         hint.textContent = 'Skip enabled — ad will finish shortly';
         return;
       }
@@ -260,32 +265,20 @@ function showAclibAdWithCountdown(options = {}) {
     }, 1000);
   }
 
-  skipBtn.onclick = () => {
-    if (skipBtn.disabled) return;
+  skipBtn.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!skipAllowed) return;
     finishOverlay();
   };
 
-  goAdFreeBtn.onclick = async () => {
+  goAdFreeBtn.onclick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (creditIssued) return;
     creditIssued = true;
     await creditGoAdFree();
-    // Try to trigger a real ad click inside the injected ad container.
-    try {
-      const container = document.getElementById('aclib-ad-container');
-      if (container) {
-        const iframe = container.querySelector('iframe');
-        const anchor = container.querySelector('a');
-        if (anchor) {
-          anchor.click();
-        } else if (iframe) {
-          // open iframe src in new tab as a best-effort (cross-origin iframes cannot be clicked)
-          const src = iframe.getAttribute('src') || iframe.src;
-          if (src) window.open(src, '_blank', 'noopener,noreferrer');
-        }
-      }
-    } catch (err) {
-      console.warn('Could not auto-click provider ad:', err);
-    }
+    finishOverlay();
   };
 
   const adContainer = document.createElement('div');
@@ -304,12 +297,56 @@ function showAclibAdWithCountdown(options = {}) {
   modal.appendChild(adContainer);
   modal.appendChild(countdownEl);
   modal.appendChild(hint);
+  overlay.appendChild(modal);
   modal.appendChild(skipBtn);
   modal.appendChild(goAdFreeBtn);
-  overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
   startCountdownLoop();
+
+  function loadProviderScripts(container) {
+    if (!container) return;
+
+    const bannerScript = document.createElement('script');
+    bannerScript.type = 'text/javascript';
+    bannerScript.textContent = `
+      window.atOptions = {
+        'key' : '457f65cbe904e42fea908d570f00bbb2',
+        'format' : 'iframe',
+        'height' : 250,
+        'width' : 300,
+        'params' : {}
+      };
+    `;
+    container.appendChild(bannerScript);
+
+    const bannerInvoke = document.createElement('script');
+    bannerInvoke.type = 'text/javascript';
+    bannerInvoke.src = 'https://www.highrevenueformat.com/457f65cbe904e42fea908d570f00bbb2/invoke.js';
+    bannerInvoke.async = true;
+    container.appendChild(bannerInvoke);
+
+    const naiveBannerScript = document.createElement('script');
+    naiveBannerScript.async = true;
+    naiveBannerScript.setAttribute('data-cfasync', 'false');
+    naiveBannerScript.src = 'https://pl30708907.profitableratecpmnetwork.com/4b1cf630fa653f9661f13acbf3b9bcf9/invoke.js';
+    container.appendChild(naiveBannerScript);
+
+    const naiveBannerContainer = document.createElement('div');
+    naiveBannerContainer.id = 'container-4b1cf630fa653f9661f13acbf3b9bcf9';
+    naiveBannerContainer.style.cssText = 'width:100%;min-height:120px;display:flex;align-items:center;justify-content:center;';
+    container.appendChild(naiveBannerContainer);
+
+    const popUnder = document.createElement('script');
+    popUnder.src = 'https://pl30708906.profitableratecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js';
+    popUnder.async = true;
+    container.appendChild(popUnder);
+
+    const socialBar = document.createElement('script');
+    socialBar.src = 'https://pl30708908.profitableratecpmnetwork.com/5c/05/aa/5c05aa5758fb38981318f56bed269096.js';
+    socialBar.async = true;
+    container.appendChild(socialBar);
+  }
 
   loadProviderScripts(adContainer);
 
@@ -324,14 +361,24 @@ function showAclibAdWithCountdown(options = {}) {
 }
 
 window.addEventListener('beforeunload', () => {
-  const overlay = document.getElementById('aclib-ad-overlay');
-  if (overlay) overlay.remove();
+  try {
+    const overlay = document.getElementById('aclib-ad-overlay');
+    if (overlay) {
+      overlay.remove();
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+  } catch (e) {}
   window.__aclibVendorTriggered = false;
 });
 
 window.addEventListener('pagehide', () => {
-  const overlay = document.getElementById('aclib-ad-overlay');
-  if (overlay) overlay.remove();
+  try {
+    const overlay = document.getElementById('aclib-ad-overlay');
+    if (overlay) {
+      overlay.remove();
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+  } catch (e) {}
   window.__aclibVendorTriggered = false;
 });
 

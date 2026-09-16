@@ -423,15 +423,17 @@ async function claimSessionBonus() {
         const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'chubby-jump' }) });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
-            alert('✅ Successfully claimed: ₦' + (data.amountNaira || 2));
+            showToast('✅ Successfully claimed: ₦' + (data.amountNaira || 2));
             resetGameNotice('bonus-ready-chubby-jump');
+            manualSessionActive = false;
+            manualSessionReady = false;
+            const iframe = document.getElementById('chubbyJumpIframe');
+            if (iframe) iframe.style.display = 'none';
             pollStatus();
             const usedAfter = Number(data.claimsToday || 0);
             if (usedAfter < 5) {
                 beginPostClaimCooldown();
             } else {
-                manualSessionActive = false;
-                manualSessionReady = false;
                 notifyGameUser('Daily limit reached for ' + gameName + '. You can claim 5 times per game per day.', 'daily-limit-' + gameName);
                 const startBtn = document.getElementById('startGameBtn');
                 if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }

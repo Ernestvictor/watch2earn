@@ -297,6 +297,7 @@
 
       document.getElementById('statusMsg').innerText = 'Watch an ad to continue with your withdrawal request.';
       await ensureWithdrawalAdWatched();
+      withdrawalAdWatchedThisAttempt = false;
 
       const amount = Number(method === 'bank' ? document.getElementById('bankAmount').value : document.getElementById('cryptoAmount').value);
       const selectedAccount = method === 'bank' ? document.getElementById('bankAccountSelect').value : document.getElementById('cryptoAccountSelect').value;

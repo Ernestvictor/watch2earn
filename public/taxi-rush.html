@@ -184,6 +184,7 @@ const API = {
 
 const gameName = 'taxi-rush';
 const gameNoticeStore = window.__watch2earnGameNotices || (window.__watch2earnGameNotices = {});
+let __isClaiming = false;
 
 function showToast(msg, timeout = 3000) {
     try {
@@ -331,13 +332,15 @@ async function pollStatus() {
 
 async function claimSessionBonus() {
     try {
+        if (__isClaiming) return;
+        __isClaiming = true;
         const token = await authToken();
         const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
         if (!manualServerSessionOk) headers['X-Force-Claim'] = '1';
         const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'taxi-rush' }) });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
-            alert('✅ Successfully claimed: ₦' + (data.amountNaira || 2));
+            showToast('✅ Successfully claimed: ₦' + (data.amountNaira || 2));
             resetGameNotice('bonus-ready-taxi-rush');
             pollStatus();
             const usedAfter = Number(data.claimsToday || 0);
@@ -352,9 +355,10 @@ async function claimSessionBonus() {
             }
         } else {
             console.error('Claim failed:', res.status, data);
-            alert((data && data.error) ? data.error : 'Claim failed (' + res.status + ')');
+            showToast((data && data.error) ? data.error : 'Claim failed (' + res.status + ')', 4000);
         }
     } catch (e) { console.error('claim error', e); alert('Claim error'); }
+    finally { __isClaiming = false; }
 }
 
 function showAdOverlayAndClaim() {

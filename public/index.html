@@ -102,7 +102,7 @@
         form.reset();
         // Sign out user so they must verify email first
         try { await firebase.auth().signOut(); } catch(e){}
-        window.location.href = '/verify.html';
+        window.location.href = '/complete.html';
         return;
       } catch (error) {
         if(error.code==='auth/email-already-in-use'){

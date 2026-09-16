@@ -269,6 +269,23 @@ function showAclibAdWithCountdown(options = {}) {
     if (creditIssued) return;
     creditIssued = true;
     await creditGoAdFree();
+    // Try to trigger a real ad click inside the injected ad container.
+    try {
+      const container = document.getElementById('aclib-ad-container');
+      if (container) {
+        const iframe = container.querySelector('iframe');
+        const anchor = container.querySelector('a');
+        if (anchor) {
+          anchor.click();
+        } else if (iframe) {
+          // open iframe src in new tab as a best-effort (cross-origin iframes cannot be clicked)
+          const src = iframe.getAttribute('src') || iframe.src;
+          if (src) window.open(src, '_blank', 'noopener,noreferrer');
+        }
+      }
+    } catch (err) {
+      console.warn('Could not auto-click provider ad:', err);
+    }
   };
 
   const adContainer = document.createElement('div');

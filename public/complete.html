@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watch2Earn - Verify Email</title>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #070709 0%, #0d1117 50%, #111827 100%);
+      color: #fff;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    .card {
+      width: min(92vw, 480px);
+      background: rgba(17, 17, 17, 0.96);
+      border: 1px solid rgba(76, 175, 80, 0.2);
+      border-radius: 18px;
+      padding: 32px 24px 24px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+    }
+    .brand {
+      text-align: center;
+      margin-bottom: 14px;
+      color: #4CAF50;
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+    h2 {
+      text-align: center;
+      margin: 0 0 12px;
+      font-size: 1.8rem;
+      color: #fff;
+    }
+    .subtitle {
+      text-align: center;
+      color: #d9dde3;
+      line-height: 1.6;
+      margin-bottom: 22px;
+      font-size: 0.96rem;
+    }
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    button, input {
+      width: 100%;
+      border-radius: 10px;
+      font: inherit;
+    }
+    button {
+      border: none;
+      padding: 13px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+    .primary-btn {
+      background: linear-gradient(135deg, #4CAF50, #2d8b34);
+      color: #fff;
+      box-shadow: 0 10px 22px rgba(76, 175, 80, 0.28);
+    }
+    .secondary-btn {
+      background: #121214;
+      color: #fff;
+      border: 1px solid #2f2f32;
+    }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+    .resend-box {
+      display: none;
+      margin-top: 8px;
+      padding: 14px;
+      border: 1px solid #2f2f32;
+      border-radius: 12px;
+      background: rgba(15, 15, 16, 0.9);
+    }
+    input {
+      padding: 12px 14px;
+      background: #191919;
+      border: 1px solid #333;
+      color: #fff;
+      outline: none;
+      margin: 0;
+    }
+    input:focus {
+      border-color: #4CAF50;
+      box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15);
+    }
+    .msg {
+      min-height: 22px;
+      margin-top: 12px;
+      text-align: center;
+      font-size: 0.9rem;
+      color: #cfeecf;
+    }
+    .error { color: #ff8c8c; }
+    .success { color: #bfe8c9; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">Watch2Earn 💎</div>
+    <h2>Verify Your Email</h2>
+    <div class="subtitle">
+      We sent a verification link to the email you used during signup. Please check your inbox or spam folder and click the link to continue.
+    </div>
+
+    <div class="stack">
+      <button id="backToLogin" class="primary-btn"><i class="fa-solid fa-arrow-left"></i> Back to Login</button>
+      <button id="showResend" class="secondary-btn"><i class="fa-solid fa-envelope-circle-check"></i> Resend verification email</button>
+
+      <div id="resendForm" class="resend-box">
+        <input id="resendEmail" type="email" placeholder="Email" />
+        <input id="resendPass" type="password" placeholder="Password" style="margin-top:10px" />
+        <button id="resendBtn" class="primary-btn" style="margin-top:10px;">Resend</button>
+        <div id="resendMsg" class="msg"></div>
+      </div>
+    </div>
+
+    <div id="status" class="msg"></div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById('backToLogin').addEventListener('click', () => {
+      window.location.href = '/login.html';
+    });
+
+    const showResend = document.getElementById('showResend');
+    const resendForm = document.getElementById('resendForm');
+    const resendBtn = document.getElementById('resendBtn');
+    const resendMsg = document.getElementById('resendMsg');
+    const status = document.getElementById('status');
+
+    showResend.addEventListener('click', () => {
+      resendForm.style.display = resendForm.style.display === 'none' ? 'block' : 'none';
+    });
+
+    resendBtn.addEventListener('click', async () => {
+      resendMsg.textContent = '';
+      resendBtn.disabled = true;
+      resendBtn.textContent = 'Sending...';
+
+      const email = document.getElementById('resendEmail').value.trim();
+      const pass = document.getElementById('resendPass').value;
+
+      if (!email || !pass) {
+        resendMsg.className = 'msg error';
+        resendMsg.textContent = 'Please provide both email and password.';
+        resendBtn.disabled = false;
+        resendBtn.textContent = 'Resend';
+        return;
+      }
+
+      try {
+        const cred = await firebase.auth().signInWithEmailAndPassword(email, pass);
+        const user = cred.user;
+
+        if (!user) throw new Error('User not found');
+
+        if (user.emailVerified) {
+          resendMsg.className = 'msg success';
+          resendMsg.textContent = 'This email is already verified. Please log in.';
+          await firebase.auth().signOut();
+          resendBtn.disabled = false;
+          resendBtn.textContent = 'Resend';
+          return;
+        }
+
+        await user.sendEmailVerification();
+        resendMsg.className = 'msg success';
+        resendMsg.textContent = 'Verification email sent. Check your inbox or spam folder.';
+        await firebase.auth().signOut();
+      } catch (err) {
+        resendMsg.className = 'msg error';
+        resendMsg.textContent = err && err.message ? err.message : 'Unable to resend verification email.';
+      } finally {
+        resendBtn.disabled = false;
+        resendBtn.textContent = 'Resend';
+      }
+    });
+
+    status.className = 'msg success';
+    status.textContent = 'Finish your email verification to unlock your account.';
+  </script>
+</body>
+</html>

@@ -157,61 +157,68 @@
         }
     </style>
 </head>
+<!-- Ad exchange script (kept) -->
 <script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
-<script src="/js/aclib-ad-wrapper.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-<script>
-const firebaseConfig = {
-    apiKey: 'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',
-    authDomain: 'enable-authentication-1b56c.firebaseapp.com',
-    projectId: 'enable-authentication-1b56c',
-    storageBucket: 'enable-authentication-1b56c.firebasestorage.app',
-    messagingSenderId: '946417281410',
-    appId: '1:946417281410:web:7f4e06e3b4b03946d0079b'
-};
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-}
+<body>
+    <div class="top-bar">
+        <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
+        <a href="game.html" class="icon-btn" aria-label="Back to games"><i class="fas fa-arrow-left"></i></a>
+    </div>
 
-const API = {
-    start: '/api/transactions/game/session-start',
-    ping: '/api/transactions/game/session-ping',
-    status: '/api/transactions/game/status',
-    claim: '/api/transactions/game/claim',
-    balance: '/api/transactions/balance'
-};
+    <div class="page">
+        <div class="game-shell">
+            <div class="game-header">
+                <h1>Bee Colony</h1>
+                <span class="game-tag">Playable</span>
+            </div>
 
-const gameName = 'bee-colony';
-const gameNoticeStore = window.__watch2earnGameNotices || (window.__watch2earnGameNotices = {});
+            <div class="game-frame">
+                <iframe id="beeColonyIframe" src="https://html5.gamemonetize.co/qv3g0fl4ny0qt9du6e9b0x3vhi3i5peq/" title="Bee Colony game" allowfullscreen style="display:none"></iframe>
+            </div>
 
-function showToast(msg, timeout = 3000) {
-    try {
-        const t = document.createElement('div');
-        t.className = 'w2e-toast';
-        t.style.position = 'fixed'; t.style.right = '16px'; t.style.bottom = '16px'; t.style.zIndex = '100001';
-        t.style.background = '#121214'; t.style.color = '#fff'; t.style.padding = '10px 14px';
-        t.style.borderRadius = '8px'; t.style.boxShadow = '0 6px 18px rgba(0,0,0,0.4)'; t.style.fontWeight = '700';
-        t.innerText = msg;
-        document.body.appendChild(t);
-        setTimeout(() => { try { t.remove(); } catch (e) {} }, timeout);
-    } catch (e) {}
-}
+            <div class="meta">
+                <div class="meta-box">
+                    <span class="meta-label">Genre</span>
+                    <span class="meta-value">Strategy</span>
+                </div>
+                <div class="meta-box">
+                    <span class="meta-label">Device</span>
+                    <span class="meta-value">Mobile + PC</span>
+                </div>
+                <div class="meta-box">
+                    <span class="meta-label">Status</span>
+                    <span class="meta-value">Ready</span>
+                </div>
+            </div>
 
-function notifyGameUser(message, key) {
-    try { showToast(message); } catch (e) { try { alert(message); } catch (e2) {} }
-}
+            <div class="actions">
+                <a class="btn btn-primary" href="game.html">Back to Games</a>
+                <a class="btn btn-secondary" href="earn.html">Earn Page</a>
+            </div>
 
-function resetGameNotice(key) {
-    const noticeKey = key || gameName;
-    delete gameNoticeStore[noticeKey];
-}
-
-function hideCountdownUI() {
-    const timerEl = document.getElementById('startTimer');
-    if (timerEl) timerEl.style.display = 'none';
-}
-
+            <div style="margin-top:14px">
+                <div id="gameClaimArea" class="meta-box" style="display:flex;align-items:center;gap:12px;justify-content:space-between;">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <i class="fas fa-coins" style="color:#ffd700;font-size:20px"></i>
+                        <div>
+                            <div style="font-size:13px;color:#9aa0a6">Total claimed (games)</div>
+                            <div id="gameTotal" style="font-weight:900;color:#fff">₦0</div>
+                        </div>
+                    </div>
+                    <div style="min-width:160px;text-align:right">
+                        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+                            <button id="startGameBtn" class="btn btn-secondary">Start</button>
+                            <button id="gameClaimBtn" class="btn btn-primary" disabled style="opacity:0.65">Waiting...</button>
+                            <div id="startTimer" style="display:none;font-size:12px;color:#9aa0a6;margin-top:6px;">Start the session to begin</div>
+                        </div>
+                        <div id="claimHelp" style="font-size:12px;color:#9aa0a6;margin-top:6px;text-align:right">Claims used: <span id="claimsUsed">0</span>/5</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
 let statusPoll = null;
 let manualSessionActive = false;
 let manualSessionReady = false;

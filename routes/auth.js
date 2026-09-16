@@ -19,6 +19,8 @@ router.post('/register', async (req, res) => {
     const safeName = (username || displayName || normalizedEmail.split('@')[0] || 'User').trim();
     const referrerUid = referredBy ? String(referredBy).trim() : null;
 
+    console.log('REGISTER debug:', { firebaseUid, email: normalizedEmail, referrerUid });
+
     let user = await User.findOne({ firebaseUid });
     if (!user) {
       user = await User.findOne({ email: normalizedEmail });
@@ -37,6 +39,10 @@ router.post('/register', async (req, res) => {
         referralId: `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       });
     } else {
+      const isPlaceholderGuest = String(user.firebaseUid || '').startsWith('guest:');
+      if (isPlaceholderGuest || user.firebaseUid !== firebaseUid) {
+        user.firebaseUid = firebaseUid;
+      }
       user.email = normalizedEmail;
       user.username = safeName;
       user.displayName = safeName;
@@ -48,7 +54,10 @@ router.post('/register', async (req, res) => {
     if (referrerUid) {
       const referrerUser = await User.findOne({ firebaseUid: referrerUid });
       if (referrerUser) {
-        const referralDoc = await Referral.findOne({ referredByUid: referrerUid, referredUid: firebaseUid });
+        let referralDoc = await Referral.findOne({ referredByUid: referrerUid, referredUid: firebaseUid });
+        if (!referralDoc) {
+          referralDoc = await Referral.findOne({ referredByUid: referrerUid, referredEmail: normalizedEmail });
+        }
         if (!referralDoc) {
           await Referral.create({
             referralId: user.referralId || `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -60,6 +69,13 @@ router.post('/register', async (req, res) => {
             source: 'signup',
             status: 'active'
           });
+          console.log('Referral document created for:', { referrerUid, referredUid: firebaseUid, referredEmail: normalizedEmail });
+        } else {
+          referralDoc.referredUid = firebaseUid;
+          referralDoc.referredEmail = normalizedEmail;
+          referralDoc.status = referralDoc.status || 'active';
+          await referralDoc.save();
+          console.log('Referral document updated for:', { referrerUid, referredUid: firebaseUid, referredEmail: normalizedEmail });
         }
 
         await User.findOneAndUpdate(
@@ -69,11 +85,6 @@ router.post('/register', async (req, res) => {
         );
       }
     }
-
-    return res.json({ success: true, user });
-  } catch (error) {
-    console.error('Auth register error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to create MongoDB user record' });
   }
 });
 
@@ -112,7 +123,7 @@ router.post('/register-guest', async (req, res) => {
     if (referrerUid) {
       const referrerUser = await User.findOne({ firebaseUid: referrerUid });
       if (referrerUser) {
-        const referralDoc = await Referral.findOne({ referredByUid: referrerUid, referredUid: placeholder });
+        let referralDoc = await Referral.findOne({ referredByUid: referrerUid, referredUid: placeholder });
         if (!referralDoc) {
           await Referral.create({
             referralId: user.referralId || `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -124,6 +135,11 @@ router.post('/register-guest', async (req, res) => {
             source: 'signup',
             status: 'active'
           });
+        } else {
+          referralDoc.referredUid = firebaseUid;
+          referralDoc.referredEmail = normalizedEmail;
+          referralDoc.status = referralDoc.status || 'active';
+          await referralDoc.save();
         }
 
         await User.findOneAndUpdate(

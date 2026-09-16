@@ -46,8 +46,15 @@
       try{
         const params=new URLSearchParams(window.location.search);
         const r=params.get('ref');
-        if(r) localStorage.setItem('w2e_ref',r);
-      }catch(e){}
+        if(r) {
+          localStorage.setItem('w2e_ref',r);
+          console.log('Referral captured on signup page:', r);
+        } else {
+          console.log('No referral param found on signup page.');
+        }
+      }catch(e){
+        console.warn('Referral parse failed:', e);
+      }
     })();
 
     const form=document.getElementById('signupForm');
@@ -87,6 +94,7 @@
               const ref = localStorage.getItem('w2e_ref');
               const body = { firebaseUid: user.uid, email: user.email, username: fullName, displayName: fullName };
               if (ref) body.referredBy = ref;
+              console.log('Register payload debug:', body);
               await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },

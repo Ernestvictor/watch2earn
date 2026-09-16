@@ -147,6 +147,33 @@
     let token = null;
     let currentBalance = 0;
     let savedAccounts = [];
+    let withdrawalAdWatchedThisAttempt = false;
+
+    function ensureWithdrawalAdWatched() {
+      return new Promise((resolve) => {
+        if (window.showAclibAdWithCountdown && typeof window.showAclibAdWithCountdown === 'function') {
+          withdrawalAdWatchedThisAttempt = false;
+          window.showAclibAdWithCountdown({
+            initialSeconds: 15,
+            mainSeconds: 34,
+            adClickUrl: 'ads.html'
+          });
+
+          const check = setInterval(() => {
+            const overlay = document.getElementById('aclib-ad-overlay');
+            if (!overlay) {
+              clearInterval(check);
+              withdrawalAdWatchedThisAttempt = true;
+              resolve();
+            }
+          }, 150);
+          return;
+        }
+
+        withdrawalAdWatchedThisAttempt = true;
+        resolve();
+      });
+    }
 
     firebase.auth().onAuthStateChanged(async user => {
       if (!user) {
@@ -267,6 +294,10 @@
     async function requestWithdraw(method){
       const authToken = token || await window.w2e.getAuthToken();
       if (!authToken) return alert('Please sign in again.');
+
+      document.getElementById('statusMsg').innerText = 'Watch an ad to continue with your withdrawal request.';
+      await ensureWithdrawalAdWatched();
+
       const amount = Number(method === 'bank' ? document.getElementById('bankAmount').value : document.getElementById('cryptoAmount').value);
       const selectedAccount = method === 'bank' ? document.getElementById('bankAccountSelect').value : document.getElementById('cryptoAccountSelect').value;
       if (!selectedAccount) return alert('Please save and select an account first.');

@@ -77,7 +77,7 @@ function showAclibAdWithCountdown(options = {}) {
 
   const initialSeconds = typeof options.initialSeconds === 'number' ? options.initialSeconds : 15;
   const mainSeconds = typeof options.mainSeconds === 'number' ? options.mainSeconds : 34;
-  const adClickUrl = options.adClickUrl || null;
+  const adClickUrl = options.adClickUrl || 'https://www.profitableratecpmnetwork.com/ke7tsjm03d?key=a96268fc04237d289e7e7bd64904e2f6';
 
   let countdown = initialSeconds;
   let phase = 'initial';
@@ -311,28 +311,7 @@ function showAclibAdWithCountdown(options = {}) {
 
   startCountdownLoop();
 
-  // trigger ad into the ad container using the provided highrevenueformat script
-  const hrKey = '457f65cbe904e42fea908d570f00bbb2';
-  const hrUrl = `https://www.highrevenueformat.com/${hrKey}/invoke.js`;
-
-  const adConfigScript = document.createElement('script');
-  adConfigScript.type = 'text/javascript';
-  adConfigScript.textContent = `
-    window.atOptions = {
-      'key': '${hrKey}',
-      'format': 'iframe',
-      'height': 250,
-      'width': 300,
-      'params': {}
-    };
-  `;
-  adContainer.appendChild(adConfigScript);
-
-  const adInvokeScript = document.createElement('script');
-  adInvokeScript.type = 'text/javascript';
-  adInvokeScript.src = hrUrl;
-  adInvokeScript.async = true;
-  adContainer.appendChild(adInvokeScript);
+  loadProviderScripts(adContainer);
 
   // keep compatibility with other pages that expect the old loader hook, but prefer the HighRevenueFormat snippet
   if (typeof aclib !== 'undefined' && aclib.runAutoTag) {

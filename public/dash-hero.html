@@ -169,6 +169,7 @@
   </div>
 </body>
 </html>
+<script src="/js/aclib-ad-wrapper.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script>
@@ -313,25 +314,19 @@ async function pollStatus() {
 
 
 function showAdOverlayAndClaim() {
-  // If ad wrapper exists, show it first and then claim when it's dismissed.
-  if (typeof window.showAclibAdWithCountdown === 'function') {
-    // show the ad overlay with default timings; when overlay removed, trigger claim
-    window.showAclibAdWithCountdown({ initialSeconds: 15, mainSeconds: 34, adClickUrl: '/ads.html' });
-
-    const observer = new MutationObserver(() => {
-      const overlay = document.getElementById('aclib-ad-overlay');
-      if (!overlay) {
-        observer.disconnect();
-        // small delay to allow UI settle
-        setTimeout(() => claimSessionBonus(), 150);
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    return;
-  }
-
-  // fallback: directly claim
-  claimSessionBonus();
+    if (typeof window.showAclibAdWithCountdown === 'function') {
+        window.showAclibAdWithCountdown({ initialSeconds: 15, mainSeconds: 34, adClickUrl: '/ads.html' });
+        const observer = new MutationObserver(() => {
+            const overlay = document.getElementById('aclib-ad-overlay');
+            if (!overlay) {
+                observer.disconnect();
+                setTimeout(() => claimSessionBonus(), 150);
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        return;
+    }
+    claimSessionBonus();
 }
 
 // Claim implementation (mirrors other game pages)

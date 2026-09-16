@@ -223,6 +223,7 @@
     </div>
 </body>
 </html>
+<script src="/js/aclib-ad-wrapper.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script>
@@ -414,7 +415,47 @@ async function pollStatus() {
     } catch (e) { console.warn('status poll failed', e); }
 }
 
+async function claimSessionBonus() {
+    try {
+        const token = await authToken();
+        const headers = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
+        if (!manualServerSessionOk) headers['X-Force-Claim'] = '1';
+        const res = await fetch(API.claim, { method: 'POST', headers, body: JSON.stringify({ gameName: 'chubby-jump' }) });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            alert('✅ Successfully claimed: ₦' + (data.amountNaira || 2));
+            resetGameNotice('bonus-ready-chubby-jump');
+            pollStatus();
+            const usedAfter = Number(data.claimsToday || 0);
+            if (usedAfter < 5) {
+                beginPostClaimCooldown();
+            } else {
+                manualSessionActive = false;
+                manualSessionReady = false;
+                notifyGameUser('Daily limit reached for ' + gameName + '. You can claim 5 times per game per day.', 'daily-limit-' + gameName);
+                const startBtn = document.getElementById('startGameBtn');
+                if (startBtn) { startBtn.disabled = false; startBtn.innerText = 'Start'; }
+            }
+        } else {
+            console.error('Claim failed:', res.status, data);
+            alert((data && data.error) ? data.error : 'Claim failed (' + res.status + ')');
+        }
+    } catch (e) { console.error('claim error', e); alert('Claim error'); }
+}
+
 function showAdOverlayAndClaim() {
+    if (typeof window.showAclibAdWithCountdown === 'function') {
+        window.showAclibAdWithCountdown({ initialSeconds: 15, mainSeconds: 34, adClickUrl: '/ads.html' });
+        const observer = new MutationObserver(() => {
+            const overlay = document.getElementById('aclib-ad-overlay');
+            if (!overlay) {
+                observer.disconnect();
+                setTimeout(() => claimSessionBonus(), 150);
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        return;
+    }
     claimSessionBonus();
 }
 

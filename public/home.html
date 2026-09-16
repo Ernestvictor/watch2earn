@@ -43,9 +43,28 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
 }
 </style>
 <script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 </head>
 
 <body>
+<script>
+  // Check email verification on page load
+  window.w2e = window.w2e || {};
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged((user) => {
+      if (user) {
+        if (!user.emailVerified) {
+          console.warn('Email not verified, redirecting to complete.html');
+          window.location.href = '/complete.html';
+          return;
+        }
+      } else {
+        window.location.href = '/login.html';
+      }
+    });
+  }
+</script>
 <div class="top">
   <div class="top-left">
     <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>

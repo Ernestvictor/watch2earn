@@ -85,6 +85,11 @@ router.post('/register', async (req, res) => {
         );
       }
     }
+
+    return res.json({ success: true, user });
+  } catch (error) {
+    console.error('Auth register error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create MongoDB user record' });
   }
 });
 

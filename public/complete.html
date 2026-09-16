@@ -193,6 +193,18 @@
 
     status.className = 'msg success';
     status.textContent = 'Finish your email verification to unlock your account.';
+
+    // Auto-redirect if email becomes verified
+    let checkInterval = setInterval(async () => {
+      if (firebase.auth().currentUser) {
+        await firebase.auth().currentUser.reload();
+        if (firebase.auth().currentUser.emailVerified) {
+          clearInterval(checkInterval);
+          console.log('Email verified! Redirecting to home...');
+          window.location.href = '/home.html';
+        }
+      }
+    }, 2000);
   </script>
 </body>
 </html>

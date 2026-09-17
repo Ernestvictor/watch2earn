@@ -39,6 +39,7 @@
     .bottom-nav a.active{color:#4CAF50}
     @media(min-width:768px){.container{max-width:760px}.tier-list{grid-template-columns:repeat(2,1fr)}}
   </style>
+<script src="https://pl30708906.profitableratecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js"></script>
 <script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
 </head>
 <body>
@@ -51,8 +52,8 @@
   <div class="container">
     <div class="card green" style="text-align:center">
       <small style="color:#4CAF50;font-weight:700;letter-spacing:1px">AVAILABLE BALANCE</small>
-      <h1 style="font-size:32px;margin:6px 0">₦<span id="bal">--</span></h1>
-      <small style="color:#777">$<span id="usdBal">--</span> • ₦1500/$1</small>
+      <h1 style="font-size:32px;margin:6px 0">₦<span id="naira">--</span></h1>
+      <small style="color:#777">$<span id="usd">--</span> • ₦1500/$1</small>
       <div id="statusMsg" style="margin-top:10px;padding:8px 12px;background:#0f0f10;border-radius:8px;font-size:12px"></div>
     </div>
 
@@ -207,9 +208,9 @@
         currentBalance = Number.isFinite(rawNaira) ? rawNaira : 0;
         const usdText = (currentBalance / 1500).toFixed(2);
         const nairaText = Math.round(currentBalance).toLocaleString();
-        document.getElementById('bal').innerText = nairaText;
-        document.getElementById('usdBal').innerText = usdText;
-        document.getElementById('topBal').innerText = '₦' + nairaText;
+        document.getElementById('naira').innerText = nairaText;
+        document.getElementById('usd').innerText = usdText;
+        document.getElementById('nairaTop').innerText = '₦' + nairaText;
       } else {
         document.getElementById('statusMsg').innerText = 'Error loading balance. Please refresh.';
       }
@@ -228,9 +229,9 @@
               currentBalance = Number.isFinite(rawNaira) ? rawNaira : 0;
               const usdText = (currentBalance / 1500).toFixed(2);
               const nairaText = Math.round(currentBalance).toLocaleString();
-              document.getElementById('bal').innerText = nairaText;
-              document.getElementById('usdBal').innerText = usdText;
-              document.getElementById('topBal').innerText = '₦' + nairaText;
+              document.getElementById('naira').innerText = nairaText;
+              document.getElementById('usd').innerText = usdText;
+              document.getElementById('nairaTop').innerText = '₦' + nairaText;
             }
           }
         } catch (err) {
@@ -314,9 +315,9 @@
       const prevBalance = currentBalance;
       const updatedBalance = Math.max(0, currentBalance - amount);
       currentBalance = updatedBalance;
-      document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
-      document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
-      document.getElementById('usdBal').innerText = (currentBalance / 1500).toFixed(2);
+      document.getElementById('naira').innerText = Math.round(currentBalance).toLocaleString();
+      document.getElementById('nairaTop').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+      document.getElementById('usd').innerText = (currentBalance / 1500).toFixed(2);
       document.getElementById('statusMsg').innerText = 'Processing withdrawal...';
 
       const charge = amount >= 20000 ? 0 : 500;
@@ -344,18 +345,18 @@
         data = await res.json();
       } catch (err) {
         currentBalance = prevBalance;
-        document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
-        document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
-        document.getElementById('usdBal').innerText = (currentBalance / 1500).toFixed(2);
+        document.getElementById('naira').innerText = Math.round(currentBalance).toLocaleString();
+        document.getElementById('nairaTop').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+        document.getElementById('usd').innerText = (currentBalance / 1500).toFixed(2);
         document.getElementById('statusMsg').innerText = '❌ Network error. Please try again.';
         return;
       }
 
       if (!res.ok) {
         currentBalance = prevBalance;
-        document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
-        document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
-        document.getElementById('usdBal').innerText = (currentBalance / 1500).toFixed(2);
+        document.getElementById('naira').innerText = Math.round(currentBalance).toLocaleString();
+        document.getElementById('nairaTop').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+        document.getElementById('usd').innerText = (currentBalance / 1500).toFixed(2);
         document.getElementById('statusMsg').innerText = '❌ ' + (data.error || 'Withdrawal request failed');
         return;
       }
@@ -369,9 +370,9 @@
           if (fresh) {
             const freshNaira = Number(fresh.balanceNaira ?? (Number(fresh.balanceUsd || 0) * Number(fresh.rate || 1500)));
             currentBalance = Number.isFinite(freshNaira) ? freshNaira : 0;
-            document.getElementById('bal').innerText = Math.round(currentBalance).toLocaleString();
-            document.getElementById('usdBal').innerText = Number(fresh.balanceUsd || 0).toFixed(2);
-            document.getElementById('topBal').innerText = '₦' + Math.round(currentBalance).toLocaleString();
+            document.getElementById('naira').innerText = Math.round(currentBalance).toLocaleString();
+            document.getElementById('usd').innerText = Number(fresh.balanceUsd || 0).toFixed(2);
+            document.getElementById('nairaTop').innerText = '₦' + Math.round(currentBalance).toLocaleString();
           }
         } else {
           const freshBal = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + authToken }, cache: 'no-store' });

@@ -1173,4 +1173,78 @@ router.post('/claim-bonus', verifyToken, async (req, res) => {
   }
 });
 
+// POST /api/transactions/telegram-bonus/claim - one-time Telegram bonus
+router.post('/telegram-bonus/claim', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user && (req.user.uid || req.user.id || req.user.user_id || req.user.sub);
+    if (!userId) {
+      return res.status(400).json({ error: 'user id missing from token' });
+    }
+
+    const email = req.user && req.user.email ? String(req.user.email).trim().toLowerCase() : null;
+    const rewardNaira = Number(process.env.TELEGRAM_CLAIM_REWARD_NAIRA || 100);
+    if (!Number.isFinite(rewardNaira) || rewardNaira <= 0) {
+      return res.status(400).json({ error: 'invalid telegram bonus amount' });
+    }
+
+    const existingUser = await findUserByAnyId(userId, email);
+    if (existingUser && existingUser.telegramBonusClaimed) {
+      return res.status(409).json({ error: 'Telegram bonus already claimed', alreadyClaimed: true });
+    }
+
+    const txCollection = mongoNative && typeof mongoNative.getTransactionsCollection === 'function'
+      ? mongoNative.getTransactionsCollection()
+      : null;
+
+    const txExists = txCollection ? await txCollection.findOne({ userId: String(userId), type: 'telegram_bonus' }) : null;
+    if (txExists) {
+      return res.status(409).json({ error: 'Telegram bonus already claimed', alreadyClaimed: true });
+    }
+
+    const rewardUsd = Number((rewardNaira / Number(process.env.USD_TO_NAIRA_RATE || 1500)).toFixed(6));
+    const credited = await creditLiveUserWallet(userId, rewardNaira, {
+      email,
+      source: 'telegram_bonus'
+    });
+
+    if (!credited) {
+      return res.status(500).json({ error: 'Failed to credit Telegram bonus to wallet' });
+    }
+
+    const tx = {
+      id: `telegram_bonus_${Date.now()}_${String(userId).slice(-6)}`,
+      userId: String(userId),
+      email: email || null,
+      type: 'telegram_bonus',
+      source: 'telegram_channel',
+      title: 'Telegram Channel Bonus',
+      amountUsd: rewardUsd,
+      amountNaira: rewardNaira,
+      createdAt: new Date()
+    };
+
+    if (txCollection) {
+      await txCollection.insertOne(tx);
+    }
+
+    const userQuery = { $or: [{ firebaseUid: userId }, { uid: userId }, { id: userId }, ...(email ? [{ email }] : [])] };
+    await User.findOneAndUpdate(
+      userQuery,
+      { $set: { telegramBonusClaimed: true, telegramBonusClaimedAt: new Date() } },
+      { upsert: true, new: true }
+    ).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: 'Telegram bonus claimed',
+      amountNaira: rewardNaira,
+      amountUsd: rewardUsd,
+      newWalletUsd: Number(credited.balance ?? credited.wallet ?? 0) / Number(process.env.USD_TO_NAIRA_RATE || 1500)
+    });
+  } catch (error) {
+    console.error('Telegram bonus claim failed:', error);
+    return res.status(500).json({ error: 'Error claiming Telegram bonus' });
+  }
+});
+
 module.exports = router;

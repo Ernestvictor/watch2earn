@@ -56,136 +56,32 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 }
 </style>
 <script src="https://pl30708906.profitableratecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js"></script>
-<script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
-</head>
-<body>
-<div class="top-bar">
-  <div class="top-left">
-    <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
-    <a href="messege.html" class="icon-btn" title="Inbox"><i class="fas fa-inbox"></i></a>
-  </div>
-  <div class="action-btns">
-    <a href="settings.html" class="icon-btn"><i class="fas fa-gear"></i></a>
-    <a href="help.html" class="icon-btn"><i class="fas fa-headset"></i></a>
-  </div>
-</div>
-
-<div class="container">
-  <div class="announcement" id="announcementBanner" style="display:none">
-    <i class="fas fa-bullhorn"></i><span id="announcementText"></span>
-  </div>
-
-  <!-- Navigation Tabs -->
-  <div style="border-bottom: 2px solid #222; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 0;">
-    <a href="ads.html" style="color: #4CAF50; border-bottom: 3px solid #4CAF50; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Ads</a>
-    <a href="survey.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Surveys</a>
-    <a href="game.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Games</a>
-    <a href="account.html" style="color: #666; border-bottom: 3px solid transparent; background-color: transparent; flex: 1; padding: 12px 20px; text-align: center; text-decoration: none; border: none; font-weight: 500; font-size: 14px;">Account</a>
-  </div>
-
-  <div id="adCounter" class="helper" title="Tap to claim daily ₦0.01 bonus" onclick="window.location='dailystrike.html'">Your daily ad count is loading...</div>
-
-  <div class="dashboard">
-    <div class="tabs">
-      <a class="tab active" href="ads.html">Ads</a>
-      <a class="tab" href="survey.html">Surveys</a>
-      <a class="tab" href="game.html">Games</a>
-    </div>
-    <div style="display:grid;gap:16px;margin-top:20px">
-            <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:18px">
-        <h3 style="margin-bottom:10px;color:#4CAF50">Play Games</h3>
-        <p style="color:#aaa;font-size:13px;line-height:1.6">our partner are offering exciting games to play and earn rewards.</p>
-        <a href="game.html" class="btn-watch" style="text-align:center;display:block">Open Games</a>
-      </div>
-      <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:18px">
-        <h3 style="margin-bottom:10px;color:#4CAF50">Complete Surveys</h3>
-        <p style="color:#aaa;font-size:13px;line-height:1.6">our partner are offering survey for you to earn more.</p>
-        <a href="survey.html" class="btn-watch" style="text-align:center;display:block">Open Surveys</a>
-      </div>
-
-      <div class="ad-card" style="background:#111;border:1px solid #222;border-radius:16px;padding:18px">
-        <button id="watchAdBtn" class="btn-watch" style="display:block;border:none;cursor:pointer">Watch Ad - Earn 10 Coins</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="bottom-nav">
-    <a href="home.html"><i class="fas fa-house"></i>Home</a>
-    <a href="earn.html" class="active"><i class="fas fa-coins"></i>Earn</a>
-    <a href="verifild.html" class="w2e-promoted-only" style="display:none"><i class="fas fa-check-circle"></i>VERIFIED</a> 
-    <a href="history.html"><i class="fas fa-receipt"></i>History</a>
-    <a href="account.html"><i class="fas fa-user"></i>Account</a>
-  </div>
-<div id="toast" class="toast"></div>
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-<script src="/js/app.js"></script>
 <script>
-window.w2e.initFirebase();
-
-firebase.auth().onAuthStateChanged(async (user) => {
-  if (!user) {
-    window.location.href = 'login.html';
-    return;
-  }
-  await loadBalance();
-});
-
-async function loadBalance() {
-  try {
-    const user = window.w2e.getCurrentUser();
-    if (!user) return;
-    const token = await user.getIdToken();
-    const response = await fetch('/api/transactions/balance', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
-    if (!response.ok) return;
-    const data = await response.json();
-    const totalNaira = (Number(data.balanceUsd || 0)) * 1500;
-    document.getElementById('totalBalance').textContent = '₦' + totalNaira.toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('adsEarned').textContent = '₦' + ((Number(data.adsEarnUsd || 0)) * 1500).toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('surveysEarned').textContent = '₦' + ((Number(data.surveyEarnUsd || 0)) * 1500).toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('gamesEarned').textContent = '₦' + ((Number(data.gameEarnUsd || 0)) * 1500).toLocaleString('en-NG', { maximumFractionDigits: 2 });
-    document.getElementById('referralEarned').textContent = '₦' + ((Number(data.referralEarnUsd || 0)) * 1500).toLocaleString('en-NG', { maximumFractionDigits: 2 });
-  } catch (error) {
-    console.error('Unable to load balance', error);
-  }
-}
-</script>
-<script>
-  window.addEventListener("load", () => {
-    if (!window.gamemonetizeSDK) return;
-
-    window.gamemonetizeSDK.gameStart();
-
-    window.gamemonetizeSDK.onAdFinished = () => {
-      alert("Ad finished! +10 Coins");
-      window.gamemonetizeSDK.gameEnd();
-    };
-
-    const watchAdBtn = document.getElementById('watchAdBtn');
-    if (watchAdBtn) {
-      watchAdBtn.onclick = () => {
-        window.gamemonetizeSDK.showAd();
-      };
+(function () {
+  const sameOrigin = new URL(location.href).origin;
+  function isAllowedUrl(url) {
+    try {
+      const u = new URL(url, location.href);
+      return u.origin === sameOrigin || u.hostname === 't.me' || u.hostname.endsWith('watch2earn.com') || u.hostname.endsWith('watch2earn.net') || u.hostname.endsWith('watch2earn.app');
+    } catch (error) {
+      return true;
     }
-  });
-</script>
-<script src="/js/aclib-ad-wrapper.js"></script>
-<div>
-  <script type="text/javascript">
-    aclib.runBanner({
-      zoneId: '11971350',
-    });
-  </script>
-</div>
-<script type="text/javascript">
-  aclib.runInPagePush({
-    zoneId: '11971438',
-    maxAds: 2,
-  });
-</script>
-</body>
-</html>
+  }
+
+  const realOpen = window.open;
+  window.open = function (url, name, specs) {
+    if (!url) return realOpen.call(this, url, name, specs);
+    return isAllowedUrl(url) ? realOpen.call(this, url, name, specs) : null;
+  };
+
+  document.addEventListener('click', function (event) {
+    const link = event.target && event.target.closest ? event.target.closest('a') : null;
+    if (!link || !link.href) return;
+    if (!isAllowedUrl(link.href)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+})();
 
 

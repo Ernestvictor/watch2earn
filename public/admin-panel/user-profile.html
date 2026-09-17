@@ -25,6 +25,7 @@
     tr:hover{background:#1d1d20}
     .badge{display:inline-block;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:700}
     .ad{background:#14361a;color:#7fe39b}.bonus{background:#332a16;color:#f9b74a}.referral{background:#122d4b;color:#8ec9ff}.survey{background:#3a1b2a;color:#ff8ab2}.strike{background:#2d3e14;color:#cfe366}.game{background:#2f1d1d;color:#ffb4b4}.telegram{background:#1d2b3a;color:#8dd3ff}.other{background:#2d2d31;color:#dfe6ec}
+    .status-approved{background:#1b4b2b;color:#81c784}.status-pending{background:#4b4a1b;color:#ffca28}.status-rejected{background:#4b1b1b;color:#f44336}.status-processing{background:#1b3a4b;color:#81d4f7}
     .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
     .btn{padding:10px 14px;border:none;border-radius:8px;color:#fff;cursor:pointer;font-weight:700}
     .suspend{background:#ff9800}.ban{background:#f44336}.restore{background:#4CAF50}
@@ -58,8 +59,30 @@
     </div>
 
     <div class="card">
+      <h3 style="margin-top:0">Balance Summary</h3>
+      <div class="stats" id="balanceSummary"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Balance by Earning Type</h3>
+      <div class="stats" id="balanceByType"></div>
+    </div>
+
+    <div class="card">
       <h3 style="margin-top:0">Current Earning Summary</h3>
       <div class="stats" id="summaryStats"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Withdrawal History</h3>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Amount</th><th>Status</th><th>Method</th></tr>
+          </thead>
+          <tbody id="withdrawalsTable"></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="card">
@@ -119,12 +142,38 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const transactions = data.transactions || [];
+        const withdrawals = data.withdrawals || [];
         const summary = data.summary || { total:0, ads:0, referrals:0, bonus:0, game:0, survey:0, telegram:0 };
+        const currentBalance = data.currentBalance || data.balance || 0;
+        const totalWithdrawn = withdrawals.reduce((sum, w) => sum + (w.status === 'approved' || w.status === 'completed' ? (w.amount || 0) : 0), 0);
+        const pendingWithdrawals = withdrawals.filter(w => w.status === 'pending' || w.status === 'processing').length;
+        const totalWithdrawalCount = withdrawals.length;
 
         profileHeader.innerHTML = `
           <h2>${data.name || 'User'}</h2>
           <p style="margin:4px 0;color:#d0d5db"><strong>Email:</strong> ${data.email || 'N/A'}</p>
           <p style="margin:4px 0;color:#d0d5db"><strong>Status:</strong> <span style="color:${data.status==='banned'?'#ff8a80':data.status==='suspended'?'#ffca28':'#81e6d9'};font-weight:700">${data.status || 'active'}</span></p>
+        `;
+
+        // Balance Summary
+        document.getElementById('balanceSummary').innerHTML = `
+          <div class="stat"><span class="label">Current Balance</span><span class="value" style="color:#4CAF50">${formatMoney(currentBalance)}</span></div>
+          <div class="stat"><span class="label">Total Withdrawn</span><span class="value" style="color:#ffeb3b">${formatMoney(totalWithdrawn)}</span></div>
+          <div class="stat"><span class="label">Pending Withdrawals</span><span class="value" style="color:#ff9800">${pendingWithdrawals}</span></div>
+          <div class="stat"><span class="label">Total Withdrawals</span><span class="value">${totalWithdrawalCount}</span></div>
+        `;
+
+        // Balance by type breakdown
+        const balanceBreakdown = data.balanceBreakdown || {};
+        document.getElementById('balanceByType').innerHTML = `
+          <div class="stat"><span class="label">Ads Balance</span><span class="value" style="color:#a5d6a7">${formatMoney(balanceBreakdown.ads || 0)}</span></div>
+          <div class="stat"><span class="label">Referral Balance</span><span class="value" style="color:#90caf9">${formatMoney(balanceBreakdown.referrals || 0)}</span></div>
+          <div class="stat"><span class="label">Bonus Balance</span><span class="value" style="color:#ffcc80">${formatMoney(balanceBreakdown.bonus || 0)}</span></div>
+          <div class="stat"><span class="label">Game Balance</span><span class="value" style="color:#ef9a9a">${formatMoney(balanceBreakdown.game || 0)}</span></div>
+          <div class="stat"><span class="label">Survey Balance</span><span class="value" style="color:#f48fb1">${formatMoney(balanceBreakdown.survey || 0)}</span></div>
+          <div class="stat"><span class="label">Daily Strike Balance</span><span class="value" style="color:#c5e1a5">${formatMoney(balanceBreakdown.dailystrike || 0)}</span></div>
+          <div class="stat"><span class="label">Telegram Balance</span><span class="value" style="color:#b3e5fc">${formatMoney(balanceBreakdown.telegram || 0)}</span></div>
+          <div class="stat"><span class="label">Other Balance</span><span class="value" style="color:#d1d5db">${formatMoney(balanceBreakdown.other || 0)}</span></div>
         `;
 
         summaryStats.innerHTML = `
@@ -137,6 +186,24 @@
           <div class="stat"><span class="label">Daily Strike</span><span class="value">${formatMoney(summary.dailystrike)}</span></div>
           <div class="stat"><span class="label">Telegram</span><span class="value">${formatMoney(summary.telegram)}</span></div>
         `;
+
+        // Withdrawal history table
+        const withdrawalsTBody = document.getElementById('withdrawalsTable');
+        if (!withdrawals || withdrawals.length === 0) {
+          withdrawalsTBody.innerHTML = '<tr><td colspan="4" class="empty">No withdrawals found</td></tr>';
+        } else {
+          withdrawalsTBody.innerHTML = withdrawals.map((w) => {
+            const statusColor = w.status === 'approved' || w.status === 'completed' ? '#81c784' : w.status === 'pending' || w.status === 'processing' ? '#ffca28' : w.status === 'rejected' ? '#f44336' : '#888';
+            return `
+              <tr>
+                <td>${formatDateTime(w.createdAt || w.date)}</td>
+                <td>${formatMoney(w.amount)}</td>
+                <td><span style="color:${statusColor};font-weight:700">${(w.status || 'unknown').toUpperCase()}</span></td>
+                <td>${w.method || w.bankName || 'N/A'}</td>
+              </tr>
+            `;
+          }).join('');
+        }
 
         if (!transactions.length) {
           tableBody.innerHTML = '<tr><td colspan="5" class="empty">No earnings found yet</td></tr>';

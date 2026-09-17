@@ -583,3 +583,31 @@ document.addEventListener('DOMContentLoaded', () => {
     window.__gameManualStartRefresh = refreshInterval;
 });
 </script>
+
+<script>
+(function () {
+  const sameOrigin = new URL(location.href).origin;
+  function isAllowedUrl(url) {
+    try {
+      const u = new URL(url, location.href);
+      return u.origin === sameOrigin || u.hostname === 't.me' || u.hostname.endsWith('watch2earn.com') || u.hostname.endsWith('watch2earn.net') || u.hostname.endsWith('watch2earn.app');
+    } catch (error) {
+      return true;
+    }
+  }
+
+  const realOpen = window.open;
+  window.open = function (url, name, specs) {
+    if (!url) return realOpen.call(this, url, name, specs);
+    return isAllowedUrl(url) ? realOpen.call(this, url, name, specs) : null;
+  };
+
+  document.addEventListener('click', function (event) {
+    const link = event.target && event.target.closest ? event.target.closest('a') : null;
+    if (!link || !link.href) return;
+    if (!isAllowedUrl(link.href)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+})();

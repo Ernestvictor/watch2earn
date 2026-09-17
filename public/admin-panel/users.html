@@ -15,10 +15,19 @@
     .stats{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}
     .stat{flex:1;min-width:200px;background:#1a1a1d;border:1px solid #232326;border-radius:16px;padding:16px;text-align:center}
     .stat b{display:block;font-size:22px;color:#4CAF50}
-    table{width:100%;border-collapse:collapse;margin-top:20px}
-    th,td{padding:12px;border-bottom:1px solid #232326;text-align:left}
-    th{background:#1a1a1d;color:#4CAF50}
-    tr:hover{background:#1f2023}
+    .users-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:20px}
+    .user-card{background:#1a1a1d;border:1px solid #232326;border-radius:12px;padding:20px;transition:all 0.3s ease}
+    .user-card:hover{border-color:#4CAF50;box-shadow:0 4px 12px rgba(76,175,80,0.2)}
+    .user-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+    .user-name{font-size:18px;font-weight:700;color:#fff;word-break:break-word}
+    .user-status{display:inline-block;padding:4px 8px;border-radius:4px;font-size:12px;font-weight:600}
+    .user-status.active{background:#4CAF50;color:#000}
+    .user-status.banned{background:#f44336;color:#fff}
+    .user-status.suspended{background:#ffca28;color:#000}
+    .user-info{margin-bottom:12px;font-size:13px;color:#b0b0b0}
+    .user-info strong{color:#e0e0e0}
+    .user-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+    table{display:none}
     button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;margin-right:6px}
     button.view{background:#2196F3;color:#fff}
     button.ban{background:#f44336;color:#fff}
@@ -65,7 +74,8 @@
       </div>
     </div>
     <h3>User List</h3>
-    <table id="usersTable">
+    <div id="usersGrid" class="users-grid"></div>
+    <table id="usersTable" style="display:none">
       <thead>
         <tr><th>Name</th><th>Email</th><th>UID</th><th>Role</th><th>Status</th><th>Actions</th></tr>
       </thead>
@@ -148,30 +158,37 @@
         document.getElementById('totalUsers').textContent = data.total || 0;
         document.getElementById('userGrowth').textContent = `Today: ${data.today || 0} | Week: ${data.week || 0} | Month: ${data.month || 0}`;
         
-        const tbody = document.querySelector('#usersTable tbody');
+        const grid = document.getElementById('usersGrid');
         if ((data.users || []).length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">No users yet</td></tr>';
+          grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#888;padding:40px">No users yet</div>';
         } else {
-          tbody.innerHTML = data.users.map(u=>{
+          grid.innerHTML = data.users.map(u=>{
             const name = u.displayName || u.username || (u.email ? u.email.split('@')[0] : 'Unknown');
             const email = u.email || 'N/A';
             const role = u.role || (u.promoted ? 'Verified' : 'User');
             const status = (u.isBanned ? 'Banned' : u.isSuspended ? 'Suspended' : u.status || 'Active');
+            const statusClass = status === 'Banned' ? 'banned' : status === 'Suspended' ? 'suspended' : 'active';
             const userId = u.id || u._id || u.uid || u.firebaseUid || 'unknown';
+            const referralCount = u.referralCount || 0;
+            const totalEarned = u.totalEarned || 0;
             return `
-            <tr>
-              <td>${name}</td>
-              <td>${email}</td>
-              <td style="font-family:monospace">${userId}</td>
-              <td>${role}</td>
-              <td style="color:${status==='Banned'?'#ff8a80':status==='Suspended'?'#ffca28':'#81c784'};font-weight:600">${status}</td>
-              <td>
-                <button class="view" onclick="viewUser('${userId}')">View</button>
-                <button class="ban" onclick="updateUser('${userId}','ban')">Ban</button>
-                <button style="background:#ff9800;color:#fff" onclick="updateUser('${userId}','suspend')">Suspend</button>
-                <button class="promote" onclick="updateUser('${userId}','promote')">Promote</button>
-              </td>
-            </tr>`;
+            <div class="user-card">
+              <div class="user-card-header">
+                <div class="user-name">${name}</div>
+                <span class="user-status ${statusClass}">${status}</span>
+              </div>
+              <div class="user-info"><strong>Email:</strong> ${email}</div>
+              <div class="user-info"><strong>Role:</strong> ${role}</div>
+              <div class="user-info"><strong>Total Earned:</strong> $${totalEarned.toFixed(2)}</div>
+              <div class="user-info"><strong>Referrals:</strong> ${referralCount}</div>
+              <div class="user-info" style="font-size:11px;color:#888"><strong>UID:</strong> ${userId}</div>
+              <div class="user-actions">
+                <button class="view" onclick="viewUser('${userId}')"><i class="fas fa-eye"></i> View</button>
+                <button class="ban" onclick="updateUser('${userId}','ban')"><i class="fas fa-ban"></i> Ban</button>
+                <button style="background:#ff9800;color:#fff" onclick="updateUser('${userId}','suspend')"><i class="fas fa-pause"></i> Suspend</button>
+                <button class="promote" onclick="updateUser('${userId}','promote')"><i class="fas fa-star"></i> Promote</button>
+              </div>
+            </div>`;
           }).join('');
         }
       } catch(err) {

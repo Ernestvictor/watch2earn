@@ -52,195 +52,31 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 }
 </style>
 <script src="https://pl30708906.profitableratecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js"></script>
-<script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
-</head>
-<body>
-<div class="top-bar">
-  <div class="top-left">
-    <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
-    <a href="messege.html" class="icon-btn" title="Inbox"><i class="fas fa-inbox"></i></a>
-  </div>
-  <div class="top-actions">
-    <a href="settings.html" class="icon-btn"><i class="fas fa-gear"></i></a>
-    <a href="referral.html" class="icon-btn" title="Referrals"><i class="fas fa-user-friends"></i></a>
-    <a href="help.html" class="icon-btn"><i class="fas fa-headset"></i></a>
-    <a href="login.html" class="icon-btn" onclick="logout()"><i class="fas fa-right-from-bracket"></i></a>
-  </div>
-</div>
-
-<div class="container">
-  <div class="announcement" id="announcementBanner" style="display:none">
-    <i class="fas fa-bullhorn"></i><span id="announcementText"></span>
-    <a href="earn.html" style="color:#4CAF50;text-decoration:underline;margin-left:8px">Go Earn</a>
-  </div>
-
-  <div class="card">
-    <div class="user-meta">
-      <span><i class="fas fa-user"></i> <span id="displayName">User</span></span>
-      <span><i class="fas fa-envelope"></i> <span id="emailText">user@email.com</span></span>
-    </div>
-  </div>
-
-  <div class="main-balance">
-    <div style="color:#888;font-size:11px">MAIN BALANCE • Referral + Ads + Game + Survey</div>
-    <h1>$<span id="usd">--</span></h1>
-    <div style="color:#888;font-size:12px">≈ ₦<span id="naira">--</span></div>
-    <div class="breakdown">
-      <div class="break-item"><small>Ads</small><b>$<span id="adsEarn">--</span></b></div>
-      <div class="break-item"><small>Games</small><b>$<span id="gameEarn">--</span></b></div>
-      <div class="break-item"><small>Survey</small><b>$<span id="surveyEarn">--</span></b></div>
-      <div class="break-item"><small>Referral</small><b>$<span id="refEarn">--</span></b></div>
-    </div>
-    <div style="display:flex;gap:12px;margin-top:14px;flex-wrap:wrap">
-      <button class="btn btn-withdraw" onclick="location.href='withdraw.html'"><i class="fas fa-arrow-up-from-bracket"></i> Withdraw</button>
-      <a href="history.html" class="btn btn-history" style="text-decoration:none"><i class="fas fa-receipt"></i> History</a>
-    </div>
-  </div>
-
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleInvite()">
-      <div><h4><i class="fas fa-user-plus" style="color:#4CAF50"></i> Invite Friends</h4><small style="color:#777">Copy link • Tap to see invites</small></div>
-      <i class="fas fa-chevron-down" style="color:#444"></i>
-    </div>
-    <div style="margin-top:12px">
-      <small style="color:#888">YOUR LINK</small>
-      <div class="ref-box"><input id="refLink" readonly><button onclick="copyRef()">Copy</button></div>
-      <div style="margin-top:8px">
-        <button onclick="shareRef('whatsapp')"><i class="fab fa-whatsapp"></i> WhatsApp</button>
-        <button onclick="shareRef('twitter')"><i class="fab fa-twitter"></i> Twitter</button>
-        <button onclick="shareRef('facebook')"><i class="fab fa-facebook"></i> Facebook</button>
-      </div>
-    </div>
-    <div class="invite-details" id="inviteDetails">
-      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
-        <div style="flex:1;background:#0f0f0f;border-radius:12px;padding:12px;text-align:center"><b id="invitedCount" style="color:#4CAF50">0</b><br><small>Invited Users</small></div>
-        <div style="flex:1;background:#0f0f0f;border-radius:12px;padding:12px;text-align:center"><b id="refEarnStat">$0.00</b><br><small>Referral Earn</small></div>
-      </div>
-      <div id="invitedList"></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h4 style="margin-bottom:12px"><i class="fas fa-gear" style="color:#4CAF50"></i> Settings</h4>
-    <a href="settings.html" class="menu-item"><span><i class="fas fa-palette"></i> Theme Change</span><i class="fas fa-chevron-right" style="color:#444"></i></a>
-    <a href="settings.html" class="menu-item"><span><i class="fas fa-bell"></i> Notification Sound</span><i class="fas fa-chevron-right" style="color:#444"></i></a>
-    <a href="help.html" class="menu-item"><span><i class="fas fa-headset"></i> Support</span><i class="fas fa-chevron-right" style="color:#444"></i></a>
-  </div>
-</div>
-
-<div class="bottom-nav">
-  <a href="home.html"><i class="fas fa-house"></i>Home</a>
-  <a href="earn.html"><i class="fas fa-coins"></i>Earn</a>
-  <a href="verifild.html"><i class="fas fa-check-circle"></i>VERIFIED</a>
-  <a href="history.html"><i class="fas fa-clock-rotate-left"></i>History</a>
-  <a href="account.html" class="active"><i class="fas fa-user"></i>Account</a>
-</div>
-
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-<script src="/js/app.js"></script>
-<script src="/js/verification-test.js"></script>
 <script>
-window.w2e.initFirebase();
-
-firebase.auth().onAuthStateChanged(async user => {
-  if (!user) {
-    location.href = 'login.html';
-    return;
+(function () {
+  const sameOrigin = new URL(location.href).origin;
+  function isAllowedUrl(url) {
+    try {
+      const u = new URL(url, location.href);
+      return u.origin === sameOrigin || u.hostname === 't.me' || u.hostname.endsWith('watch2earn.com') || u.hostname.endsWith('watch2earn.net') || u.hostname.endsWith('watch2earn.app');
+    } catch (error) {
+      return true;
+    }
   }
 
-  document.getElementById('displayName').innerText = user.displayName || 'User';
-  document.getElementById('emailText').innerText = user.email || 'user@email.com';
-  document.getElementById('refLink').value = `${location.origin}/index.html?ref=${user.uid}`;
+  const realOpen = window.open;
+  window.open = function (url, name, specs) {
+    if (!url) return realOpen.call(this, url, name, specs);
+    return isAllowedUrl(url) ? realOpen.call(this, url, name, specs) : null;
+  };
 
-  try {
-    const token = await user.getIdToken();
-    const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
-    if(!res.ok) throw new Error('Balance fetch failed');
-    const data = await res.json();
-    const usd = Number(data.balanceUsd || 0);
-    const naira = Math.round(usd * 1500);
-    document.getElementById('usd').innerText = usd.toFixed(2);
-    document.getElementById('naira').innerText = naira.toLocaleString();
-    document.getElementById('adsEarn').innerText = (Number(data.adsEarnUsd || 0)).toFixed(2);
-    document.getElementById('gameEarn').innerText = (Number(data.gameEarnUsd || 0)).toFixed(2);
-    document.getElementById('surveyEarn').innerText = (Number(data.surveyEarnUsd || 0)).toFixed(2);
-    document.getElementById('refEarn').innerText = (Number(data.referralEarnUsd || 0)).toFixed(2);
-
-    try {
-      const refRes = await fetch('/api/referrals/summary', { headers: { Authorization: 'Bearer ' + token } });
-      if(refRes.ok) {
-        const refData = await refRes.json();
-        document.getElementById('invitedCount').innerText = refData.countInvited || 0;
-        document.getElementById('refEarnStat').innerText = '$' + (refData.totalReferralUsd || 0).toFixed(4);
-      }
-    } catch (e) {
-      console.warn('Referral summary failed:', e);
+  document.addEventListener('click', function (event) {
+    const link = event.target && event.target.closest ? event.target.closest('a') : null;
+    if (!link || !link.href) return;
+    if (!isAllowedUrl(link.href)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
     }
-  } catch (e) {
-    console.warn('Live balance request failed', e);
-    document.getElementById('usd').innerText = '—';
-    document.getElementById('naira').innerText = '—';
-  }
-
-  // Reload balance every 5 seconds
-  setInterval(async () => {
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
-      if(res.ok) {
-        const data = await res.json();
-        const usd = Number(data.balanceUsd || 0);
-        const naira = Math.round(usd * 1500);
-        document.getElementById('usd').innerText = usd.toFixed(2);
-        document.getElementById('naira').innerText = naira.toLocaleString();
-        document.getElementById('adsEarn').innerText = (Number(data.adsEarnUsd || 0)).toFixed(2);
-        document.getElementById('gameEarn').innerText = (Number(data.gameEarnUsd || 0)).toFixed(2);
-        document.getElementById('surveyEarn').innerText = (Number(data.surveyEarnUsd || 0)).toFixed(2);
-        document.getElementById('refEarn').innerText = (Number(data.referralEarnUsd || 0)).toFixed(2);
-      }
-    } catch (err) {
-      console.warn('Auto-refresh balance failed', err);
-    }
-  }, 5000);
-});
-
-function toggleInvite() {
-  document.getElementById('inviteDetails').classList.toggle('open');
-}
-
-function copyRef() {
-  const input = document.getElementById('refLink');
-  input.select();
-  document.execCommand('copy');
-  alert('Referral link copied!');
-}
-
-function shareRef(platform) {
-  const link = document.getElementById('refLink').value;
-  if (platform === 'whatsapp') location.href = `https://wa.me/?text=${encodeURIComponent(link)}`;
-  if (platform === 'twitter') location.href = `https://twitter.com/intent/tweet?text=${encodeURIComponent(link)}`;
-  if (platform === 'facebook') location.href = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`;
-}
-
-function logout() {
-  firebase.auth().signOut().then(() => location.href = 'login.html');
-}
-</script>
-<script src="/js/aclib-ad-wrapper.js"></script>
-<div>
-    <script type="text/javascript">
-        aclib.runBanner({
-            zoneId: '11971350',
-        });
-    </script>
-</div>
-<script type="text/javascript">
-    aclib.runInPagePush({
-        zoneId: '11971438',
-        maxAds: 2,
-    });
-</script>
-</body>
-</html>
+  }, true);
+})();
 

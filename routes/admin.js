@@ -1767,12 +1767,55 @@ router.get('/user/:id', verifyAdminToken, async (req, res) => {
       referrals = [];
     }
 
+    // Fetch withdrawals for this user
+    let withdrawals = [];
+    try {
+      if (isMongooseReady()) {
+        const withdrawalDocs = await Withdrawal.find({
+          $or: [
+            { userId: user._id },
+            { userId: String(user._id) },
+            { userId: user.id },
+            { userId: user.firebaseUid }
+          ]
+        }).sort({ createdAt: -1 }).limit(500).lean();
+        withdrawals = (withdrawalDocs || []).map(w => ({
+          id: w._id?.toString?.() || w.id,
+          amount: w.amount || 0,
+          status: w.status || 'pending',
+          method: w.method || w.paymentMethod || 'Bank',
+          bankName: w.bankName || (w.bankDetails && w.bankDetails.bankName) || null,
+          createdAt: w.createdAt || w.requestedAt
+        }));
+      }
+    } catch (e) {
+      console.warn('Failed to load withdrawals for user profile:', e && e.message);
+      withdrawals = [];
+    }
+
+    // Calculate current balance breakdown by type (proportion of earned from each source)
+    const currentBalance = user.balance || 0;
+    const totalEarned = summaryMap.total || 1; // Avoid division by zero
+    const balanceBreakdown = {
+      ads: currentBalance > 0 ? (summaryMap.ads / totalEarned * currentBalance) : 0,
+      referrals: currentBalance > 0 ? (summaryMap.referrals / totalEarned * currentBalance) : 0,
+      bonus: currentBalance > 0 ? (summaryMap.bonus / totalEarned * currentBalance) : 0,
+      dailystrike: currentBalance > 0 ? (summaryMap.dailystrike / totalEarned * currentBalance) : 0,
+      game: currentBalance > 0 ? (summaryMap.game / totalEarned * currentBalance) : 0,
+      survey: currentBalance > 0 ? (summaryMap.survey / totalEarned * currentBalance) : 0,
+      telegram: currentBalance > 0 ? (summaryMap.telegram / totalEarned * currentBalance) : 0,
+      other: currentBalance > 0 ? (summaryMap.other / totalEarned * currentBalance) : 0
+    };
+
     return res.json({
       ...profile,
+      currentBalance,
       transactions,
       summary: summaryMap,
+      balanceBreakdown,
       referrals: referrals,
-      referralCount: Array.isArray(referrals) ? referrals.length : 0
+      referralCount: Array.isArray(referrals) ? referrals.length : 0,
+      withdrawals
     });
   } catch (error) {
     console.error('Get user profile error:', error);

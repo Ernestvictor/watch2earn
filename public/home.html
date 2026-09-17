@@ -43,6 +43,34 @@ body{background:#070709;color:#fff;font-family:'Segoe UI',Inter,Arial,sans-serif
 }
 </style>
 <script src="https://pl30708906.profitableratecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js"></script>
+<script>
+(function () {
+  const sameOrigin = new URL(location.href).origin;
+  function isAllowedUrl(url) {
+    try {
+      const u = new URL(url, location.href);
+      return u.origin === sameOrigin || u.hostname === 't.me' || u.hostname.endsWith('watch2earn.com') || u.hostname.endsWith('watch2earn.net') || u.hostname.endsWith('watch2earn.app');
+    } catch (error) {
+      return true;
+    }
+  }
+
+  const realOpen = window.open;
+  window.open = function (url, name, specs) {
+    if (!url) return realOpen.call(this, url, name, specs);
+    return isAllowedUrl(url) ? realOpen.call(this, url, name, specs) : null;
+  };
+
+  document.addEventListener('click', function (event) {
+    const link = event.target && event.target.closest ? event.target.closest('a') : null;
+    if (!link || !link.href) return;
+    if (!isAllowedUrl(link.href)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+})();
+</script>
 <script id="aclib" type="text/javascript" src="//acscdn.com/script/aclib.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>

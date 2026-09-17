@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Account - Watch2Earn</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script src="https://cdn.gamemonetize.com/sdk.js" data-game-id="7ubj0focn2ah0c9km8a4bxzskl6emjuy"></script>
+<script src="https://cdn.gamemonetize.com/sdk.js" data-game-id="7ubj0focn2ah0c9km8a4bxzskl6emjuy"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding-bottom:85px}
@@ -19,7 +19,9 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 .container{max-width:560px;margin:0 auto;padding:16px}
 .main-balance{background:linear-gradient(135deg,#111,#1a2e1a);border:1px solid #2a4a2a;border-radius:20px;padding:20px;margin-bottom:14px}
 .main-balance h1{font-size:42px;font-weight:900}
-.breakdown{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.main-balance .breakdown{
+  display:flex;gap:8px;margin-top:12px;flex-wrap:wrap
+}
 .break-item{background:#0f0f0f;border:1px solid #222;border-radius:10px;padding:8px 12px;flex:1;min-width:70px;text-align:center}
 .break-item small{color:#777;font-size:10px;display:block}
 .break-item b{font-size:13px;color:#4CAF50}
@@ -40,6 +42,7 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 .announcement{background:#1a1a1d;padding:12px;border-radius:12px;margin-bottom:14px;color:#fff}
 .announcement i{color:#4CAF50;margin-right:6px}
 .user-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:#bbb;font-size:12px}
+.muted{color:#777;font-size:12px}
 @media (min-width: 768px){
   .container{max-width:760px}
 }
@@ -54,11 +57,13 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
 <script src="https://pl30708906.profitableratecpmnetwork.com/f2/0a/64/f20a64eb43c44172c8e55cd3d4f83180.js"></script>
 <script>
 (function () {
-  const sameOrigin = new URL(location.href).origin;
+  const sameOrigin = location.origin;
   function isAllowedUrl(url) {
     try {
       const u = new URL(url, location.href);
-      return u.origin === sameOrigin || u.hostname === 't.me' || u.hostname.endsWith('watch2earn.com') || u.hostname.endsWith('watch2earn.net') || u.hostname.endsWith('watch2earn.app');
+      if (u.origin === sameOrigin) return true;
+      if (u.hostname === 't.me' || u.hostname === 'telegram.org' || u.hostname === 'www.telegram.org') return true;
+      return false;
     } catch (error) {
       return true;
     }
@@ -73,10 +78,190 @@ body{background:#050505;color:#fff;font-family:Segoe UI,Arial,sans-serif;padding
   document.addEventListener('click', function (event) {
     const link = event.target && event.target.closest ? event.target.closest('a') : null;
     if (!link || !link.href) return;
-    if (!isAllowedUrl(link.href)) {
+
+    const href = link.getAttribute('href') || '';
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+    if (!isAllowedUrl(href)) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }
   }, true);
 })();
+</script>
+</head>
+<body>
+  <div class="top-bar">
+    <div class="top-left">
+      <div class="logo"><img src="assets/logo.svg" alt="Watch2Earn" class="site-logo"><span>Watch2Earn</span></div>
+    </div>
+    <div class="top-actions">
+      <a href="messege.html" class="icon-btn" title="Inbox" style="position:relative"><i class="fas fa-inbox"></i><span id="inboxBadge" style="position:absolute;top:-8px;right:-8px;background:#f44336;color:#fff;border-radius:50%;width:18px;height:18px;display:none;align-items:center;justify-content:center;font-size:10px;font-weight:800">0</span></a>
+      <a href="settings.html" class="icon-btn" title="Settings"><i class="fas fa-gear"></i></a>
+    </div>
+  </div>
 
+  <div class="container">
+    <div class="main-balance">
+      <div style="color:#888;font-size:11px">MAIN BALANCE • Referral + Ads + Game + Survey</div>
+      <h1>$<span id="mainBal">--</span></h1>
+      <div style="color:#888;font-size:12px">≈ ₦<span id="mainNaira">--</span></div>
+      <div class="breakdown">
+        <div class="break-item"><small>Ads</small><b>$<span id="adsEarn">--</span></b></div>
+        <div class="break-item"><small>Games</small><b>$<span id="gameEarn">--</span></b></div>
+        <div class="break-item"><small>Survey</small><b>$<span id="surveyEarn">--</span></b></div>
+        <div class="break-item"><small>Referral</small><b>$<span id="refEarn">--</span></b></div>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-withdraw" onclick="location.href='withdraw.html'"><i class="fas fa-arrow-up-from-bracket"></i> Withdraw</button>
+        <a href="history.html" class="btn btn-history" style="text-decoration:none"><i class="fas fa-receipt"></i> History</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleInvite()">
+        <div><h4><i class="fas fa-user-plus" style="color:#4CAF50"></i> Invite Friends</h4><small style="color:#777">Copy link • Tap to see invites</small></div>
+        <i class="fas fa-chevron-down" style="color:#444"></i>
+      </div>
+      <div style="margin-top:12px">
+        <small style="color:#888">YOUR LINK</small>
+        <div class="ref-box"><input id="refLink" readonly><button onclick="copyRef()">Copy</button></div>
+        <div style="margin-top:8px">
+          <button onclick="shareRef('whatsapp')"><i class="fab fa-whatsapp"></i> WhatsApp</button>
+          <button onclick="shareRef('twitter')"><i class="fab fa-twitter"></i> Twitter</button>
+          <button onclick="shareRef('facebook')"><i class="fab fa-facebook"></i> Facebook</button>
+        </div>
+      </div>
+      <div class="invite-details" id="inviteDetails">
+        <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+          <div style="flex:1;background:#0f0f0f;border-radius:12px;padding:12px;text-align:center"><b id="invitedCount" style="color:#4CAF50">0</b><br><small>Invited Users</small></div>
+          <div style="flex:1;background:#0f0f0f;border-radius:12px;padding:12px;text-align:center"><b id="refEarnStat">$0.00</b><br><small>Referral Earn</small></div>
+        </div>
+        <div id="invitedList"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h4 style="margin-bottom:12px"><i class="fas fa-gear" style="color:#4CAF50"></i> Settings</h4>
+      <a href="settings.html" class="menu-item"><span><i class="fas fa-palette"></i> Theme Change</span><i class="fas fa-chevron-right" style="color:#444"></i></a>
+      <a href="settings.html" class="menu-item"><span><i class="fas fa-bell"></i> Notification Sound</span><i class="fas fa-chevron-right" style="color:#444"></i></a>
+      <a href="help.html" class="menu-item"><span><i class="fas fa-headset"></i> Support</span><i class="fas fa-chevron-right" style="color:#444"></i></a>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <a href="home.html"><i class="fas fa-house"></i>Home</a>
+    <a href="earn.html"><i class="fas fa-coins"></i>Earn</a>
+    <a href="verifild.html"><i class="fas fa-check-circle"></i>VERIFIED</a>
+    <a href="history.html"><i class="fas fa-clock-rotate-left"></i>History</a>
+    <a href="account.html" class="active"><i class="fas fa-user"></i>Account</a>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/verification-test.js"></script>
+  <script>
+    window.w2e.initFirebase();
+
+    firebase.auth().onAuthStateChanged(async user => {
+      if (!user) {
+        location.href = 'login.html';
+        return;
+      }
+
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token } });
+        if(!res.ok) throw new Error('Balance fetch failed');
+        const data = await res.json();
+        const usd = Number(data.balanceUsd || 0);
+        const naira = Math.round(usd * 1500);
+        document.getElementById('mainBal').innerText = usd.toFixed(2);
+        document.getElementById('mainNaira').innerText = naira.toLocaleString();
+        document.getElementById('adsEarn').innerText = (Number(data.adsEarnUsd || 0)).toFixed(2);
+        document.getElementById('gameEarn').innerText = (Number(data.gameEarnUsd || 0)).toFixed(2);
+        document.getElementById('surveyEarn').innerText = (Number(data.surveyEarnUsd || 0)).toFixed(2);
+        document.getElementById('refEarn').innerText = (Number(data.referralEarnUsd || 0)).toFixed(2);
+
+        try {
+          const refRes = await fetch('/api/referrals/summary', { headers: { Authorization: 'Bearer ' + token } });
+          if(refRes.ok) {
+            const refData = await refRes.json();
+            document.getElementById('invitedCount').innerText = refData.countInvited || 0;
+            document.getElementById('refEarnStat').innerText = '$' + (refData.totalReferralUsd || 0).toFixed(4);
+          }
+        } catch (e) {
+          console.warn('Referral summary failed:', e);
+        }
+      } catch (e) {
+        console.warn('Live balance request failed', e);
+        document.getElementById('mainBal').innerText = '—';
+        document.getElementById('mainNaira').innerText = '—';
+      }
+
+      // Reload balance every 5 seconds
+      setInterval(async () => {
+        try {
+          const token = await user.getIdToken();
+          const res = await fetch('/api/transactions/balance', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
+          if(res.ok) {
+            const data = await res.json();
+            const usd = Number(data.balanceUsd || 0);
+            const naira = Math.round(usd * 1500);
+            document.getElementById('mainBal').innerText = usd.toFixed(2);
+            document.getElementById('mainNaira').innerText = naira.toLocaleString();
+            document.getElementById('adsEarn').innerText = (Number(data.adsEarnUsd || 0)).toFixed(2);
+            document.getElementById('gameEarn').innerText = (Number(data.gameEarnUsd || 0)).toFixed(2);
+            document.getElementById('surveyEarn').innerText = (Number(data.surveyEarnUsd || 0)).toFixed(2);
+            document.getElementById('refEarn').innerText = (Number(data.referralEarnUsd || 0)).toFixed(2);
+          }
+        } catch (err) {
+          console.warn('Auto-refresh balance failed', err);
+        }
+      }, 5000);
+    });
+
+    function toggleInvite() {
+      document.getElementById('inviteDetails').classList.toggle('open');
+    }
+
+    function copyRef() {
+      const link = document.getElementById('refLink').value;
+      if (!link) return alert('No referral link');
+      navigator.clipboard.writeText(link).then(() => {
+        alert('Referral link copied!');
+      });
+    }
+
+    function shareRef(platform) {
+      const link = document.getElementById('refLink').value;
+      if (!link) return alert('No referral link');
+      const text = `Join Watch2Earn and earn money! ${link}`;
+      const urls = {
+        whatsapp: `https://wa.me/?text=${encodeURIComponent(text)}`,
+        twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
+        facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`
+      };
+      window.open(urls[platform], '_blank', 'width=500,height=500');
+    }
+
+    // Populate referral link
+    async function loadReferrals() {
+      const user = firebase.auth().currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch('/api/referrals/me', { headers: { Authorization: 'Bearer ' + token } });
+      if(res.ok) {
+        const data = await res.json();
+        document.getElementById('refLink').value = data.referralLink || `${window.location.origin}/?ref=${user.uid}`;
+        if(data.invitedUsers && Array.isArray(data.invitedUsers)) {
+          document.getElementById('invitedList').innerHTML = data.invitedUsers.map(u => `<div style="padding:8px;border-bottom:1px solid #222;color:#aaa;font-size:11px"><b>${u.name || 'User'}</b> • ${new Date(u.invitedAt).toLocaleDateString()}</div>`).join('');
+        }
+      }
+    }
+
+    loadReferrals();
+  </script>
+</body>
+</html>

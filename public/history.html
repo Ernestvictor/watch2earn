@@ -15,7 +15,10 @@ body{background:#070709;color:#fff;font-family:Inter,sans-serif;padding-bottom:9
 .status.pending{background:#2a1f13;color:#f59e0b}
 .status.approved{background:#132a18;color:#4CAF50}
 .status.rejected{background:#2a1515;color:#ff6b6b}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f10;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0}
+.nav-tabs{display:flex;gap:0;margin:14px 0;background:#111;border:1px solid #222;border-radius:14px;overflow:hidden}
+.nav-tab{flex:1;padding:12px 10px;text-align:center;color:#666;text-decoration:none;font-weight:600;font-size:13px}
+.nav-tab.active{background:#4CAF50;color:#fff}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#0f0f10;border-top:1px solid #232326;display:flex;justify-content:space-around;padding:10px 0;z-index:20;width:100%;max-width:500px;margin:0 auto}
 .bottom-nav a{color:#666;text-decoration:none;font-size:11px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
 .bottom-nav a.active{color:#4CAF50}
 .empty{text-align:center;padding:40px 20px;color:#777}
@@ -31,7 +34,8 @@ body{background:#070709;color:#fff;font-family:Inter,sans-serif;padding-bottom:9
   <i class="fas fa-rotate" style="margin-left:auto;cursor:pointer;color:#777" onclick="loadHistory()"></i>
 </div>
 
-<div class="container">
+
+
   <div class="card" style="text-align:center;background:linear-gradient(135deg,#121412,#162916);border-color:#1f3d1f">
     <small style="color:#4CAF50">TOTAL WITHDRAWN</small>
     <h2 id="totalWithdrawn">₦0</h2>
@@ -45,13 +49,14 @@ body{background:#070709;color:#fff;font-family:Inter,sans-serif;padding-bottom:9
 <div class="bottom-nav">
   <a href="home.html"><i class="fas fa-house"></i>Home</a>
   <a href="earn.html"><i class="fas fa-coins"></i>Earn</a>
-  <a href="verifild.html"><i class="fas fa-check-circle"></i>VERIFIED</a> 
+  <a href="verifild.html"><i class="fas fa-check-circle"></i>VERIFIED</a>
   <a href="history.html" class="active"><i class="fas fa-clock-rotate-left"></i>History</a>
-  <a href="account.html"><i class="fas fa-wallet"></i>Account</a>
+  <a href="account.html"><i class="fas fa-user"></i>Account</a>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+<script src="/js/app.js"></script>
 <script>
 if(!firebase.apps.length) firebase.initializeApp({apiKey:'AIzaSyDnfD0bTUGE12YhwZCnCsR8JN3OVft6El0',authDomain:'enable-authentication-1b56c.firebaseapp.com',projectId:'enable-authentication-1b56c',storageBucket:'enable-authentication-1b56c.firebasestorage.app',messagingSenderId:'946417281410',appId:'1:946417281410:web:7f4e06e3b4b03946d0079b'});
 async function loadHistory(){
